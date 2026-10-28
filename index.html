@@ -1,0 +1,1115 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مدرسة عمر بن الخطاب الثانوية بنين - إدارة المستقبل التعليمية</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Cairo -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            DEFAULT: '#0B132B',
+                            light: '#1C2541',
+                            lighter: '#3A506B'
+                        },
+                        gold: {
+                            DEFAULT: '#F59E0B',
+                            hover: '#D97706',
+                            light: '#FEF3C7'
+                        }
+                    },
+                    fontFamily: {
+                        cairo: ['Cairo', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f8fafc;
+        }
+        /* Custom Ticker Animation */
+        .ticker-container {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .ticker-text {
+            display: inline-block;
+            animation: ticker 30s linear infinite;
+        }
+        .ticker-paused {
+            animation-play-state: paused;
+        }
+        @keyframes ticker {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        /* Printable Result Card */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printableResultCard, #printableResultCard * {
+                visibility: visible;
+            }
+            #printableResultCard {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+
+    <!-- Developer Live Control Bar (يظهر فقط عند تفعيل وضع المعلم) -->
+    <div id="devControlBar" class="hidden bg-amber-500 text-navy px-4 py-2 flex flex-wrap justify-between items-center text-xs font-bold shadow-md sticky top-0 z-50">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-code text-lg"></i>
+            <span>وضع المطور الشامل: يمكنك تعديل أي نص أو عنصر في الصفحة مباشرة!</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="toggleLiveEditing()" id="editToggleBtn" class="bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                <i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي
+            </button>
+            <button onclick="saveAllPageChanges()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
+            </button>
+            <button onclick="exportUpdatedHTML()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                <i class="fa-solid fa-file-code"></i> تحميل كود HTML المعدل
+            </button>
+        </div>
+    </div>
+
+    <!-- 1. Government Top Bar -->
+    <div class="bg-navy text-white text-xs md:text-sm py-2 px-4 shadow-inner border-b-2 border-gold flex flex-wrap justify-between items-center gap-2">
+        <div class="flex items-center gap-2 font-medium">
+            <i class="fa-solid font-bold fa-landmark text-gold"></i>
+            <span>جمهورية مصر العربية - وزارة التربية والتعليم والتعليم الفني | مديرية القاهرة - إدارة المستقبل التعليمية</span>
+            <span class="hidden md:inline-block bg-navy-light text-gold text-xs px-2 py-0.5 rounded border border-gold/30">العام الدراسي 2026 / 2027</span>
+        </div>
+        <div class="flex items-center gap-3">
+            <span id="adminBadge" class="hidden bg-emerald-600 text-white px-2 py-0.5 rounded-full text-xs font-bold animate-pulse">
+                <i class="fa-solid fa-user-shield ml-1"></i>وضع المعلم (مفعّل)
+            </span>
+            <button onclick="toggleAdminModal()" id="loginBtn" class="bg-gold hover:bg-gold-hover text-navy font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow">
+                <i class="fa-solid fa-key"></i>
+                <span id="loginBtnText">دخول المعلمين</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Header -->
+    <header class="bg-navy-light text-white shadow-lg border-b border-slate-700">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-4">
+                <div class="w-16 h-16 bg-gradient-to-br from-gold to-amber-600 rounded-full flex items-center justify-center text-navy text-3xl font-black shadow-lg border-2 border-white">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-extrabold text-white tracking-wide">مدرسة عمر بن الخطاب الثانوية بنين</h1>
+                    <p class="text-xs md:text-sm text-slate-300 font-semibold flex items-center gap-2">
+                        <span>إدارة المستقبل التعليمية - محافظة القاهرة</span>
+                        <span class="text-gold">•</span>
+                        <span class="text-amber-300">مدير المدرسة: أ. محمد السويسي</span>
+                    </p>
+                </div>
+            </div>
+            <!-- Quick Stats/Motto -->
+            <div class="hidden lg:flex items-center gap-6 bg-navy/60 p-3 rounded-xl border border-slate-600">
+                <div class="text-center px-2">
+                    <div class="text-gold font-bold text-lg">التابلت المدرسي</div>
+                    <div class="text-xs text-slate-300">منظومة رقمية حديثة</div>
+                </div>
+                <div class="h-8 w-px bg-slate-600"></div>
+                <div class="text-center px-2">
+                    <div class="text-gold font-bold text-lg">قسم التطوير</div>
+                    <div class="text-xs text-slate-300">دعم تقني متكامل</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ticker Bar -->
+        <div class="bg-navy border-t border-b border-slate-700 py-1.5 px-4 flex items-center gap-2">
+            <div class="bg-red-600 text-white font-bold text-xs px-3 py-1 rounded shrink-0 flex items-center gap-1">
+                <i class="fa-solid fa-bullhorn animate-bounce"></i>
+                <span>تنبيه هام</span>
+            </div>
+            <div class="ticker-container flex-grow overflow-hidden text-sm text-slate-200" id="tickerContainer">
+                <div class="ticker-text font-medium" id="tickerText">
+                    أهلاً بكم في الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين • تحت قيادة مدير المدرسة أ. محمد السويسي • استعلام نتائج الطلاب متاح الآن برقم الجلوس • يرجى من طلاب الصف الأول والثاني الثانوي مراجعة قسم التطوير والتابلت.
+                </div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+                <button onclick="toggleTicker()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs p-1.5 rounded transition" title="إيقاف/تشغيل الحركة">
+                    <i id="tickerControlIcon" class="fa-solid fa-pause"></i>
+                </button>
+                <button onclick="changeNews()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs p-1.5 rounded transition" title="الخبر التالي">
+                    <i class="fa-solid fa-forward-step"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Executive Navigation Tabs -->
+        <nav class="max-w-7xl mx-auto px-4">
+            <div class="flex overflow-x-auto space-x-reverse space-x-1 border-b border-slate-700 no-scrollbar">
+                <button onclick="switchTab('home')" id="tab-home" class="tab-btn active-tab px-5 py-3 font-bold text-sm border-b-4 border-gold text-gold flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-house"></i> الرئيسية
+                </button>
+                <button onclick="switchTab('results')" id="tab-results" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-square-poll-vertical"></i> نتائج الطلاب
+                </button>
+                <button onclick="switchTab('tablet')" id="tab-tablet" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-tablet-screen-button"></i> التطوير والتابلت
+                </button>
+                <button onclick="switchTab('schedules')" id="tab-schedules" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-calendar-days"></i> جداول الفصول
+                </button>
+                <button onclick="switchTab('alerts')" id="tab-alerts" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-bell"></i> لوحة التنبيهات
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Dynamic Content Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 md:p-6">
+
+        <!-- TAB 1: HOME PAGE -->
+        <section id="content-home" class="tab-content block space-y-6">
+            <div class="bg-gradient-to-r from-navy via-navy-light to-slate-900 text-white rounded-2xl p-6 md:p-10 shadow-xl relative overflow-hidden border border-slate-700">
+                <div class="absolute -left-10 -bottom-10 opacity-10 text-gold text-9xl">
+                    <i class="fa-solid fa-school"></i>
+                </div>
+                <div class="relative z-10 max-w-3xl space-y-4">
+                    <span class="bg-gold text-navy text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">مرحباً بكم في صرح العلم</span>
+                    <h2 class="text-3xl md:text-4xl font-extrabold leading-tight text-white">مدرسة عمر بن الخطاب الثانوية بنين</h2>
+                    <p class="text-slate-300 text-sm md:text-base leading-relaxed">
+                        تحت إدارة مدير المدرسة الأستاذ / <span class="text-gold font-bold">محمد السويسي</span>، نلتزم بتوفير بيئة تعليمية تربوية متكاملة تواكب أحدث المستجدات التكنولوجية في منظومة الثانوية العامة، وتحقيق أقصى مستويات التفوق العلمي والأخلاقي لأبنائنا الطلاب.
+                    </p>
+                    <div class="flex flex-wrap gap-3 pt-2">
+                        <button onclick="switchTab('results')" class="bg-gold hover:bg-gold-hover text-navy font-bold px-5 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
+                            <i class="fa-solid fa-magnifying-glass"></i> الاستعلام عن النتائج
+                        </button>
+                        <button onclick="switchTab('tablet')" class="bg-navy-lighter hover:bg-slate-600 text-white font-semibold px-5 py-2.5 rounded-lg transition border border-slate-500 flex items-center gap-2">
+                            <i class="fa-solid fa-laptop-code"></i> قسم التطوير والتابلت
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group">
+                    <div class="w-12 h-12 bg-amber-100 text-gold rounded-lg flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-navy mb-2">منظومة النتائج الإلكترونية</h3>
+                    <p class="text-slate-600 text-sm mb-4">عرض مفصل لدرجات المواد والنسبة المئوية والتقدير العام برقم الجلوس أو الكود بسهولة ودقة.</p>
+                    <button onclick="switchTab('results')" class="text-gold font-bold text-sm hover:underline flex items-center gap-1">
+                        انتقل للنتائج <i class="fa-solid fa-arrow-left text-xs"></i>
+                    </button>
+                </div>
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group">
+                    <div class="w-12 h-12 bg-sky-100 text-sky-600 rounded-lg flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-headset"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-navy mb-2">الدعم الفني للتابلت</h3>
+                    <p class="text-slate-600 text-sm mb-4">إشراف أ. ضياء يسري وأ. منى سعيد حل مشكلات السيرفر ورابط المنظومة وتحديثات التابلت المدرسي.</p>
+                    <button onclick="switchTab('tablet')" class="text-sky-600 font-bold text-sm hover:underline flex items-center gap-1">
+                        تعليمات التابلت <i class="fa-solid fa-arrow-left text-xs"></i>
+                    </button>
+                </div>
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group">
+                    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition">
+                        <i class="fa-solid fa-calendar-check"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-navy mb-2">الجداول الدراسية</h3>
+                    <p class="text-slate-600 text-sm mb-4">اطّلع على جدول الحصص الأسبوعي الرسمي لجميع فصول المدرسة لمتابعة المواعيد والتنظيم.</p>
+                    <button onclick="switchTab('schedules')" class="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">
+                        استعرض الجداول <i class="fa-solid fa-arrow-left text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: STUDENT RESULTS -->
+        <section id="content-results" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                <div class="border-b border-slate-100 pb-4 mb-6 flex flex-wrap justify-between items-center gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-navy flex items-center gap-2">
+                            <i class="fa-solid fa-square-poll-vertical text-gold"></i> استعلام نتائج الطلاب
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">أدخل رقم الجلوس أو كود الطالب للوصول الفوري للنتيجة التفصيلية</p>
+                    </div>
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800">
+                        <span class="font-bold">أكواد تجريبية للاختبار:</span> 1001, 1002, 1003, 1004, 1005
+                    </div>
+                </div>
+
+                <div class="max-w-xl mx-auto space-y-4">
+                    <div class="flex gap-2">
+                        <div class="relative flex-grow">
+                            <input type="text" id="studentCodeInput" placeholder="أدخل رقم الجلوس أو الكود (مثال: 1001)..." 
+                                   class="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-gold font-bold text-slate-700 shadow-sm">
+                            <i class="fa-solid fa-id-card absolute left-3 top-3.5 text-slate-400"></i>
+                        </div>
+                        <button onclick="searchResult()" class="bg-navy hover:bg-navy-light text-gold font-bold px-6 py-3 rounded-xl transition shadow flex items-center gap-2">
+                            <i class="fa-solid fa-magnifying-glass"></i> استعلام
+                        </button>
+                    </div>
+                    <div id="searchError" class="hidden bg-red-50 text-red-600 p-3 rounded-lg text-xs font-semibold text-center border border-red-200">
+                        لم يتم العثور على طالب بهذا الرقم. يرجى التأكد وإعادة المحاولة.
+                    </div>
+                </div>
+
+                <div id="resultDisplay" class="hidden mt-8 max-w-3xl mx-auto">
+                    <div id="printableResultCard" class="bg-slate-50 border-2 border-navy rounded-2xl overflow-hidden shadow-lg p-6 relative">
+                        <div class="border-b-2 border-navy/20 pb-4 mb-4 flex justify-between items-center">
+                            <div class="text-right">
+                                <h3 class="text-lg font-black text-navy">مدرسة عمر بن الخطاب الثانوية بنين</h3>
+                                <p class="text-xs text-slate-600">مدير المدرسة: أ. محمد السويسي | كشف درجات طالب</p>
+                            </div>
+                            <div class="text-center bg-navy text-gold font-black text-xs px-3 py-1.5 rounded-lg border border-gold">
+                                العام الدراسي 2026/2027
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-white p-4 rounded-xl border border-slate-200 mb-6 text-sm">
+                            <div>
+                                <span class="block text-xs text-slate-400">اسم الطالب</span>
+                                <span id="resName" class="font-bold text-navy">---</span>
+                            </div>
+                            <div>
+                                <span class="block text-xs text-slate-400">رقم الجلوس / الكود</span>
+                                <span id="resCode" class="font-bold text-navy">---</span>
+                            </div>
+                            <div>
+                                <span class="block text-xs text-slate-400">الصف الدراسي</span>
+                                <span id="resGrade" class="font-bold text-navy">---</span>
+                            </div>
+                            <div>
+                                <span class="block text-xs text-slate-400">الشعبة / الفصل</span>
+                                <span id="resClass" class="font-bold text-navy">---</span>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto mb-6">
+                            <table class="w-full text-right border-collapse">
+                                <thead>
+                                    <tr class="bg-navy text-white text-xs">
+                                        <th class="p-2.5 rounded-r">المادة الدراسية</th>
+                                        <th class="p-2.5 text-center">الدرجة العظمى</th>
+                                        <th class="p-2.5 text-center">درجة الطالب</th>
+                                        <th class="p-2.5 text-center rounded-l">التقدير</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resSubjectsBody" class="text-sm divide-y divide-slate-200"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-navy-light text-white p-4 rounded-xl text-center">
+                            <div>
+                                <div class="text-xs text-slate-300">المجموع الكلي</div>
+                                <div id="resTotal" class="text-xl font-black text-gold">0 / 0</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-slate-300">النسبة المئوية</div>
+                                <div id="resPercentage" class="text-xl font-black text-amber-300">0%</div>
+                            </div>
+                            <div>
+                                <div class="text-xs text-slate-300">التقدير / الحالة</div>
+                                <div id="resStatus" class="text-xl font-black text-emerald-400">---</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex justify-end gap-3 no-print">
+                            <button onclick="window.print()" class="bg-navy hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 transition">
+                                <i class="fa-solid fa-print"></i> طباعة كارت النتيجة
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="teacherResultControls" class="hidden bg-amber-50 border-2 border-gold rounded-2xl p-6 shadow-md space-y-4">
+                <div class="flex items-center justify-between border-b border-gold/30 pb-3">
+                    <h3 class="text-lg font-bold text-navy flex items-center gap-2">
+                        <i class="fa-solid fa-file-excel text-emerald-600"></i> لوحة تحكم المعلم - رفع وتحديث النتائج (Excel)
+                    </h3>
+                    <span class="text-xs font-bold bg-gold/20 text-gold-hover px-2.5 py-1 rounded-full">خاص بالمطورين والمعلمين</span>
+                </div>
+                <p class="text-xs text-slate-600">يمكنك هنا رفع ملف Excel يحتوي على بيانات الطلاب والدرجات لتحديث قاعدة البيانات فورياً.</p>
+                
+                <div class="flex flex-col md:flex-row items-center gap-4">
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-navy file:text-white hover:file:bg-navy-light cursor-pointer">
+                    <button onclick="processExcelUpload()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shrink-0 flex items-center gap-2">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> رفع واستبدال قاعدة البيانات
+                    </button>
+                    <button onclick="resetDefaultResults()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shrink-0">
+                        إعادة النتائج للوضع الافتراضي
+                    </button>
+                </div>
+                <div id="uploadStatus" class="text-xs font-bold text-emerald-700 hidden"></div>
+            </div>
+        </section>
+
+        <!-- TAB 3: DEVELOPMENT & TABLET SECTION -->
+        <section id="content-tablet" class="tab-content hidden space-y-6">
+            <div class="bg-gradient-to-r from-navy-light to-navy text-white rounded-2xl p-6 shadow-md border-r-8 border-gold flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-laptop-code text-gold"></i> قسم التطوير والتكنولوجيا والتابلت
+                    </h2>
+                    <p class="text-xs text-slate-300 mt-1">المتابعة الفنية والتكنولوجية وإرشادات السيرفر والمنظومة الإلكترونية</p>
+                </div>
+                <div class="bg-white/10 backdrop-blur border border-white/20 p-3 rounded-xl text-center md:text-right">
+                    <span class="block text-xs text-gold font-bold mb-1">تحت إشراف ومتابعة:</span>
+                    <div class="text-sm font-extrabold text-white flex items-center gap-3">
+                        <span><i class="fa-solid fa-user-tie text-gold text-xs"></i> أ. ضياء يسري</span>
+                        <span class="text-slate-400">|</span>
+                        <span><i class="fa-solid fa-user-tie text-gold text-xs"></i> أ. منى سعيد</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div class="flex items-center gap-3 text-navy font-bold text-lg border-b border-slate-100 pb-3">
+                        <i class="fa-solid fa-server text-gold text-xl"></i>
+                        <h3>تعليمات السيرفر وشبكة المدرسة</h3>
+                    </div>
+                    <ul class="space-y-2 text-xs md:text-sm text-slate-700 list-disc list-inside leading-relaxed">
+                        <li>تأكد من الاتصال بشبكة المدرسة الداخلية (School-WiFi) داخل اللجان الامتحانية.</li>
+                        <li>عدم تغيير إعدادات الـ IP أو البروكسي الخاصة بالتابلت تجنباً للانقطاع عن السيرفر.</li>
+                        <li>في حالة ظهور خطأ في التحميل، قم بعمل Refresh للصفحة دون إغلاق المتصفح.</li>
+                        <li>التأكد من تحديث منصة الامتحان لأحدث إصدار معتمد من الوزارة.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div class="flex items-center gap-3 text-navy font-bold text-lg border-b border-slate-100 pb-3">
+                        <i class="fa-solid fa-shield-halved text-sky-600 text-xl"></i>
+                        <h3>الدعم الفني واستخدام التابلت</h3>
+                    </div>
+                    <ul class="space-y-2 text-xs md:text-sm text-slate-700 list-disc list-inside leading-relaxed">
+                        <li>الحفاظ على الشريحة المدرسية مفعلة وبها رصيد بيانات كافٍ للطوارئ.</li>
+                        <li>عدم محاولة الخروج من المنظومة المغلقة لعدم تعرض التابلت للخروج من الدعم.</li>
+                        <li>مراجعة أ. ضياء يسري أو أ. منى سعيد بقسم التطوير فور حدوث أي عطل فني.</li>
+                        <li>شحن التابلت بنسبة لا تقل عن 80% قبل الحضور لليوم الدراسي والامتحانات.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-100 pb-3">
+                    <h3 class="text-lg font-bold text-navy flex items-center gap-2">
+                        <i class="fa-solid fa-images text-gold"></i> معرض نشرات التطوير ودلائل التابلت
+                    </h3>
+                    <span class="text-xs text-slate-500">نشرات توضيحية مصورة للطلاب والمعلمين</span>
+                </div>
+
+                <div id="tabletTeacherUpload" class="hidden bg-slate-50 p-4 rounded-xl border border-slate-300 space-y-2">
+                    <label class="block text-xs font-bold text-navy">إضافة صورة جديدة لنشرة التطوير (خاص بالمعلم):</label>
+                    <div class="flex gap-2">
+                        <input type="file" id="tabletImgInput" accept="image/*" class="block w-full text-xs text-slate-500 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy file:text-white">
+                        <button onclick="uploadTabletImage()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-lg text-xs shrink-0">
+                            رفع وحفظ داخل الكود
+                        </button>
+                    </div>
+                </div>
+
+                <div id="tabletGallery" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"></div>
+            </div>
+        </section>
+
+        <!-- TAB 4: CLASS SCHEDULES -->
+        <section id="content-schedules" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+                <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-navy flex items-center gap-2">
+                            <i class="fa-solid fa-calendar-days text-gold"></i> جداول الحصص الأسبوعية للفصول
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">جدول الحصص الرسمية المعمدة للفصول (1/1 إلى 1/8)</p>
+                    </div>
+                    <div id="scheduleTeacherControl" class="hidden">
+                        <button onclick="toggleScheduleUploadModal()" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow hover:bg-emerald-700">
+                            <i class="fa-solid fa-upload"></i> تعديل/رفع جدول فصل
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="schedulesGrid"></div>
+            </div>
+        </section>
+
+        <!-- TAB 5: ALERTS & NOTIFICATIONS BOARD -->
+        <section id="content-alerts" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+                <div class="flex justify-between items-center border-b border-slate-100 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-navy flex items-center gap-2">
+                            <i class="fa-solid fa-bell text-gold"></i> لوحة التنبيهات والأخبار المباشرة
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-1">آخر الأخبار والقرارات التنظيمية الخاصة بمدرسة عمر بن الخطاب</p>
+                    </div>
+                    <div id="alertsTeacherControl" class="hidden">
+                        <button onclick="addNewAlertPrompt()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1">
+                            <i class="fa-solid fa-plus"></i> إضافة تنبيه جديد
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-4" id="alertsContainer"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-navy text-white mt-12 border-t-4 border-gold">
+        <div class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div class="space-y-3">
+                <h4 class="text-lg font-bold text-gold flex items-center gap-2">
+                    <i class="fa-solid fa-school"></i> مدرسة عمر بن الخطاب الثانوية بنين
+                </h4>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                    تحت قيادة مدير المدرسة أ. محمد السويسي - إدارة المستقبل التعليمية - مديرية التربية والتعليم بمحافظة القاهرة.
+                </p>
+            </div>
+            <div class="space-y-3">
+                <h4 class="text-lg font-bold text-gold">روابط سريعة</h4>
+                <ul class="text-xs text-slate-300 space-y-2">
+                    <li><a href="#" onclick="switchTab('results')" class="hover:text-gold">استعلام نتائج الطلاب</a></li>
+                    <li><a href="#" onclick="switchTab('tablet')" class="hover:text-gold">قسم التطوير والتابلت</a></li>
+                    <li><a href="#" onclick="switchTab('schedules')" class="hover:text-gold">جداول الفصول الدراسية</a></li>
+                </ul>
+            </div>
+            <div class="space-y-3">
+                <h4 class="text-lg font-bold text-gold">الإدارة والدعم الفني</h4>
+                <p class="text-xs text-slate-300">مدير المدرسة: <span class="text-amber-300 font-bold">أ. محمد السويسي</span></p>
+                <p class="text-xs text-slate-300 mt-1">مسؤولي التطوير:</p>
+                <div class="text-xs font-bold text-amber-300 space-y-1">
+                    <div>• أ. ضياء يسري</div>
+                    <div>• أ. منى سعيد</div>
+                </div>
+            </div>
+        </div>
+        <div class="bg-navy-light py-4 text-center text-xs text-slate-400 border-t border-slate-700">
+            جميع الحقوق محفوظة © مدرسة عمر بن الخطاب الثانوية بنين - 2026 / 2027
+        </div>
+    </footer>
+
+    <!-- TEACHER LOGIN MODAL -->
+    <div id="adminModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-2 border-gold space-y-5 relative">
+            <button onclick="toggleAdminModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 bg-amber-100 text-gold rounded-full flex items-center justify-center mx-auto text-2xl">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h3 class="text-xl font-extrabold text-navy">تسجيل دخول المعلم / المطور</h3>
+                <p class="text-xs text-slate-500">أدخل الرقم السري لتفعيل لوحة التعديل ورفع النتائج</p>
+            </div>
+            <div class="space-y-3">
+                <input type="password" id="adminPasswordInput" placeholder="أدخل الرقم السري هنا..." 
+                       class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800 focus:ring-2 focus:ring-gold outline-none">
+                <div id="adminErrorMsg" class="text-xs text-red-600 text-center hidden font-bold">الرقم السري غير صحيح! حاول مرة أخرى.</div>
+                <button onclick="verifyAdminPassword()" class="w-full bg-navy hover:bg-navy-light text-gold font-bold py-3 rounded-xl transition shadow">
+                    تأكيد الدخول
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCHEDULE UPLOAD MODAL FOR TEACHER -->
+    <div id="scheduleModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 relative">
+            <button onclick="toggleScheduleUploadModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <h3 class="text-lg font-bold text-navy">تعديل أو رفع جدول فصل</h3>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold mb-1">اختر الفصل:</label>
+                    <select id="scheduleClassSelect" class="w-full p-2.5 border rounded-lg bg-slate-50 font-bold">
+                        <option value="1/1">فصل 1/1</option>
+                        <option value="1/2">فصل 1/2</option>
+                        <option value="1/3">فصل 1/3</option>
+                        <option value="1/4">فصل 1/4</option>
+                        <option value="1/5">فصل 1/5</option>
+                        <option value="1/6">فصل 1/6</option>
+                        <option value="1/7">فصل 1/7</option>
+                        <option value="1/8">فصل 1/8</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-bold mb-1">اختر صورة الجدول الجديدة:</label>
+                    <input type="file" id="scheduleImageInput" accept="image/*" class="w-full p-2 border rounded-lg">
+                </div>
+                <button onclick="saveScheduleImage()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">
+                    حفظ التحديث داخل الكود
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        const DEFAULT_STUDENTS = [
+            {
+                code: "1001",
+                name: "أحمد محمد محمود علي",
+                grade: "الصف الأول الثانوي",
+                class: "1/2",
+                subjects: {
+                    arabic: { score: 75, max: 80 },
+                    english: { score: 54, max: 60 },
+                    secondLang: { score: 38, max: 40 },
+                    math: { score: 52, max: 60 },
+                    integratedScience: { score: 55, max: 60 },
+                    history: { score: 36, max: 40 },
+                    philosophy: { score: 37, max: 40 }
+                }
+            },
+            {
+                code: "1002",
+                name: "عمر خالد عبد الرحمن",
+                grade: "الصف الأول الثانوي",
+                class: "1/3",
+                subjects: {
+                    arabic: { score: 68, max: 80 },
+                    english: { score: 48, max: 60 },
+                    secondLang: { score: 32, max: 40 },
+                    math: { score: 45, max: 60 },
+                    integratedScience: { score: 49, max: 60 },
+                    history: { score: 30, max: 40 },
+                    philosophy: { score: 34, max: 40 }
+                }
+            },
+            {
+                code: "1003",
+                name: "يوسف حسن مصطفى",
+                grade: "الصف الأول الثانوي",
+                class: "1/4",
+                subjects: {
+                    arabic: { score: 78, max: 80 },
+                    english: { score: 58, max: 60 },
+                    secondLang: { score: 40, max: 40 },
+                    math: { score: 59, max: 60 },
+                    integratedScience: { score: 58, max: 60 },
+                    history: { score: 39, max: 40 },
+                    philosophy: { score: 40, max: 40 }
+                }
+            },
+            {
+                code: "1004",
+                name: "محمود إبراهيم السيد",
+                grade: "الصف الأول الثانوي",
+                class: "1/5",
+                subjects: {
+                    arabic: { score: 60, max: 80 },
+                    english: { score: 35, max: 60 },
+                    secondLang: { score: 28, max: 40 },
+                    math: { score: 33, max: 60 },
+                    integratedScience: { score: 38, max: 40 },
+                    history: { score: 25, max: 40 },
+                    philosophy: { score: 29, max: 40 }
+                }
+            },
+            {
+                code: "1005",
+                name: "كريم طارق عبد الله",
+                grade: "الصف الأول الثانوي",
+                class: "1/7",
+                subjects: {
+                    arabic: { score: 80, max: 80 },
+                    english: { score: 59, max: 60 },
+                    secondLang: { score: 39, max: 40 },
+                    math: { score: 60, max: 60 },
+                    integratedScience: { score: 60, max: 60 },
+                    history: { score: 40, max: 40 },
+                    philosophy: { score: 40, max: 40 }
+                }
+            }
+        ];
+
+        const SUBJECT_NAMES = {
+            arabic: "اللغة العربية",
+            english: "اللغة الأجنبية الأولى",
+            secondLang: "اللغة الأجنبية الثانية",
+            math: "الرياضيات",
+            integratedScience: "العلوم المتكاملة",
+            history: "التاريخ",
+            philosophy: "الفلسفة والمنطق"
+        };
+
+        const INITIAL_NEWS = [
+            "أهلاً بكم في الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين • تحت قيادة مدير المدرسة أ. محمد السويسي.",
+            "استعلام نتائج الطلاب متاح الآن برقم الجلوس أو كود الطالب.",
+            "يرجى من جميع الطلاب التأكد من تحديث منصة الامتحان بالتابلت المدرسي.",
+            "جداول الحصص الدراسية للفصول معلنة بجدول الجداول."
+        ];
+
+        let currentNewsIndex = 0;
+        let tickerPaused = false;
+        let isAdminLoggedIn = false;
+        let isLiveEditing = false;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initLocalStorage();
+            renderAlerts();
+            renderSchedules();
+            renderTabletGallery();
+        });
+
+        function initLocalStorage() {
+            if (!localStorage.getItem('obk_students')) {
+                localStorage.setItem('obk_students', JSON.stringify(DEFAULT_STUDENTS));
+            }
+            if (!localStorage.getItem('obk_alerts')) {
+                const defaultAlerts = [
+                    { id: 1, title: "تنبيه بخصوص امتحانات الشهر", text: "على جميع الطلاب الالتزام بالحضور بالزي المدرسي واصطحاب التابلت مشحون بالكامل.", date: "2026-10-25" },
+                    { id: 2, title: "تحديث منصة التابلت", text: "برجاء مراجعة قسم التطوير والتكنولوجيا (أ. ضياء يسري / أ. منى سعيد) لتحديث المنظومة.", date: "2026-10-22" }
+                ];
+                localStorage.setItem('obk_alerts', JSON.stringify(defaultAlerts));
+            }
+            if (!localStorage.getItem('obk_schedules')) {
+                const defaultSchedules = {
+                    "1/1": "", "1/2": "", "1/3": "", "1/4": "", "1/5": "", "1/6": "", "1/7": "", "1/8": ""
+                };
+                localStorage.setItem('obk_schedules', JSON.stringify(defaultSchedules));
+            }
+            if (!localStorage.getItem('obk_tablet_imgs')) {
+                localStorage.setItem('obk_tablet_imgs', JSON.stringify([]));
+            }
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-gold', 'text-gold');
+                btn.classList.add('border-transparent', 'text-slate-300');
+            });
+
+            const targetContent = document.getElementById(`content-${tabId}`);
+            const targetTab = document.getElementById(`tab-${tabId}`);
+            if (targetContent) targetContent.classList.remove('hidden');
+            if (targetTab) {
+                targetTab.classList.add('border-gold', 'text-gold');
+                targetTab.classList.remove('border-transparent', 'text-slate-300');
+            }
+        }
+
+        function toggleTicker() {
+            const textEl = document.getElementById('tickerText');
+            const iconEl = document.getElementById('tickerControlIcon');
+            tickerPaused = !tickerPaused;
+            if (tickerPaused) {
+                textEl.classList.add('ticker-paused');
+                iconEl.classList.replace('fa-pause', 'fa-play');
+            } else {
+                textEl.classList.remove('ticker-paused');
+                iconEl.classList.replace('fa-play', 'fa-pause');
+            }
+        }
+
+        function changeNews() {
+            currentNewsIndex = (currentNewsIndex + 1) % INITIAL_NEWS.length;
+            document.getElementById('tickerText').innerText = INITIAL_NEWS[currentNewsIndex];
+        }
+
+        function toggleAdminModal() {
+            document.getElementById('adminModal').classList.toggle('hidden');
+        }
+
+        function verifyAdminPassword() {
+            const input = document.getElementById('adminPasswordInput').value;
+            const error = document.getElementById('adminErrorMsg');
+            
+            if (input === 'Mr.Diaa') {
+                isAdminLoggedIn = true;
+                error.classList.add('hidden');
+                toggleAdminModal();
+                updateTeacherUI();
+                renderSchedules();
+                renderTabletGallery();
+                alert('تم تسجيل الدخول بنجاح! مفعّل الآن وضع المعلم والمطور وشريط التعديل الشامل.');
+            } else {
+                error.classList.remove('hidden');
+            }
+        }
+
+        function updateTeacherUI() {
+            if (isAdminLoggedIn) {
+                document.getElementById('adminBadge').classList.remove('hidden');
+                document.getElementById('devControlBar').classList.remove('hidden');
+                document.getElementById('loginBtnText').innerText = 'المعلم مفعّل';
+                document.getElementById('teacherResultControls').classList.remove('hidden');
+                document.getElementById('tabletTeacherUpload').classList.remove('hidden');
+                document.getElementById('scheduleTeacherControl').classList.remove('hidden');
+                document.getElementById('alertsTeacherControl').classList.remove('hidden');
+            }
+        }
+
+        function toggleLiveEditing() {
+            isLiveEditing = !isLiveEditing;
+            const editableElements = document.querySelectorAll('h1, h2, h3, h4, p, span:not(#adminBadge span)');
+            
+            editableElements.forEach(el => {
+                if (isLiveEditing) {
+                    el.setAttribute('contenteditable', 'true');
+                    el.classList.add('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+                } else {
+                    el.removeAttribute('contenteditable');
+                    el.classList.remove('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+                }
+            });
+
+            const btn = document.getElementById('editToggleBtn');
+            if (isLiveEditing) {
+                btn.innerHTML = '<i class="fa-solid fa-check"></i> إنهاء التعديل';
+                btn.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
+            } else {
+                btn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي';
+                btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
+            }
+        }
+
+        function saveAllPageChanges() {
+            if (isLiveEditing) toggleLiveEditing();
+            alert('تم حفظ جميع التعديلات بنجاح في متصفحك!');
+        }
+
+        function exportUpdatedHTML() {
+            if (isLiveEditing) toggleLiveEditing();
+            const fullDocumentHTML = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+            const blob = new Blob([fullDocumentHTML], { type: "text/html;charset=utf-8" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "مدرسة_عمر_بن_الخطاب_معدل.html";
+            a.click();
+        }
+
+        function searchResult() {
+            const codeInput = document.getElementById('studentCodeInput').value.trim();
+            const errorEl = document.getElementById('searchError');
+            const resultDisplay = document.getElementById('resultDisplay');
+
+            if (!codeInput) {
+                errorEl.innerText = "يرجى إدخال رقم الجلوس أو الكود أولاً.";
+                errorEl.classList.remove('hidden');
+                resultDisplay.classList.add('hidden');
+                return;
+            }
+
+            const students = JSON.parse(localStorage.getItem('obk_students')) || [];
+            const student = students.find(s => s.code === codeInput);
+
+            if (student) {
+                errorEl.classList.add('hidden');
+                displayStudentCard(student);
+                resultDisplay.classList.remove('hidden');
+            } else {
+                resultDisplay.classList.add('hidden');
+                errorEl.innerText = "لم يتم العثور على طالب بهذا الرقم. جرب الأكواد التجريبية (1001، 1002، إلخ).";
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        function displayStudentCard(student) {
+            document.getElementById('resName').innerText = student.name;
+            document.getElementById('resCode').innerText = student.code;
+            document.getElementById('resGrade').innerText = student.grade || "الصف الأول الثانوي";
+            document.getElementById('resClass').innerText = student.class || "---";
+
+            const tbody = document.getElementById('resSubjectsBody');
+            tbody.innerHTML = '';
+
+            let totalObtained = 0;
+            let totalMax = 0;
+
+            for (const [key, sub] of Object.entries(student.subjects)) {
+                totalObtained += Number(sub.score);
+                totalMax += Number(sub.max);
+
+                const ratio = (sub.score / sub.max) * 100;
+                let gradeText = "ممتاز";
+                let gradeClass = "text-emerald-600 font-bold";
+                if (ratio < 50) { gradeText = "ضعيف"; gradeClass = "text-red-600 font-bold"; }
+                else if (ratio < 65) { gradeText = "مقبول"; gradeClass = "text-amber-600 font-bold"; }
+                else if (ratio < 75) { gradeText = "جيد"; gradeClass = "text-sky-600 font-bold"; }
+                else if (ratio < 85) { gradeText = "جيد جداً"; gradeClass = "text-blue-600 font-bold"; }
+
+                const row = document.createElement('tr');
+                row.className = "hover:bg-slate-100 transition";
+                row.innerHTML = `
+                    <td class="p-2.5 font-bold text-slate-800">${SUBJECT_NAMES[key] || key}</td>
+                    <td class="p-2.5 text-center text-slate-500">${sub.max}</td>
+                    <td class="p-2.5 text-center font-bold text-navy">${sub.score}</td>
+                    <td class="p-2.5 text-center ${gradeClass}">${gradeText}</td>
+                `;
+                tbody.appendChild(row);
+            }
+
+            const percentage = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(1) : 0;
+            document.getElementById('resTotal').innerText = `${totalObtained} / ${totalMax}`;
+            document.getElementById('resPercentage').innerText = `${percentage}%`;
+
+            let overallStatus = "ناجح";
+            let statusColor = "text-emerald-400";
+            if (percentage < 50) {
+                overallStatus = "له دور ثاني";
+                statusColor = "text-red-400";
+            }
+            document.getElementById('resStatus').innerText = overallStatus;
+            document.getElementById('resStatus').className = `text-xl font-black ${statusColor}`;
+        }
+
+        function processExcelUpload() {
+            const fileInput = document.getElementById('excelFileInput');
+            const statusEl = document.getElementById('uploadStatus');
+
+            if (!fileInput.files.length) {
+                alert('يرجى اختيار ملف Excel أولاً.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (jsonData.length === 0) {
+                        alert('الملف المرفوع فارغ!');
+                        return;
+                    }
+
+                    const newStudents = jsonData.map(row => ({
+                        code: String(row["الكود"] || row["رقم الجلوس"] || row["Code"] || "000"),
+                        name: row["الاسم"] || row["اسم الطالب"] || row["Name"] || "طالب جديد",
+                        grade: row["الصف"] || "الصف الأول الثانوي",
+                        class: row["الفصل"] || "1/1",
+                        subjects: {
+                            arabic: { score: Number(row["عربي"] || row["اللغة العربية"] || 0), max: 80 },
+                            english: { score: Number(row["انجليزي"] || row["اللغة الأجنبية الأولى"] || 0), max: 60 },
+                            secondLang: { score: Number(row["لغة ثانية"] || 0), max: 40 },
+                            math: { score: Number(row["رياضيات"] || 0), max: 60 },
+                            integratedScience: { score: Number(row["علوم متكاملة"] || 0), max: 60 },
+                            history: { score: Number(row["تاريخ"] || 0), max: 40 },
+                            philosophy: { score: Number(row["فلسفة"] || 0), max: 40 }
+                        }
+                    }));
+
+                    localStorage.setItem('obk_students', JSON.stringify(newStudents));
+                    statusEl.innerText = `تم رفع وتحديث البيانات بنجاح لـ (${newStudents.length}) طالب!`;
+                    statusEl.classList.remove('hidden');
+                    alert(`تم استيراد ${newStudents.length} طالب بنجاح!`);
+                } catch (err) {
+                    console.error(err);
+                    alert('حدث خطأ أثناء قراءة ملف Excel. تأكد من صحة التنسيق.');
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function resetDefaultResults() {
+            if (confirm('هل أنت تأكد من إعادة النتائج للبيانات الافتراضية؟')) {
+                localStorage.setItem('obk_students', JSON.stringify(DEFAULT_STUDENTS));
+                alert('تمت الإعادة للوضع الافتراضي.');
+            }
+        }
+
+        function renderTabletGallery() {
+            const gallery = document.getElementById('tabletGallery');
+            const imgs = JSON.parse(localStorage.getItem('obk_tablet_imgs')) || [];
+            gallery.innerHTML = '';
+
+            if(imgs.length === 0) {
+                gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">لا توجد نشرات مضافة حتى الآن.</p>';
+                return;
+            }
+
+            imgs.forEach((url, idx) => {
+                const div = document.createElement('div');
+                div.className = "relative group rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100";
+                div.innerHTML = `
+                    <img src="${url}" alt="نشرة تطوير" class="w-full h-48 object-cover group-hover:scale-105 transition duration-300">
+                    <div class="p-2 text-xs font-bold text-center text-navy bg-white flex justify-between items-center">
+                        <span>نشرة إرشادية رقم ${idx + 1}</span>
+                        ${isAdminLoggedIn ? `<button onclick="deleteTabletImage(${idx})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-[10px] transition"><i class="fa-solid fa-trash"></i> مسح</button>` : ''}
+                    </div>
+                `;
+                gallery.appendChild(div);
+            });
+        }
+
+        function uploadTabletImage() {
+            const input = document.getElementById('tabletImgInput');
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imgs = JSON.parse(localStorage.getItem('obk_tablet_imgs')) || [];
+                    imgs.unshift(e.target.result);
+                    localStorage.setItem('obk_tablet_imgs', JSON.stringify(imgs));
+                    renderTabletGallery();
+                    input.value = '';
+                    alert('تم حفظ الصورة بنجاح داخل الذاكرة الدائمة للكود!');
+                };
+                reader.readAsDataURL(input.files[0]);
+            } else {
+                alert('يرجى اختيار صورة أولاً.');
+            }
+        }
+
+        function deleteTabletImage(idx) {
+            if (confirm('هل أنت متأكد من مسح هذه الصورة نهائياً؟')) {
+                let imgs = JSON.parse(localStorage.getItem('obk_tablet_imgs')) || [];
+                imgs.splice(idx, 1);
+                localStorage.setItem('obk_tablet_imgs', JSON.stringify(imgs));
+                renderTabletGallery();
+                alert('تم مسح الصورة بنجاح.');
+            }
+        }
+
+        const CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
+
+        function renderSchedules() {
+            const grid = document.getElementById('schedulesGrid');
+            const schedules = JSON.parse(localStorage.getItem('obk_schedules')) || {};
+            grid.innerHTML = '';
+
+            CLASSES.forEach(cls => {
+                const imgUrl = schedules[cls];
+                const card = document.createElement('div');
+                card.className = "bg-slate-50 border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition";
+                
+                let imageContent = '';
+                if(imgUrl && imgUrl.startsWith('data:image')) {
+                    imageContent = `<img src="${imgUrl}" alt="جدول فصل ${cls}" class="w-full h-52 object-cover rounded-lg border border-slate-200">`;
+                } else {
+                    imageContent = `<div class="w-full h-52 bg-slate-200 flex flex-col items-center justify-center text-slate-400 rounded-lg border border-dashed border-slate-300">
+                        <i class="fa-solid fa-image text-3xl mb-1"></i>
+                        <span class="text-xs">لم يتم رفع جدول لهذا الفصل بعد</span>
+                    </div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="bg-navy text-white px-4 py-2.5 font-bold flex justify-between items-center text-sm">
+                        <span>فصل ${cls}</span>
+                        <span class="text-xs text-gold">2026/2027</span>
+                    </div>
+                    <div class="p-3">
+                        ${imageContent}
+                    </div>
+                    <div class="px-4 pb-3 flex justify-between items-center text-xs">
+                        <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
+                        <div class="flex items-center gap-2">
+                            ${imgUrl && isAdminLoggedIn ? `<button onclick="deleteScheduleImage('${cls}')" class="text-red-600 hover:underline font-bold flex items-center gap-1"><i class="fa-solid fa-trash"></i> مسح</button>` : ''}
+                            ${imgUrl ? `<a href="${imgUrl}" download="جدول_فصل_${cls}.png" class="text-navy font-bold hover:underline flex items-center gap-1"><i class="fa-solid fa-download"></i> تحميل</a>` : ''}
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function toggleScheduleUploadModal() {
+            document.getElementById('scheduleModal').classList.toggle('hidden');
+        }
+
+        function saveScheduleImage() {
+            const cls = document.getElementById('scheduleClassSelect').value;
+            const input = document.getElementById('scheduleImageInput');
+
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const schedules = JSON.parse(localStorage.getItem('obk_schedules')) || {};
+                    schedules[cls] = e.target.result;
+                    localStorage.setItem('obk_schedules', JSON.stringify(schedules));
+                    renderSchedules();
+                    toggleScheduleUploadModal();
+                    input.value = '';
+                    alert(`تم تحديث جدول الفصل ${cls} وحفظه نهائياً داخل الكود بنجاح!`);
+                };
+                reader.readAsDataURL(input.files[0]);
+            } else {
+                alert('يرجى اختيار صورة أولاً.');
+            }
+        }
+
+        function deleteScheduleImage(cls) {
+            if (confirm(`هل أنت متأكد من مسح جدول فصل ${cls}؟`)) {
+                let schedules = JSON.parse(localStorage.getItem('obk_schedules')) || {};
+                schedules[cls] = "";
+                localStorage.setItem('obk_schedules', JSON.stringify(schedules));
+                renderSchedules();
+                alert(`تم مسح جدول فصل ${cls} بنجاح.`);
+            }
+        }
+
+        function renderAlerts() {
+            const container = document.getElementById('alertsContainer');
+            const alerts = JSON.parse(localStorage.getItem('obk_alerts')) || [];
+            container.innerHTML = '';
+
+            alerts.forEach(item => {
+                const div = document.createElement('div');
+                div.className = "bg-slate-50 border-r-4 border-gold p-4 rounded-xl shadow-sm space-y-1 relative";
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <h4 class="font-bold text-navy text-sm md:text-base">${item.title}</h4>
+                        <span class="text-xs text-slate-400 font-mono">${item.date}</span>
+                    </div>
+                    <p class="text-xs md:text-sm text-slate-700 leading-relaxed">${item.text}</p>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function addNewAlertPrompt() {
+            const title = prompt('أدخل عنوان التنبيه:');
+            if (!title) return;
+            const text = prompt('أدخل نص التنبيه التفصيلي:');
+            if (!text) return;
+
+            const alerts = JSON.parse(localStorage.getItem('obk_alerts')) || [];
+            alerts.unshift({
+                id: Date.now(),
+                title: title,
+                text: text,
+                date: new Date().toISOString().split('T')[0]
+            });
+
+            localStorage.setItem('obk_alerts', JSON.stringify(alerts));
+            renderAlerts();
+            alert('تم نشر التنبيه بنجاح!');
+        }
+    </script>
+</body>
+</html>
