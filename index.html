@@ -443,13 +443,13 @@
                 <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-4">
                     <div>
                         <h2 class="text-2xl font-bold text-navy flex items-center gap-2">
-                            <i class="fa-solid fa-calendar-days text-gold"></i> جداول الحصص الأسبوعية للفصول
+                            <i class="fa-solid fa-calendar-days text-gold"></i> قوائم الفصول 
                         </h2>
-                        <p class="text-xs text-slate-500 mt-1">جدول الحصص الرسمية المعمدة للفصول (1/1 إلى 1/8)</p>
+                        <p class="text-xs text-slate-500 mt-1">قوائم الفصول الرسمية (1/1 إلى 1/8)</p>
                     </div>
                     <div id="scheduleTeacherControl" class="hidden">
                         <button onclick="toggleScheduleUploadModal()" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow hover:bg-emerald-700">
-                            <i class="fa-solid fa-upload"></i> تعديل/رفع جدول فصل
+                            <i class="fa-solid fa-upload"></i> تعديل/رفع قائمة فصل
                         </button>
                     </div>
                 </div>
@@ -545,7 +545,7 @@
             <button onclick="toggleScheduleUploadModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
                 <i class="fa-solid fa-xmark text-xl"></i>
             </button>
-            <h3 class="text-lg font-bold text-navy">تعديل أو رفع جدول فصل</h3>
+            <h3 class="text-lg font-bold text-navy">تعديل أو رفع قائمة فصل</h3>
             <div class="space-y-3 text-xs">
                 <div>
                     <label class="block font-bold mb-1">اختر الفصل:</label>
@@ -561,7 +561,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block font-bold mb-1">اختر صورة الجدول الجديدة:</label>
+                    <label class="block font-bold mb-1">اختر صورة القائمة الجديدة:</label>
                     <input type="file" id="scheduleImageInput" accept="image/*" class="w-full p-2 border rounded-lg">
                 </div>
                 <button onclick="saveScheduleImage()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">
@@ -665,7 +665,7 @@
             "أهلاً بكم في الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين • تحت قيادة مدير المدرسة أ. محمد السويسي.",
             "استعلام نتائج الطلاب متاح الآن برقم الجلوس أو كود الطالب.",
             "يرجى من جميع الطلاب التأكد من تحديث منصة الامتحان بالتابلت المدرسي.",
-            "جداول الحصص الدراسية للفصول معلنة بجدول الجداول."
+            "جداول الحصص الدراسية للفصول معلنة بالفصول ."
         ];
 
         let currentNewsIndex = 0;
