@@ -497,7 +497,7 @@
                 <ul class="text-xs text-slate-300 space-y-2">
                     <li><a href="#" onclick="switchTab('results')" class="hover:text-gold">استعلام نتائج الطلاب</a></li>
                     <li><a href="#" onclick="switchTab('tablet')" class="hover:text-gold">قسم التطوير والتابلت</a></li>
-                    <li><a href="#" onclick="switchTab('schedules')" class="hover:text-gold">جداول الفصول الدراسية</a></li>
+                    <li><a href="#" onclick="switchTab('schedules')" class="hover:text-gold">قوائم الفصول الدراسية</a></li>
                 </ul>
             </div>
             <div class="space-y-3">
@@ -1010,11 +1010,11 @@
                 
                 let imageContent = '';
                 if(imgUrl && imgUrl.startsWith('data:image')) {
-                    imageContent = `<img src="${imgUrl}" alt="جدول فصل ${cls}" class="w-full h-52 object-cover rounded-lg border border-slate-200">`;
+                    imageContent = `<img src="${imgUrl}" alt="قائمة فصل ${cls}" class="w-full h-52 object-cover rounded-lg border border-slate-200">`;
                 } else {
                     imageContent = `<div class="w-full h-52 bg-slate-200 flex flex-col items-center justify-center text-slate-400 rounded-lg border border-dashed border-slate-300">
                         <i class="fa-solid fa-image text-3xl mb-1"></i>
-                        <span class="text-xs">لم يتم رفع جدول لهذا الفصل بعد</span>
+                        <span class="text-xs">لم يتم رفع قائمة لهذا الفصل بعد</span>
                     </div>`;
                 }
 
@@ -1030,7 +1030,7 @@
                         <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
                         <div class="flex items-center gap-2">
                             ${imgUrl && isAdminLoggedIn ? `<button onclick="deleteScheduleImage('${cls}')" class="text-red-600 hover:underline font-bold flex items-center gap-1"><i class="fa-solid fa-trash"></i> مسح</button>` : ''}
-                            ${imgUrl ? `<a href="${imgUrl}" download="جدول_فصل_${cls}.png" class="text-navy font-bold hover:underline flex items-center gap-1"><i class="fa-solid fa-download"></i> تحميل</a>` : ''}
+                            ${imgUrl ? `<a href="${imgUrl}" download="قائمة_فصل_${cls}.png" class="text-navy font-bold hover:underline flex items-center gap-1"><i class="fa-solid fa-download"></i> تحميل</a>` : ''}
                         </div>
                     </div>
                 `;
@@ -1055,7 +1055,7 @@
                     renderSchedules();
                     toggleScheduleUploadModal();
                     input.value = '';
-                    alert(`تم تحديث جدول الفصل ${cls} وحفظه نهائياً داخل الكود بنجاح!`);
+                    alert(`تم تحديث قائمه الفصل ${cls} وحفظه نهائياً داخل الكود بنجاح!`);
                 };
                 reader.readAsDataURL(input.files[0]);
             } else {
@@ -1064,12 +1064,12 @@
         }
 
         function deleteScheduleImage(cls) {
-            if (confirm(`هل أنت متأكد من مسح جدول فصل ${cls}؟`)) {
+            if (confirm(`هل أنت متأكد من مسح قائمة فصل ${cls}؟`)) {
                 let schedules = JSON.parse(localStorage.getItem('obk_schedules')) || {};
                 schedules[cls] = "";
                 localStorage.setItem('obk_schedules', JSON.stringify(schedules));
                 renderSchedules();
-                alert(`تم مسح جدول فصل ${cls} بنجاح.`);
+                alert(`تم مسح قائمة فصل ${cls} بنجاح.`);
             }
         }
 
