@@ -947,47 +947,169 @@
             }
         }
 
-        function renderTabletGallery() {
-            const gallery = document.getElementById('tabletGallery');
-            const imgs = JSON.parse(localStorage.getItem('obk_tablet_imgs')) || [];
-            gallery.innerHTML = '';
+        
+async function renderTabletGallery() {
+    const gallery = document.getElementById('tabletGallery');
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
 
-            if(imgs.length === 0) {
-                gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">لا توجد نشرات مضافة حتى الآن.</p>';
-                return;
+    gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">جارٍ تحميل النشرات...</p>';
+
+    try {
+        const callbackName = 'schoolGalleryCallback_' + Date.now();
+
+        const images = await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('انتهت مهلة تحميل الصور.'));
+            }, 15000);
+
+            function cleanup() {
+                clearTimeout(timeout);
+                script.remove();
+                delete window[callbackName];
             }
 
-            imgs.forEach((url, idx) => {
-                const div = document.createElement('div');
-                div.className = "relative group rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100";
-                div.innerHTML = `
-                    <img src="${url}" alt="نشرة تطوير" class="w-full h-48 object-cover group-hover:scale-105 transition duration-300">
-                    <div class="p-2 text-xs font-bold text-center text-navy bg-white flex justify-between items-center">
-                        <span>نشرة إرشادية رقم ${idx + 1}</span>
-                        ${isAdminLoggedIn ? `<button onclick="deleteTabletImage(${idx})" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-[10px] transition"><i class="fa-solid fa-trash"></i> مسح</button>` : ''}
-                    </div>
-                `;
-                gallery.appendChild(div);
-            });
+            window[callbackName] = (result) => {
+                cleanup();
+                if (result && result.success && Array.isArray(result.images)) {
+                    resolve(result.images);
+                } else {
+                    reject(new Error('تعذر جلب معرض الصور.'));
+                }
+            };
+
+            script.src = scriptUrl + '?action=gallery&callback=' + callbackName;
+            script.onerror = () => {
+                cleanup();
+                reject(new Error('تعذر الاتصال بمعرض الصور.'));
+            };
+
+            document.body.appendChild(script);
+        });
+
+        gallery.innerHTML = '';
+
+        if (images.length === 0) {
+            gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">لا توجد نشرات مضافة حتى الآن.</p>';
+            return;
         }
 
-        function uploadTabletImage() {
-            const input = document.getElementById('tabletImgInput');
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const imgs = JSON.parse(localStorage.getItem('obk_tablet_imgs')) || [];
-                    imgs.unshift(e.target.result);
-                    localStorage.setItem('obk_tablet_imgs', JSON.stringify(imgs));
-                    renderTabletGallery();
-                    input.value = '';
-                    alert('تم حفظ الصورة بنجاح داخل الذاكرة الدائمة للكود!');
-                };
-                reader.readAsDataURL(input.files[0]);
-            } else {
-                alert('يرجى اختيار صورة أولاً.');
-            }
+        images.forEach((item, idx) => {
+            const url = typeof item === 'string' ? item : (item.url || item.imageUrl || item.thumbnailUrl || '');
+            if (!url) return;
+
+            const div = document.createElement('div');
+            div.className = 'relative group rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100';
+
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = 'نشرة تطوير';
+            img.className = 'w-full h-48 object-cover group-hover:scale-105 transition duration-300';
+
+            const footer = document.createElement('div');
+            footer.className = 'p-2 text-xs font-bold text-center text-navy bg-white flex justify-between items-center';
+
+            const label = document.createElement('span');
+            label.textContent = 'نشرة إرشادية رقم ' + (idx + 1);
+            footer.appendChild(label);
+
+            div.appendChild(img);
+            div.appendChild(footer);
+            gallery.appendChild(div);
+        });
+
+        if (!gallery.children.length) {
+            gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">لا توجد صور قابلة للعرض.</p>';
         }
+
+    } catch (error) {
+        gallery.innerHTML = '<p class="text-xs text-red-500 col-span-full text-center py-4">تعذر تحميل النشرات. حدّث الصفحة وحاول مرة أخرى.</p>';
+        console.error('Gallery loading error:', error);
+    }
+}
+
+        
+async function uploadTabletImage() {
+    const input = document.getElementById('tabletImgInput');
+    const status = document.getElementById('googleSignInStatus');
+
+    if (!googleUploadToken) {
+        status.textContent = 'سجّل الدخول بحساب Google أولاً.';
+        return;
+    }
+
+    if (!input.files || !input.files[0]) {
+        alert('يرجى اختيار صورة أولاً.');
+        return;
+    }
+
+    const file = input.files[0];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+    if (!allowedTypes.includes(file.type)) {
+        status.textContent = 'نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF.';
+        return;
+    }
+
+    if (file.size > 4 * 1024 * 1024) {
+        status.textContent = 'حجم الصورة يجب ألا يتجاوز 4 ميجابايت.';
+        return;
+    }
+
+    status.textContent = 'جارٍ إرسال الصورة إلى Google Drive...';
+
+    try {
+        const data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result).split(',')[1]);
+            reader.onerror = () => reject(new Error('تعذرت قراءة الصورة.'));
+            reader.readAsDataURL(file);
+        });
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+        form.target = 'schoolPhotoUploadFrame';
+        form.style.display = 'none';
+
+        const fields = {
+            token: googleUploadToken,
+            fileName: file.name,
+            mimeType: file.type,
+            data: data
+        };
+
+        Object.entries(fields).forEach(([name, value]) => {
+            const field = document.createElement('input');
+            field.type = 'hidden';
+            field.name = name;
+            field.value = value;
+            form.appendChild(field);
+        });
+
+        let frame = document.getElementById('schoolPhotoUploadFrame');
+        if (!frame) {
+            frame = document.createElement('iframe');
+            frame.name = 'schoolPhotoUploadFrame';
+            frame.id = 'schoolPhotoUploadFrame';
+            frame.style.display = 'none';
+            document.body.appendChild(frame);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+
+        status.textContent =
+            'تم إرسال طلب الرفع. سنحتاج إلى التحقق من ظهوره في معرض الصور قبل تأكيد النجاح.';
+        input.value = '';
+
+    } catch (error) {
+        status.textContent = error.message || 'تعذر تجهيز الصورة للرفع.';
+    }
+}
+
         
 let googleUploadToken = null;
 
