@@ -948,6 +948,7 @@
         }
 
         
+
 async function renderTabletGallery() {
     const gallery = document.getElementById('tabletGallery');
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
@@ -996,25 +997,68 @@ async function renderTabletGallery() {
         }
 
         images.forEach((item, idx) => {
-            const url = typeof item === 'string' ? item : (item.url || item.imageUrl || item.thumbnailUrl || '');
+            const image = typeof item === 'string' ? { url: item } : item;
+            const url = image.url || image.imageUrl || image.thumbnailUrl || '';
             if (!url) return;
+
+            const fileId = image.id || '';
+            const openUrl = fileId
+                ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/view'
+                : url;
+            const downloadUrl = fileId
+                ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId)
+                : '';
 
             const div = document.createElement('div');
             div.className = 'relative group rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100';
 
+            // الضغط على الصورة يفتحها
+            const imageLink = document.createElement('a');
+            imageLink.href = openUrl;
+            imageLink.target = '_blank';
+            imageLink.rel = 'noopener noreferrer';
+            imageLink.title = 'اضغط لفتح الصورة بالحجم الكامل';
+            imageLink.className = 'block overflow-hidden cursor-pointer';
+
             const img = document.createElement('img');
             img.src = url;
-            img.alt = 'نشرة تطوير';
+            img.alt = image.name || 'نشرة إرشادية';
+            img.loading = 'lazy';
             img.className = 'w-full h-48 object-cover group-hover:scale-105 transition duration-300';
 
-            const footer = document.createElement('div');
-            footer.className = 'p-2 text-xs font-bold text-center text-navy bg-white flex justify-between items-center';
+            imageLink.appendChild(img);
+            div.appendChild(imageLink);
 
-            const label = document.createElement('span');
-            label.textContent = 'نشرة إرشادية رقم ' + (idx + 1);
+            const footer = document.createElement('div');
+            footer.className = 'p-2 text-xs font-bold text-navy bg-white';
+
+            const label = document.createElement('p');
+            label.className = 'text-center mb-2';
+            label.textContent = image.name || ('نشرة إرشادية رقم ' + (idx + 1));
             footer.appendChild(label);
 
-            div.appendChild(img);
+            const actions = document.createElement('div');
+            actions.className = 'flex justify-center gap-2 flex-wrap';
+
+            const openButton = document.createElement('a');
+            openButton.href = openUrl;
+            openButton.target = '_blank';
+            openButton.rel = 'noopener noreferrer';
+            openButton.textContent = 'فتح الصورة';
+            openButton.className = 'inline-block rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700';
+            actions.appendChild(openButton);
+
+            if (downloadUrl) {
+                const downloadButton = document.createElement('a');
+                downloadButton.href = downloadUrl;
+                downloadButton.target = '_blank';
+                downloadButton.rel = 'noopener noreferrer';
+                downloadButton.textContent = 'تحميل الصورة';
+                downloadButton.className = 'inline-block rounded-lg bg-green-600 text-white px-3 py-2 hover:bg-green-700';
+                actions.appendChild(downloadButton);
+            }
+
+            footer.appendChild(actions);
             div.appendChild(footer);
             gallery.appendChild(div);
         });
