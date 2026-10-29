@@ -1228,6 +1228,7 @@ async function uploadTabletImage() {
         
 let googleUploadToken = null;
 
+
 function handleGoogleCredentialResponse(response) {
     const status = document.getElementById('googleSignInStatus');
 
@@ -1237,8 +1238,11 @@ function handleGoogleCredentialResponse(response) {
     }
 
     googleUploadToken = response.credential;
-    status.textContent = 'تم تسجيل الدخول بنجاح. يمكنك الآن تجهيز رفع الصور.';
+    status.textContent = 'تم تسجيل الدخول بنجاح. يمكنك الآن رفع الصور وحذفها.';
+
+    renderTabletGallery();
 }
+
 
 function initGooglePhotoLogin() {
     const button = document.getElementById('googleSignInButton');
