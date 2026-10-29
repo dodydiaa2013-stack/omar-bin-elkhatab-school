@@ -988,6 +988,45 @@
                 alert('يرجى اختيار صورة أولاً.');
             }
         }
+        
+let googleUploadToken = null;
+
+function handleGoogleCredentialResponse(response) {
+    const status = document.getElementById('googleSignInStatus');
+
+    if (!response || !response.credential) {
+        status.textContent = 'تعذر تسجيل الدخول بحساب Google.';
+        return;
+    }
+
+    googleUploadToken = response.credential;
+    status.textContent = 'تم تسجيل الدخول بنجاح. يمكنك الآن تجهيز رفع الصور.';
+}
+
+function initGooglePhotoLogin() {
+    const button = document.getElementById('googleSignInButton');
+
+    if (!button || !window.google ||
+        !window.google.accounts || !window.google.accounts.id) {
+        return;
+    }
+
+    window.google.accounts.id.initialize({
+        client_id: '889693944069-h03fc0msck71367f96gqb9nh5stgvqk0.apps.googleusercontent.com',
+        callback: handleGoogleCredentialResponse
+    });
+
+    window.google.accounts.id.renderButton(button, {
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'rectangular',
+        locale: 'ar'
+    });
+}
+
+window.addEventListener('load', initGooglePhotoLogin);
+
 
         function deleteTabletImage(idx) {
             if (confirm('هل أنت متأكد من مسح هذه الصورة نهائياً؟')) {
