@@ -1061,18 +1061,20 @@ async function renderTabletGallery() {
                 actions.appendChild(downloadButton);
             }
 
-            if (fileId) {
-                const deleteButton = document.createElement('button');
-                deleteButton.type = 'button';
-                deleteButton.textContent = 'حذف الصورة';
-                deleteButton.className = 'inline-block rounded-lg bg-red-600 text-white px-3 py-2 hover:bg-red-700';
+            
+if (fileId && googleUploadToken) {
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.textContent = 'حذف الصورة';
+    deleteButton.className = 'inline-block rounded-lg bg-red-600 text-white px-3 py-2 hover:bg-red-700';
 
-                deleteButton.addEventListener('click', () => {
-                    deleteDriveTabletImage(fileId, image.name || 'هذه الصورة');
-                });
+    deleteButton.addEventListener('click', () => {
+        deleteDriveTabletImage(fileId, image.name || 'هذه الصورة');
+    });
 
-                actions.appendChild(deleteButton);
-            }
+    actions.appendChild(deleteButton);
+}
+
 
             footer.appendChild(actions);
             div.appendChild(footer);
