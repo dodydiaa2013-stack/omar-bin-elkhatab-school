@@ -949,6 +949,7 @@
 
         
 
+
 async function renderTabletGallery() {
     const gallery = document.getElementById('tabletGallery');
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
@@ -973,6 +974,7 @@ async function renderTabletGallery() {
 
             window[callbackName] = (result) => {
                 cleanup();
+
                 if (result && result.success && Array.isArray(result.images)) {
                     resolve(result.images);
                 } else {
@@ -999,12 +1001,14 @@ async function renderTabletGallery() {
         images.forEach((item, idx) => {
             const image = typeof item === 'string' ? { url: item } : item;
             const url = image.url || image.imageUrl || image.thumbnailUrl || '';
+
             if (!url) return;
 
             const fileId = image.id || '';
             const openUrl = fileId
                 ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/view'
                 : url;
+
             const downloadUrl = fileId
                 ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId)
                 : '';
@@ -1012,7 +1016,6 @@ async function renderTabletGallery() {
             const div = document.createElement('div');
             div.className = 'relative group rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100';
 
-            // الضغط على الصورة يفتحها
             const imageLink = document.createElement('a');
             imageLink.href = openUrl;
             imageLink.target = '_blank';
@@ -1058,6 +1061,19 @@ async function renderTabletGallery() {
                 actions.appendChild(downloadButton);
             }
 
+            if (fileId) {
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.textContent = 'حذف الصورة';
+                deleteButton.className = 'inline-block rounded-lg bg-red-600 text-white px-3 py-2 hover:bg-red-700';
+
+                deleteButton.addEventListener('click', () => {
+                    deleteDriveTabletImage(fileId, image.name || 'هذه الصورة');
+                });
+
+                actions.appendChild(deleteButton);
+            }
+
             footer.appendChild(actions);
             div.appendChild(footer);
             gallery.appendChild(div);
@@ -1071,6 +1087,59 @@ async function renderTabletGallery() {
         gallery.innerHTML = '<p class="text-xs text-red-500 col-span-full text-center py-4">تعذر تحميل النشرات. حدّث الصفحة وحاول مرة أخرى.</p>';
         console.error('Gallery loading error:', error);
     }
+}
+
+function deleteDriveTabletImage(fileId, fileName) {
+    if (!googleUploadToken) {
+        alert('سجّل الدخول بحساب Google المصرح له بالحذف أولاً.');
+        return;
+    }
+
+    if (!confirm('هل أنت متأكد من حذف "' + fileName + '" من صور المدرسة؟')) {
+        return;
+    }
+
+    const status = document.getElementById('googleSignInStatus');
+
+    let frame = document.getElementById('schoolPhotoUploadFrame');
+
+    if (!frame) {
+        frame = document.createElement('iframe');
+        frame.name = 'schoolPhotoUploadFrame';
+        frame.id = 'schoolPhotoUploadFrame';
+        frame.style.display = 'none';
+        document.body.appendChild(frame);
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+    form.target = 'schoolPhotoUploadFrame';
+    form.style.display = 'none';
+
+    const fields = {
+        action: 'delete',
+        token: googleUploadToken,
+        fileId: fileId
+    };
+
+    Object.entries(fields).forEach(([name, value]) => {
+        const field = document.createElement('input');
+        field.type = 'hidden';
+        field.name = name;
+        field.value = value;
+        form.appendChild(field);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+
+    status.textContent = 'تم إرسال طلب الحذف، جارٍ تحديث المعرض للتحقق من النتيجة.';
+
+    setTimeout(() => {
+        renderTabletGallery();
+    }, 2500);
 }
 
         
