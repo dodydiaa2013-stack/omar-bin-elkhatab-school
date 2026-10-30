@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" class="page-changes-loading">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -37,6 +37,7 @@
         }
     </script>
     <style>
+        html.page-changes-loading [data-page-edit-id] { visibility: hidden; }
         body {
             font-family: 'Cairo', sans-serif;
             background-color: #f8fafc;
@@ -127,7 +128,7 @@
                     <p class="text-xs md:text-sm text-slate-300 font-semibold flex items-center gap-2">
                         <span data-page-edit-id="school-administration">إدارة المستقبل التعليمية - محافظة القاهرة</span>
                         <span class="text-gold">•</span>
-                        <span class="text-amber-300">مدير المدرسة: أ. محمد السويسي</span>
+                        <span data-page-edit-id="header-manager" class="text-amber-300">مدير المدرسة: أ. محمد السويسي</span>
                     </p>
                 </div>
             </div>
@@ -200,8 +201,8 @@
                 <div class="relative z-10 max-w-3xl space-y-4">
                     <span class="bg-gold text-navy text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">مرحباً بكم في صرح العلم</span>
                     <h2 class="text-3xl md:text-4xl font-extrabold leading-tight text-white"><span data-page-edit-id="home-title">مدرسة عمر بن الخطاب الثانوية بنين</span></h2>
-                    <p class="text-slate-300 text-sm md:text-base leading-relaxed">
-                        تحت إدارة مدير المدرسة الأستاذ / <span class="text-gold font-bold">محمد السويسي</span>، نلتزم بتوفير بيئة تعليمية تربوية متكاملة تواكب أحدث المستجدات التكنولوجية في منظومة الثانوية العامة، وتحقيق أقصى مستويات التفوق العلمي والأخلاقي لأبنائنا الطلاب.
+                    <p data-page-edit-id="home-intro" class="text-slate-300 text-sm md:text-base leading-relaxed">
+                        تحت إدارة مدير المدرسة الأستاذ / محمد السويسي، نلتزم بتوفير بيئة تعليمية تربوية متكاملة تواكب أحدث المستجدات التكنولوجية في منظومة الثانوية العامة، وتحقيق أقصى مستويات التفوق العلمي والأخلاقي لأبنائنا الطلاب.
                     </p>
                     <div class="flex flex-wrap gap-3 pt-2">
                         <button onclick="switchTab('results')" class="bg-gold hover:bg-gold-hover text-navy font-bold px-5 py-2.5 rounded-lg transition shadow-lg flex items-center gap-2">
@@ -490,25 +491,25 @@
                 <h4 class="text-lg font-bold text-gold flex items-center gap-2">
                     <i class="fa-solid fa-school"></i> مدرسة عمر بن الخطاب الثانوية بنين
                 </h4>
-                <p class="text-xs text-slate-300 leading-relaxed">
+                <p data-page-edit-id="footer-leadership" class="text-xs text-slate-300 leading-relaxed">
                     تحت قيادة مدير المدرسة أ. محمد السويسي - إدارة المستقبل التعليمية - مديرية التربية والتعليم بمحافظة القاهرة.
                 </p>
             </div>
             <div class="space-y-3">
-                <h4 class="text-lg font-bold text-gold">روابط سريعة</h4>
+                <h4 data-page-edit-id="quick-links-title" class="text-lg font-bold text-gold">روابط سريعة</h4>
                 <ul class="text-xs text-slate-300 space-y-2">
-                    <li><a href="#" onclick="switchTab('results')" class="hover:text-gold">استعلام نتائج الطلاب</a></li>
-                    <li><a href="#" onclick="switchTab('tablet')" class="hover:text-gold">قسم التطوير والتابلت</a></li>
-                    <li><a href="#" onclick="switchTab('schedules')" class="hover:text-gold">قوائم الفصول الدراسية</a></li>
+                    <li><a data-page-edit-id="quick-results-link" href="#" onclick="switchTab('results')" class="hover:text-gold">استعلام نتائج الطلاب</a></li>
+                    <li><a data-page-edit-id="quick-tablet-link" href="#" onclick="switchTab('tablet')" class="hover:text-gold">قسم التطوير والتابلت</a></li>
+                    <li><a data-page-edit-id="quick-schedules-link" href="#" onclick="switchTab('schedules')" class="hover:text-gold">قوائم الفصول الدراسية</a></li>
                 </ul>
             </div>
             <div class="space-y-3">
-                <h4 class="text-lg font-bold text-gold">الإدارة والدعم الفني</h4>
-                <p class="text-xs text-slate-300">مدير المدرسة: <span class="text-amber-300 font-bold">أ. محمد السويسي</span></p>
-                <p class="text-xs text-slate-300 mt-1">مسؤولي التطوير:</p>
+                <h4 data-page-edit-id="support-section-title" class="text-lg font-bold text-gold">الإدارة والدعم الفني</h4>
+                <p data-page-edit-id="footer-manager" class="text-xs text-slate-300">مدير المدرسة: <span class="text-amber-300 font-bold">أ. محمد السويسي</span></p>
+                <p data-page-edit-id="support-responsibles-title" class="text-xs text-slate-300 mt-1">مسؤولي التطوير:</p>
                 <div class="text-xs font-bold text-amber-300 space-y-1">
-                    <div>• أ. ضياء يسري</div>
-                    <div>• أ. منى سعيد</div>
+                    <div data-page-edit-id="support-diaa-name">• أ. ضياء يسري</div>
+                    <div data-page-edit-id="support-mona-name">• أ. منى سعيد</div>
                 </div>
             </div>
         </div>
@@ -882,7 +883,7 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","results-title","results-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description","republic-header","academic-year"];
+    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","results-title","results-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description","republic-header","academic-year","header-manager","home-intro","footer-leadership","quick-links-title","quick-results-link","quick-tablet-link","quick-schedules-link","support-section-title","footer-manager","support-responsibles-title","support-diaa-name","support-mona-name"];
     const changes = allowedIds.map(id => {
         const el = document.querySelector('[data-page-edit-id="' + id + '"]');
         return el ? { id: id, text: el.textContent.trim() } : null;
@@ -956,7 +957,8 @@ function loadSavedPageChanges() {
     const scriptURL="https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
     const script=document.createElement("script");
     script.src=scriptURL+"?action=pageChanges&callback=receivePageChanges";
-    script.onerror=()=>console.error('تعذر تحميل تعديلات نصوص الموقع.');
+    script.onerror=()=>{ document.documentElement.classList.remove("page-changes-loading"); console.error('تعذر تحميل تعديلات نصوص الموقع.'); };
+    script.onload=()=>document.documentElement.classList.remove("page-changes-loading");
     document.body.appendChild(script);
 }
 
