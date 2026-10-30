@@ -683,6 +683,7 @@ window.addEventListener('DOMContentLoaded', () => {
     renderSchedules();
     loadSchedulesFromDrive();
     renderTabletGallery();
+    loadSavedPageChanges();
 });
 
 
@@ -871,21 +872,79 @@ window.addEventListener('DOMContentLoaded', () => {
                 btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
             }
         }
+// تحميل التعديلات المحفوظة من Google Drive
+function loadSavedPageChanges() {
+    const scriptURL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
 
+    const script = document.createElement("script");
+    script.src = scriptURL + "?action=pageChanges&callback=receivePageChanges";
+    document.body.appendChild(script);
+}
+
+// استقبال التعديلات وتطبيقها
+function receivePageChanges(data) {
+    if (!data || !data.success || !Array.isArray(data.changes)) return;
+
+    data.changes.forEach(item => {
+        if (!item.id || typeof item.html !== "string") return;
+
+        const element = document.querySelector(
+            '[data-page-edit-id="' + CSS.escape(item.id) + '"]'
+        );
+
+        if (element) {
+            element.textContent = item.html;
+        }
+    });
+}
         function saveAllPageChanges() {
             if (isLiveEditing) toggleLiveEditing();
             alert('تم حفظ جميع التعديلات بنجاح في متصفحك!');
         }
 
         function exportUpdatedHTML() {
-            if (isLiveEditing) toggleLiveEditing();
-            const fullDocumentHTML = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
-            const blob = new Blob([fullDocumentHTML], { type: "text/html;charset=utf-8" });
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            a.download = "مدرسة_عمر_بن_الخطاب_معدل.html";
-            a.click();
-        }
+    if (isLiveEditing) toggleLiveEditing();
+
+    // إنشاء نسخة مستقلة من الصفحة
+    const pageCopy = document.documentElement.cloneNode(true);
+
+    // إزالة شريط أدوات المطور من النسخة
+    const devBar = pageCopy.querySelector('#devControlBar');
+    if (devBar) devBar.remove();
+
+    // إزالة خصائص التحرير الحي
+    pageCopy.querySelectorAll('[contenteditable]').forEach(el => {
+        el.removeAttribute('contenteditable');
+    });
+
+    // إزالة علامات التحديد الخاصة بالتحرير
+    pageCopy.querySelectorAll('.outline-dashed, .outline-2, .outline-navy, .p-0\\.5')
+        .forEach(el => {
+            el.classList.remove(
+                'outline-dashed',
+                'outline-2',
+                'outline-navy',
+                'p-0.5'
+            );
+        });
+
+    const fullDocumentHTML =
+        '<!DOCTYPE html>\n' + pageCopy.outerHTML;
+
+    const blob = new Blob(
+        [fullDocumentHTML],
+        { type: 'text/html;charset=utf-8' }
+    );
+
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    a.href = url;
+    a.download = 'مدرسة_عمر_بن_الخطاب_معدل.html';
+    a.click();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
         function searchResult() {
             const codeInput = document.getElementById('studentCodeInput').value.trim();
