@@ -774,7 +774,6 @@ window.addEventListener('DOMContentLoaded', () => {
         : String(Date.now()) + Math.random().toString(36).slice(2);
 
     const handleMessage = function(event) {
-        if (event.source !== frame.contentWindow) return;
 
         const data = event.data;
 
