@@ -676,12 +676,15 @@
         let isAdminLoggedIn = false;
         let isLiveEditing = false;
 
-        window.addEventListener('DOMContentLoaded', () => {
-            initLocalStorage();
-            renderAlerts();
-            renderSchedules();
-            renderTabletGallery();
-        });
+        
+window.addEventListener('DOMContentLoaded', () => {
+    initLocalStorage();
+    renderAlerts();
+    renderSchedules();
+    loadSchedulesFromDrive();
+    renderTabletGallery();
+});
+
 
         function initLocalStorage() {
             if (!localStorage.getItem('obk_students')) {
