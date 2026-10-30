@@ -1315,11 +1315,12 @@ async function uploadTabletImage() {
         form.style.display = 'none';
 
         const fields = {
-            token: googleUploadToken,
-            fileName: file.name,
-            mimeType: file.type,
-            data: data
-        };
+    token: googleUploadToken,
+    adminSessionToken: window.adminSessionToken,
+    fileName: file.name,
+    mimeType: file.type,
+    data: data
+};
 
         Object.entries(fields).forEach(([name, value]) => {
             const field = document.createElement('input');
