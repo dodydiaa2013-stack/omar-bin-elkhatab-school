@@ -1091,6 +1091,55 @@ if (fileId && googleUploadToken) {
     }
 }
 
+async function loadSchedulesFromDrive() {
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+
+    try {
+        const callbackName = 'schoolSchedulesCallback_' + Date.now();
+
+        const schedules = await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('انتهت مهلة تحميل قوائم الفصول.'));
+            }, 15000);
+
+            function cleanup() {
+                clearTimeout(timeout);
+                script.remove();
+                delete window[callbackName];
+            }
+
+            window[callbackName] = (result) => {
+                cleanup();
+
+                if (result && result.success && result.schedules) {
+                    resolve(result.schedules);
+                } else {
+                    reject(new Error('تعذر جلب قوائم الفصول.'));
+                }
+            };
+
+            script.src = scriptUrl + '?action=schedules&callback=' + callbackName;
+
+            script.onerror = () => {
+                cleanup();
+                reject(new Error('تعذر الاتصال بقوائم الفصول.'));
+            };
+
+            document.body.appendChild(script);
+        });
+
+        driveSchedules = schedules;
+        renderSchedules();
+
+    } catch (error) {
+        console.error('Schedules loading error:', error);
+        console.error('تعذر تحميل قوائم الفصول من Google Drive.');
+    }
+}
+
 function deleteDriveTabletImage(fileId, fileName) {
     if (!googleUploadToken) {
         alert('سجّل الدخول بحساب Google المصرح له بالحذف أولاً.');
@@ -1280,81 +1329,241 @@ window.addEventListener('load', initGooglePhotoLogin);
         }
 
         const CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
+let driveSchedules = {};
+       
+function renderSchedules() {
+    const grid = document.getElementById('schedulesGrid');
+    if (!grid) return;
 
-        function renderSchedules() {
-            const grid = document.getElementById('schedulesGrid');
-            const schedules = JSON.parse(localStorage.getItem('obk_schedules')) || {};
-            grid.innerHTML = '';
+    const schedules = driveSchedules || {};
+    grid.innerHTML = '';
 
-            CLASSES.forEach(cls => {
-                const imgUrl = schedules[cls];
-                const card = document.createElement('div');
-                card.className = "bg-slate-50 border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition";
-                
-                let imageContent = '';
-                if(imgUrl && imgUrl.startsWith('data:image')) {
-                    imageContent = `<img src="${imgUrl}" alt="قائمة فصل ${cls}" class="w-full h-52 object-cover rounded-lg border border-slate-200">`;
-                } else {
-                    imageContent = `<div class="w-full h-52 bg-slate-200 flex flex-col items-center justify-center text-slate-400 rounded-lg border border-dashed border-slate-300">
-                        <i class="fa-solid fa-image text-3xl mb-1"></i>
-                        <span class="text-xs">لم يتم رفع قائمة لهذا الفصل بعد</span>
-                    </div>`;
-                }
+    CLASSES.forEach(cls => {
+        const item = schedules[cls];
+        const imgUrl = item && item.url ? item.url : '';
+        const fileId = item && item.id ? item.id : '';
 
-                card.innerHTML = `
-                    <div class="bg-navy text-white px-4 py-2.5 font-bold flex justify-between items-center text-sm">
-                        <span>فصل ${cls}</span>
-                        <span class="text-xs text-gold">2026/2027</span>
-                    </div>
-                    <div class="p-3">
-                        ${imageContent}
-                    </div>
-                    <div class="px-4 pb-3 flex justify-between items-center text-xs">
-                        <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
-                        <div class="flex items-center gap-2">
-                            ${imgUrl && isAdminLoggedIn ? `<button onclick="deleteScheduleImage('${cls}')" class="text-red-600 hover:underline font-bold flex items-center gap-1"><i class="fa-solid fa-trash"></i> مسح</button>` : ''}
-                            ${imgUrl ? `<a href="${imgUrl}" download="قائمة_فصل_${cls}.png" class="text-navy font-bold hover:underline flex items-center gap-1"><i class="fa-solid fa-download"></i> تحميل</a>` : ''}
-                        </div>
-                    </div>
-                `;
-                grid.appendChild(card);
-            });
+        const card = document.createElement('div');
+        card.className = "bg-slate-50 border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition";
+
+        let imageContent = '';
+
+        if (imgUrl) {
+            imageContent = `
+                <a href="${fileId ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/view' : imgUrl}"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    <img src="${imgUrl}"
+                         alt="قائمة فصل ${cls}"
+                         loading="lazy"
+                         class="w-full h-52 object-cover rounded-lg border border-slate-200">
+                </a>`;
+        } else {
+            imageContent = `
+                <div class="w-full h-52 bg-slate-200 flex flex-col items-center justify-center text-slate-400 rounded-lg border border-dashed border-slate-300">
+                    <i class="fa-solid fa-image text-3xl mb-1"></i>
+                    <span class="text-xs">لم يتم رفع قائمة لهذا الفصل بعد</span>
+                </div>`;
         }
+
+        card.innerHTML = `
+            <div class="bg-navy text-white px-4 py-2.5 font-bold flex justify-between items-center text-sm">
+                <span>فصل ${cls}</span>
+                <span class="text-xs text-gold">2026/2027</span>
+            </div>
+
+            <div class="p-3">
+                ${imageContent}
+            </div>
+
+            <div class="px-4 pb-3 flex justify-between items-center text-xs">
+                <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
+
+                <div class="flex items-center gap-2">
+                    ${imgUrl && googleUploadToken
+                        ? `<button onclick="deleteScheduleImage('${cls}')"
+                            class="text-red-600 hover:underline font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-trash"></i> مسح
+                           </button>`
+                        : ''}
+
+                    ${imgUrl
+                        ? `<a href="${fileId ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId) : imgUrl}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-navy font-bold hover:underline flex items-center gap-1">
+                            <i class="fa-solid fa-download"></i> تحميل
+                           </a>`
+                        : ''}
+                </div>
+            </div>
+        `;
+
+        grid.appendChild(card);
+    });
+}
+
 
         function toggleScheduleUploadModal() {
             document.getElementById('scheduleModal').classList.toggle('hidden');
         }
 
-        function saveScheduleImage() {
-            const cls = document.getElementById('scheduleClassSelect').value;
-            const input = document.getElementById('scheduleImageInput');
+        
+async function saveScheduleImage() {
+    const cls = document.getElementById('scheduleClassSelect').value;
+    const input = document.getElementById('scheduleImageInput');
+    const status = document.getElementById('googleSignInStatus');
 
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const schedules = JSON.parse(localStorage.getItem('obk_schedules')) || {};
-                    schedules[cls] = e.target.result;
-                    localStorage.setItem('obk_schedules', JSON.stringify(schedules));
-                    renderSchedules();
-                    toggleScheduleUploadModal();
-                    input.value = '';
-                    alert(`تم تحديث قائمه الفصل ${cls} وحفظه نهائياً داخل الكود بنجاح!`);
-                };
-                reader.readAsDataURL(input.files[0]);
-            } else {
-                alert('يرجى اختيار صورة أولاً.');
-            }
+    if (!googleUploadToken) {
+        alert('سجّل الدخول بحساب Google المصرح له برفع قوائم الفصول أولاً.');
+        return;
+    }
+
+    if (!input.files || !input.files[0]) {
+        alert('يرجى اختيار صورة أولاً.');
+        return;
+    }
+
+    const file = input.files[0];
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+    if (!allowedTypes.includes(file.type)) {
+        alert('نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF.');
+        return;
+    }
+
+    if (file.size > 4 * 1024 * 1024) {
+        alert('حجم الصورة يجب ألا يتجاوز 4 ميجابايت.');
+        return;
+    }
+
+    if (!confirm('هل تريد رفع قائمة الفصل ' + cls + ' واستبدال القائمة القديمة إن وجدت؟')) {
+        return;
+    }
+
+    status.textContent = 'جارٍ تجهيز قائمة الفصل ورفعها إلى Google Drive...';
+
+    try {
+        const data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result).split(',')[1]);
+            reader.onerror = () => reject(new Error('تعذرت قراءة الصورة.'));
+            reader.readAsDataURL(file);
+        });
+
+        let frame = document.getElementById('schoolPhotoUploadFrame');
+
+        if (!frame) {
+            frame = document.createElement('iframe');
+            frame.name = 'schoolPhotoUploadFrame';
+            frame.id = 'schoolPhotoUploadFrame';
+            frame.style.display = 'none';
+            document.body.appendChild(frame);
         }
 
-        function deleteScheduleImage(cls) {
-            if (confirm(`هل أنت متأكد من مسح قائمة فصل ${cls}؟`)) {
-                let schedules = JSON.parse(localStorage.getItem('obk_schedules')) || {};
-                schedules[cls] = "";
-                localStorage.setItem('obk_schedules', JSON.stringify(schedules));
-                renderSchedules();
-                alert(`تم مسح قائمة فصل ${cls} بنجاح.`);
-            }
-        }
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+        form.target = 'schoolPhotoUploadFrame';
+        form.style.display = 'none';
+
+        const fields = {
+            action: 'uploadSchedule',
+            token: googleUploadToken,
+            className: cls,
+            fileName: file.name,
+            mimeType: file.type,
+            data: data
+        };
+
+        Object.entries(fields).forEach(([name, value]) => {
+            const field = document.createElement('input');
+            field.type = 'hidden';
+            field.name = name;
+            field.value = value;
+            form.appendChild(field);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+
+        status.textContent = 'تم إرسال طلب الرفع. انتظر التحقق من ظهور القائمة في الموقع.';
+
+        input.value = '';
+        toggleScheduleUploadModal();
+
+        setTimeout(() => {
+            loadSchedulesFromDrive();
+        }, 3000);
+
+    } catch (error) {
+        status.textContent = error.message || 'تعذر تجهيز الصورة للرفع.';
+        alert(status.textContent);
+    }
+}
+
+
+        
+function deleteScheduleImage(cls) {
+    if (!googleUploadToken) {
+        alert('سجّل الدخول بحساب Google المسؤول أولاً.');
+        return;
+    }
+
+    const item = driveSchedules[cls];
+
+    if (!item || !item.id) {
+        alert('لم يتم العثور على صورة هذا الفصل.');
+        return;
+    }
+
+    if (!confirm('هل أنت متأكد من حذف قائمة فصل ' + cls + ' نهائياً؟')) {
+        return;
+    }
+
+    let frame = document.getElementById('schoolPhotoUploadFrame');
+
+    if (!frame) {
+        frame = document.createElement('iframe');
+        frame.name = 'schoolPhotoUploadFrame';
+        frame.id = 'schoolPhotoUploadFrame';
+        frame.style.display = 'none';
+        document.body.appendChild(frame);
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+    form.target = 'schoolPhotoUploadFrame';
+    form.style.display = 'none';
+
+    const fields = {
+        action: 'deleteSchedule',
+        token: googleUploadToken,
+        fileId: item.id,
+        className: cls
+    };
+
+    Object.entries(fields).forEach(([name, value]) => {
+        const field = document.createElement('input');
+        field.type = 'hidden';
+        field.name = name;
+        field.value = value;
+        form.appendChild(field);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+
+    alert('تم إرسال طلب حذف قائمة الفصل. جارٍ التحقق من الحذف.');
+
+    setTimeout(() => {
+        loadSchedulesFromDrive();
+    }, 3000);
+}
+
 
         function renderAlerts() {
             const container = document.getElementById('alertsContainer');
