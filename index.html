@@ -928,7 +928,10 @@ async function saveAllPageChanges() {
 }
 
 window.addEventListener('message',function(event) {
-    if(event.origin!=='https://dodydiaa2013-stack.github.io') return;
+    if (
+    event.origin !== 'https://script.google.com' &&
+    !event.origin.endsWith('.googleusercontent.com')
+) return;
     const data=event.data;
     if(!data || data.type!=='savePageChangesResult' || !pendingPageChangesNonce || data.nonce!==pendingPageChangesNonce) return;
     clearTimeout(pageChangesTimeout); pendingPageChangesNonce=null;
