@@ -1245,10 +1245,11 @@ function deleteDriveTabletImage(fileId, fileName) {
     form.style.display = 'none';
 
     const fields = {
-        action: 'delete',
-        token: googleUploadToken,
-        fileId: fileId
-    };
+    action: 'delete',
+    token: googleUploadToken,
+    adminSessionToken: window.adminSessionToken,
+    fileId: fileId
+};
 
     Object.entries(fields).forEach(([name, value]) => {
         const field = document.createElement('input');
