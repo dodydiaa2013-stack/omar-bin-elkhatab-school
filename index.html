@@ -882,7 +882,7 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","results-title","results-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description"];
+    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","results-title","results-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description","republic-header","academic-year"];
     const changes = allowedIds.map(id => {
         const el = document.querySelector('[data-page-edit-id="' + id + '"]');
         return el ? { id: id, text: el.textContent.trim() } : null;
