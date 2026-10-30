@@ -1547,6 +1547,7 @@ async function saveScheduleImage() {
         const fields = {
             action: 'uploadSchedule',
             token: googleUploadToken,
+            adminSessionToken: window.adminSessionToken,
             className: cls,
             fileName: file.name,
             mimeType: file.type,
@@ -1618,6 +1619,7 @@ function deleteScheduleImage(cls) {
     const fields = {
         action: 'deleteSchedule',
         token: googleUploadToken,
+        adminSessionToken: window.adminSessionToken,
         fileId: item.id,
         className: cls
     };
