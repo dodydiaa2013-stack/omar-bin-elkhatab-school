@@ -850,30 +850,121 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         function toggleLiveEditing() {
-            isLiveEditing = !isLiveEditing;
-            const editableElements = document.querySelectorAll('h1, h2, h3, h4, p, span:not(#adminBadge span)');
-            
-            editableElements.forEach(el => {
-                if (isLiveEditing) {
-                    el.setAttribute('contenteditable', 'true');
-                    el.classList.add('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
-                } else {
-                    el.removeAttribute('contenteditable');
-                    el.classList.remove('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
-                }
-            });
+    isLiveEditing = !isLiveEditing;
 
-            const btn = document.getElementById('editToggleBtn');
-            if (isLiveEditing) {
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> إنهاء التعديل';
-                btn.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
-            } else {
-                btn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي';
-                btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
-            }
+    const editableElements = document.querySelectorAll(
+        'h1, h2, h3, h4, p, span:not(#adminBadge span)'
+    );
+
+    editableElements.forEach((el, index) => {
+        if (!el.hasAttribute('data-page-edit-id')) {
+            el.setAttribute('data-page-edit-id', 'page-text-' + index);
         }
-// تحميل التعديلات المحفوظة من Google Drive
+
+        if (isLiveEditing) {
+            el.setAttribute('contenteditable', 'true');
+            el.classList.add('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+        } else {
+            el.removeAttribute('contenteditable');
+            el.classList.remove('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+        }
+    });
+
+    const btn = document.getElementById('editToggleBtn');
+
+    if (isLiveEditing) {
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> إنهاء التعديل';
+        btn.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
+    } else {
+        btn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي';
+        btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
+    }
+}
+        async function saveAllPageChanges() {
+    if (!isAdminLoggedIn || !googleUploadToken || !window.adminSessionToken) {
+        alert('انتهت جلسة المسؤول. سجّل الدخول مرة أخرى.');
+        return;
+    }
+
+    const elements = document.querySelectorAll('[data-page-edit-id]');
+    const changes = [];
+
+    elements.forEach(el => {
+        changes.push({
+            id: el.getAttribute('data-page-edit-id'),
+            html: el.textContent
+        });
+    });
+
+    const payload = JSON.stringify({ changes });
+
+    if (!changes.length) {
+        alert('لا توجد عناصر جاهزة للحفظ.');
+        return;
+    }
+
+    if (payload.length > 90000) {
+        alert('حجم التعديلات كبير. قلّل النصوص وحاول مرة أخرى.');
+        return;
+    }
+
+    try {
+        let frame = document.getElementById('pageChangesUploadFrame');
+
+        if (!frame) {
+            frame = document.createElement('iframe');
+            frame.id = 'pageChangesUploadFrame';
+            frame.name = 'pageChangesUploadFrame';
+            frame.style.display = 'none';
+            document.body.appendChild(frame);
+        }
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+        form.target = 'pageChangesUploadFrame';
+        form.style.display = 'none';
+
+        const fields = {
+            action: 'savePageChanges',
+            token: googleUploadToken,
+            adminSessionToken: window.adminSessionToken,
+            changes: payload
+        };
+
+        Object.entries(fields).forEach(([name, value]) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+
+        if (isLiveEditing) toggleLiveEditing();
+
+        alert('تم إرسال طلب حفظ التعديلات. انتظر قليلًا ثم أعد تحميل الصفحة للتحقق من ظهورها.');
+
+    } catch (error) {
+        alert('تعذر إرسال التعديلات: ' + error.message);
+    }
+}
+        function assignPageEditIds() {
+    const elements = document.querySelectorAll(
+        'h1, h2, h3, h4, p, span:not(#adminBadge span)'
+    );
+
+    elements.forEach((el, index) => {
+        el.setAttribute('data-page-edit-id', 'page-text-' + index);
+    });
+}
+
 function loadSavedPageChanges() {
+    assignPageEditIds();
+
     const scriptURL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
 
     const script = document.createElement("script");
@@ -881,12 +972,11 @@ function loadSavedPageChanges() {
     document.body.appendChild(script);
 }
 
-// استقبال التعديلات وتطبيقها
 function receivePageChanges(data) {
     if (!data || !data.success || !Array.isArray(data.changes)) return;
 
     data.changes.forEach(item => {
-        if (!item.id || typeof item.html !== "string") return;
+        if (typeof item.id !== "string" || typeof item.html !== "string") return;
 
         const element = document.querySelector(
             '[data-page-edit-id="' + CSS.escape(item.id) + '"]'
@@ -897,11 +987,6 @@ function receivePageChanges(data) {
         }
     });
 }
-        function saveAllPageChanges() {
-            if (isLiveEditing) toggleLiveEditing();
-            alert('تم حفظ جميع التعديلات بنجاح في متصفحك!');
-        }
-
         function exportUpdatedHTML() {
     if (isLiveEditing) toggleLiveEditing();
 
