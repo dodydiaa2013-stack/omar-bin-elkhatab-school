@@ -557,11 +557,6 @@
                     <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden"><div id="scheduleProgressBar" class="h-full bg-emerald-600 rounded-full" style="width:0%"></div></div>
                     <div id="scheduleUploadResults" class="space-y-1"></div>
                 </div>
-                <div id="scheduleUploadProgress" class="hidden rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs space-y-2">
-                    <div class="flex justify-between font-bold"><span>تقدم الحفظ</span><span id="scheduleProgressText">0 / 0</span></div>
-                    <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden"><div id="scheduleProgressBar" class="h-full bg-emerald-600 rounded-full" style="width:0%"></div></div>
-                    <div id="scheduleUploadResults" class="space-y-1"></div>
-                </div>
                 <button id="scheduleUploadButton" onclick="saveScheduleImage()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
                     <i class="fa-solid fa-floppy-disk ml-1"></i> حفظ كل قوائم الفصول مرة واحدة
                 </button>
@@ -1606,7 +1601,10 @@ function renderSchedules() {
 
 
         function toggleScheduleUploadModal() {
-            document.getElementById('scheduleModal').classList.toggle('hidden');
+            const modal = document.getElementById('scheduleModal');
+            const willOpen = modal.classList.contains('hidden');
+            modal.classList.toggle('hidden');
+            if (willOpen) renderScheduleClassFileInputs();
         }
 
         
