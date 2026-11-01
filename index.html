@@ -550,19 +550,20 @@
             </button>
             <h3 class="text-lg font-bold text-navy">تعديل أو رفع قائمة فصل</h3>
             <div class="space-y-3 text-xs">
-                <div>
-                    <label class="block font-bold mb-1">اختر صور القوائم (يمكن اختيار أكثر من صورة):</label>
-                    <input type="file" id="scheduleImageInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="w-full p-2 border rounded-lg bg-slate-50">
-                    <p class="text-[11px] text-slate-500 mt-1">الحد الأقصى لكل صورة 4 ميجابايت. حدّد الفصل المناسب لكل صورة قبل الرفع.</p>
-                </div>
-                <div id="scheduleFileAssignments" class="space-y-2 max-h-52 overflow-y-auto"></div>
+                <p class="text-xs text-slate-600">اختر صورة مستقلة أمام كل فصل. يمكنك تجهيز الفصول كلها ثم الضغط على زر الحفظ مرة واحدة.</p>
+                <div id="scheduleClassFiles" class="space-y-2 max-h-64 overflow-y-auto"></div>
                 <div id="scheduleUploadProgress" class="hidden rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs space-y-2">
                     <div class="flex justify-between font-bold"><span>تقدم الرفع</span><span id="scheduleProgressText">0 / 0</span></div>
                     <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden"><div id="scheduleProgressBar" class="h-full bg-emerald-600 rounded-full" style="width:0%"></div></div>
                     <div id="scheduleUploadResults" class="space-y-1"></div>
                 </div>
+                <div id="scheduleUploadProgress" class="hidden rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs space-y-2">
+                    <div class="flex justify-between font-bold"><span>تقدم الحفظ</span><span id="scheduleProgressText">0 / 0</span></div>
+                    <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden"><div id="scheduleProgressBar" class="h-full bg-emerald-600 rounded-full" style="width:0%"></div></div>
+                    <div id="scheduleUploadResults" class="space-y-1"></div>
+                </div>
                 <button id="scheduleUploadButton" onclick="saveScheduleImage()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i class="fa-solid fa-cloud-arrow-up ml-1"></i> رفع القوائم المحددة دفعة واحدة
+                    <i class="fa-solid fa-floppy-disk ml-1"></i> حفظ كل قوائم الفصول مرة واحدة
                 </button>
             </div>
         </div>
@@ -1609,47 +1610,30 @@ function renderSchedules() {
         }
 
         
-function renderScheduleFileAssignments() {
-    const input = document.getElementById('scheduleImageInput');
-    const container = document.getElementById('scheduleFileAssignments');
-    if (!input || !container) return;
+function renderScheduleClassFileInputs() {
+    const container = document.getElementById('scheduleClassFiles');
+    if (!container || container.children.length) return;
 
-    container.innerHTML = '';
-    const files = Array.from(input.files || []);
-    if (!files.length) return;
-
-    files.forEach((file, index) => {
+    CLASSES.forEach(cls => {
         const row = document.createElement('div');
-        row.className = 'grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white';
+        row.className = 'grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white';
 
-        const name = document.createElement('div');
-        name.className = 'min-w-0';
-        name.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
-        name.title = file.name;
+        const label = document.createElement('label');
+        label.className = 'font-bold text-navy';
+        label.textContent = 'فصل ' + cls;
 
-        const select = document.createElement('select');
-        select.className = 'w-full p-2 border rounded-lg bg-slate-50 font-bold';
-        select.dataset.fileIndex = String(index);
-        select.setAttribute('aria-label', 'الفصل الخاص بالصورة ' + file.name);
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/jpeg,image/png,image/webp,image/gif';
+        input.className = 'w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50';
+        input.dataset.className = cls;
+        input.setAttribute('aria-label', 'صورة قائمة فصل ' + cls);
 
-        CLASSES.forEach(cls => {
-            const option = document.createElement('option');
-            option.value = cls;
-            option.textContent = 'فصل ' + cls;
-            select.appendChild(option);
-        });
-
-        row.appendChild(name);
-        row.appendChild(select);
+        row.appendChild(label);
+        row.appendChild(input);
         container.appendChild(row);
     });
 }
-
-document.addEventListener('change', function(event) {
-    if (event.target && event.target.id === 'scheduleImageInput') {
-        renderScheduleFileAssignments();
-    }
-});
 
 function readScheduleFileAsBase64(file) {
     return new Promise((resolve, reject) => {
@@ -1736,61 +1720,46 @@ function uploadOneScheduleFile(file, className, index) {
 }
 
 async function saveScheduleImage() {
-    const input = document.getElementById('scheduleImageInput');
     const status = document.getElementById('googleSignInStatus');
     const button = document.getElementById('scheduleUploadButton');
     const progress = document.getElementById('scheduleUploadProgress');
     const progressText = document.getElementById('scheduleProgressText');
     const progressBar = document.getElementById('scheduleProgressBar');
     const results = document.getElementById('scheduleUploadResults');
+    const fileInputs = Array.from(document.querySelectorAll('#scheduleClassFiles input[type="file"]'));
 
     if (!googleUploadToken) {
         alert('سجّل الدخول بحساب Google المصرح له برفع قوائم الفصول أولاً.');
         return;
     }
 
-    const files = Array.from(input.files || []);
-    if (!files.length) {
-        alert('اختر صورة واحدة على الأقل.');
-        return;
-    }
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    const assignments = Array.from(document.querySelectorAll('#scheduleFileAssignments select'));
-    if (assignments.length !== files.length) {
-        alert('راجع اختيار الصور والفصول ثم حاول مرة أخرى.');
-        return;
-    }
-
-    for (let i = 0; i < files.length; i++) {
-        if (!allowedTypes.includes(files[i].type)) {
-            alert('نوع الصورة غير مسموح: ' + files[i].name + '. استخدم JPG أو PNG أو WEBP أو GIF.');
-            return;
-        }
-        if (files[i].size > 4 * 1024 * 1024) {
-            alert('حجم الصورة أكبر من 4 ميجابايت: ' + files[i].name);
-            return;
-        }
-    }
-
-    const jobs = files.map((file, index) => ({
-        file: file,
-        className: assignments[index].value
+    const jobs = fileInputs.filter(input => input.files && input.files[0]).map(input => ({
+        file: input.files[0],
+        className: input.dataset.className,
+        input: input
     }));
-    const duplicateClasses = jobs.map(job => job.className).filter((cls, index, all) => all.indexOf(cls) !== index);
-    if (duplicateClasses.length) {
-        alert('اختر صورة واحدة فقط لكل فصل في عملية الرفع الواحدة. يوجد تكرار للفصل: ' + [...new Set(duplicateClasses)].join('، '));
+
+    if (!jobs.length) {
+        alert('اختر صورة لفصل واحد على الأقل.');
         return;
     }
 
-    const summary = jobs.map(job => job.file.name + ' ← فصل ' + job.className).join('\n');
-    if (!confirm('سيتم رفع ' + jobs.length + ' صورة بالتتابع واستبدال قوائم الفصول المختارة إن وجدت:\n\n' + summary + '\n\nهل تريد المتابعة؟')) {
-        return;
+    for (const job of jobs) {
+        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(job.file.type)) {
+            alert('نوع الصورة غير مسموح في فصل ' + job.className + '. استخدم JPG أو PNG أو WEBP أو GIF.');
+            return;
+        }
+        if (job.file.size > 4 * 1024 * 1024) {
+            alert('حجم صورة فصل ' + job.className + ' أكبر من 4 ميجابايت.');
+            return;
+        }
     }
+
+    const summary = jobs.map(job => 'فصل ' + job.className + ': ' + job.file.name).join('\n');
+    if (!confirm('سيتم حفظ ' + jobs.length + ' قائمة للفصول المحددة، كل صورة في فصلها، بضغطة واحدة.\n\n' + summary + '\n\nهل تريد المتابعة؟')) return;
 
     button.disabled = true;
-    input.disabled = true;
-    assignments.forEach(select => select.disabled = true);
+    fileInputs.forEach(input => input.disabled = true);
     progress.classList.remove('hidden');
     results.innerHTML = '';
     progressBar.style.width = '0%';
@@ -1800,43 +1769,37 @@ async function saveScheduleImage() {
 
     for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
-        status.textContent = 'جارٍ رفع ' + (i + 1) + ' من ' + jobs.length + ': ' + job.file.name;
-        progressText.textContent = i + ' / ' + jobs.length;
+        status.textContent = 'جارٍ حفظ قائمة فصل ' + job.className + ' (' + (i + 1) + ' من ' + jobs.length + ')';
 
         const line = document.createElement('div');
         line.className = 'text-slate-600';
-        line.textContent = 'قيد الرفع: فصل ' + job.className + ' — ' + job.file.name;
+        line.textContent = 'جارٍ رفع قائمة فصل ' + job.className + '...';
         results.appendChild(line);
 
         try {
-            const result = await uploadOneScheduleFile(job.file, job.className, i);
+            await uploadOneScheduleFile(job.file, job.className, i);
             succeeded++;
             line.className = 'text-emerald-700 font-bold';
-            line.textContent = '✓ تم رفع فصل ' + job.className + ': ' + job.file.name;
+            line.textContent = '✓ تم حفظ قائمة فصل ' + job.className;
         } catch (error) {
-            failures.push({ className: job.className, fileName: job.file.name, message: error.message });
+            failures.push(job.className);
             line.className = 'text-red-600 font-bold';
-            line.textContent = '✕ فشل فصل ' + job.className + ': ' + job.file.name + ' — ' + error.message;
+            line.textContent = '✕ تعذر حفظ قائمة فصل ' + job.className + ': ' + error.message;
         }
 
         progressText.textContent = (i + 1) + ' / ' + jobs.length;
         progressBar.style.width = (((i + 1) / jobs.length) * 100) + '%';
     }
 
-    status.textContent = 'انتهى الرفع: نجح ' + succeeded + ' من ' + jobs.length + '، وفشل ' + failures.length + '.';
-    input.disabled = false;
+    status.textContent = 'اكتمل الحفظ: ' + succeeded + ' ناجح، ' + failures.length + ' فشل.';
+    fileInputs.forEach(input => input.disabled = false);
     button.disabled = false;
-    assignments.forEach(select => select.disabled = false);
+    await loadSchedulesFromDrive();
 
     if (!failures.length) {
-        input.value = '';
-        document.getElementById('scheduleFileAssignments').innerHTML = '';
-        setTimeout(() => {
-            document.getElementById('scheduleModal').classList.add('hidden');
-        }, 1200);
+        fileInputs.forEach(input => { input.value = ''; });
+        setTimeout(() => document.getElementById('scheduleModal').classList.add('hidden'), 1200);
     }
-
-    await loadSchedulesFromDrive();
 }
 
         
