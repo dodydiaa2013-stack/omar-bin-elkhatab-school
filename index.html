@@ -466,10 +466,10 @@
             <div class="bg-white rounded-2xl p-5 md:p-6 border border-slate-200 shadow-sm space-y-6">
                 <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-4">
                     <div>
-                        <h2 class="text-2xl font-bold text-navy flex items-center gap-2">
+                        <h2 data-page-edit-id="alerts-title" class="text-2xl font-bold text-navy flex items-center gap-2">
                             <i class="fa-solid fa-images text-gold"></i> معرض الصور والأنشطة
                         </h2>
-                        <p class="text-xs text-slate-500 mt-1">ألبومات الندوات وورش العمل والتدريبات والاجتماعات والفعاليات المدرسية</p>
+                        <p data-page-edit-id="alerts-description" class="text-xs text-slate-500 mt-1">ألبومات الندوات وورش العمل والتدريبات والاجتماعات والفعاليات المدرسية</p>
                     </div>
                     <div id="alertsTeacherControl" class="hidden">
                         <button type="button" onclick="openPhotoAlbumCreate()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2">
@@ -948,10 +948,7 @@ async function saveAllPageChanges() {
         return el ? { id: id, text: el.textContent.trim() } : null;
     });
     if (changes.some(item => !item)) {
-        const missingIds = allowedIds.filter(id =>
-            !document.querySelector('[data-page-edit-id="' + id + '"]')
-        );
-        alert('العناصر غير الموجودة في الصفحة: ' + missingIds.join(' - '));
+        alert('تعذر الحفظ: بعض عناصر النص المحددة غير موجودة في الصفحة.');
         return;
     }
     const payload = JSON.stringify({ changes });
