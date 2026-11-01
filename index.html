@@ -551,24 +551,18 @@
             <h3 class="text-lg font-bold text-navy">تعديل أو رفع قائمة فصل</h3>
             <div class="space-y-3 text-xs">
                 <div>
-                    <label class="block font-bold mb-1">اختر الفصل:</label>
-                    <select id="scheduleClassSelect" class="w-full p-2.5 border rounded-lg bg-slate-50 font-bold">
-                        <option value="1/1">فصل 1/1</option>
-                        <option value="1/2">فصل 1/2</option>
-                        <option value="1/3">فصل 1/3</option>
-                        <option value="1/4">فصل 1/4</option>
-                        <option value="1/5">فصل 1/5</option>
-                        <option value="1/6">فصل 1/6</option>
-                        <option value="1/7">فصل 1/7</option>
-                        <option value="1/8">فصل 1/8</option>
-                    </select>
+                    <label class="block font-bold mb-1">اختر صور القوائم (يمكن اختيار أكثر من صورة):</label>
+                    <input type="file" id="scheduleImageInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="w-full p-2 border rounded-lg bg-slate-50">
+                    <p class="text-[11px] text-slate-500 mt-1">الحد الأقصى لكل صورة 4 ميجابايت. حدّد الفصل المناسب لكل صورة قبل الرفع.</p>
                 </div>
-                <div>
-                    <label class="block font-bold mb-1">اختر صورة القائمة الجديدة:</label>
-                    <input type="file" id="scheduleImageInput" accept="image/*" class="w-full p-2 border rounded-lg">
+                <div id="scheduleFileAssignments" class="space-y-2 max-h-52 overflow-y-auto"></div>
+                <div id="scheduleUploadProgress" class="hidden rounded-lg bg-slate-50 border border-slate-200 p-3 text-xs space-y-2">
+                    <div class="flex justify-between font-bold"><span>تقدم الرفع</span><span id="scheduleProgressText">0 / 0</span></div>
+                    <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden"><div id="scheduleProgressBar" class="h-full bg-emerald-600 rounded-full" style="width:0%"></div></div>
+                    <div id="scheduleUploadResults" class="space-y-1"></div>
                 </div>
-                <button onclick="saveScheduleImage()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">
-                    حفظ التحديث داخل الكود
+                <button id="scheduleUploadButton" onclick="saveScheduleImage()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fa-solid fa-cloud-arrow-up ml-1"></i> رفع القوائم المحددة دفعة واحدة
                 </button>
             </div>
         </div>
@@ -1615,69 +1609,85 @@ function renderSchedules() {
         }
 
         
-async function saveScheduleImage() {
-    const cls = document.getElementById('scheduleClassSelect').value;
+function renderScheduleFileAssignments() {
     const input = document.getElementById('scheduleImageInput');
-    const status = document.getElementById('googleSignInStatus');
+    const container = document.getElementById('scheduleFileAssignments');
+    if (!input || !container) return;
 
-    if (!googleUploadToken) {
-        alert('سجّل الدخول بحساب Google المصرح له برفع قوائم الفصول أولاً.');
-        return;
-    }
+    container.innerHTML = '';
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
 
-    if (!input.files || !input.files[0]) {
-        alert('يرجى اختيار صورة أولاً.');
-        return;
-    }
+    files.forEach((file, index) => {
+        const row = document.createElement('div');
+        row.className = 'grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white';
 
-    const file = input.files[0];
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        const name = document.createElement('div');
+        name.className = 'min-w-0';
+        name.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(2) + ' MB)';
+        name.title = file.name;
 
-    if (!allowedTypes.includes(file.type)) {
-        alert('نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF.');
-        return;
-    }
+        const select = document.createElement('select');
+        select.className = 'w-full p-2 border rounded-lg bg-slate-50 font-bold';
+        select.dataset.fileIndex = String(index);
+        select.setAttribute('aria-label', 'الفصل الخاص بالصورة ' + file.name);
 
-    if (file.size > 4 * 1024 * 1024) {
-        alert('حجم الصورة يجب ألا يتجاوز 4 ميجابايت.');
-        return;
-    }
-
-    if (!confirm('هل تريد رفع قائمة الفصل ' + cls + ' واستبدال القائمة القديمة إن وجدت؟')) {
-        return;
-    }
-
-    status.textContent = 'جارٍ تجهيز قائمة الفصل ورفعها إلى Google Drive...';
-
-    try {
-        const data = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result).split(',')[1]);
-            reader.onerror = () => reject(new Error('تعذرت قراءة الصورة.'));
-            reader.readAsDataURL(file);
+        CLASSES.forEach(cls => {
+            const option = document.createElement('option');
+            option.value = cls;
+            option.textContent = 'فصل ' + cls;
+            select.appendChild(option);
         });
 
-        let frame = document.getElementById('schoolPhotoUploadFrame');
+        row.appendChild(name);
+        row.appendChild(select);
+        container.appendChild(row);
+    });
+}
 
-        if (!frame) {
-            frame = document.createElement('iframe');
-            frame.name = 'schoolPhotoUploadFrame';
-            frame.id = 'schoolPhotoUploadFrame';
-            frame.style.display = 'none';
-            document.body.appendChild(frame);
-        }
+document.addEventListener('change', function(event) {
+    if (event.target && event.target.id === 'scheduleImageInput') {
+        renderScheduleFileAssignments();
+    }
+});
+
+function readScheduleFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = String(reader.result || '');
+            const comma = result.indexOf(',');
+            if (comma < 0) return reject(new Error('تعذرت قراءة بيانات الصورة.'));
+            resolve(result.slice(comma + 1));
+        };
+        reader.onerror = () => reject(new Error('تعذرت قراءة الصورة: ' + file.name));
+        reader.readAsDataURL(file);
+    });
+}
+
+function uploadOneScheduleFile(file, className, index) {
+    return readScheduleFileAsBase64(file).then(data => new Promise((resolve, reject) => {
+        const nonce = (window.crypto && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : 'schedule-' + Date.now() + '-' + index + '-' + Math.random().toString(36).slice(2);
+
+        const frame = document.createElement('iframe');
+        const frameName = 'scheduleUploadFrame_' + nonce.replace(/[^a-zA-Z0-9_]/g, '');
+        frame.name = frameName;
+        frame.style.display = 'none';
 
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
-        form.target = 'schoolPhotoUploadFrame';
+        form.action = GOOGLE_SCRIPT_URL;
+        form.target = frameName;
         form.style.display = 'none';
 
         const fields = {
             action: 'uploadSchedule',
+            nonce: nonce,
             token: googleUploadToken,
-            adminSessionToken: window.adminSessionToken,
-            className: cls,
+            adminSessionToken: window.adminSessionToken || '',
+            className: className,
             fileName: file.name,
             mimeType: file.type,
             data: data
@@ -1687,29 +1697,147 @@ async function saveScheduleImage() {
             const field = document.createElement('input');
             field.type = 'hidden';
             field.name = name;
-            field.value = value;
+            field.value = String(value);
             form.appendChild(field);
         });
 
+        let settled = false;
+        const cleanup = () => {
+            window.removeEventListener('message', onMessage);
+            clearTimeout(timeout);
+            form.remove();
+            frame.remove();
+        };
+        const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            callback(value);
+        };
+        const onMessage = event => {
+            if (event.source !== frame.contentWindow) return;
+            const message = event.data;
+            if (!message || message.type !== 'scheduleUploadResult' || message.nonce !== nonce) return;
+            if (message.result && message.result.success) {
+                finish(resolve, message.result);
+            } else {
+                finish(reject, new Error((message.result && message.result.message) || 'فشل رفع الصورة.'));
+            }
+        };
+        const timeout = setTimeout(() => {
+            finish(reject, new Error('انتهت مهلة انتظار تأكيد رفع ' + file.name));
+        }, 90000);
+
+        window.addEventListener('message', onMessage);
+        document.body.appendChild(frame);
         document.body.appendChild(form);
         form.submit();
-        form.remove();
-
-        status.textContent = 'تم إرسال طلب الرفع. انتظر التحقق من ظهور القائمة في الموقع.';
-
-        input.value = '';
-        toggleScheduleUploadModal();
-
-        setTimeout(() => {
-            loadSchedulesFromDrive();
-        }, 3000);
-
-    } catch (error) {
-        status.textContent = error.message || 'تعذر تجهيز الصورة للرفع.';
-        alert(status.textContent);
-    }
+    }));
 }
 
+async function saveScheduleImage() {
+    const input = document.getElementById('scheduleImageInput');
+    const status = document.getElementById('googleSignInStatus');
+    const button = document.getElementById('scheduleUploadButton');
+    const progress = document.getElementById('scheduleUploadProgress');
+    const progressText = document.getElementById('scheduleProgressText');
+    const progressBar = document.getElementById('scheduleProgressBar');
+    const results = document.getElementById('scheduleUploadResults');
+
+    if (!googleUploadToken) {
+        alert('سجّل الدخول بحساب Google المصرح له برفع قوائم الفصول أولاً.');
+        return;
+    }
+
+    const files = Array.from(input.files || []);
+    if (!files.length) {
+        alert('اختر صورة واحدة على الأقل.');
+        return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const assignments = Array.from(document.querySelectorAll('#scheduleFileAssignments select'));
+    if (assignments.length !== files.length) {
+        alert('راجع اختيار الصور والفصول ثم حاول مرة أخرى.');
+        return;
+    }
+
+    for (let i = 0; i < files.length; i++) {
+        if (!allowedTypes.includes(files[i].type)) {
+            alert('نوع الصورة غير مسموح: ' + files[i].name + '. استخدم JPG أو PNG أو WEBP أو GIF.');
+            return;
+        }
+        if (files[i].size > 4 * 1024 * 1024) {
+            alert('حجم الصورة أكبر من 4 ميجابايت: ' + files[i].name);
+            return;
+        }
+    }
+
+    const jobs = files.map((file, index) => ({
+        file: file,
+        className: assignments[index].value
+    }));
+    const duplicateClasses = jobs.map(job => job.className).filter((cls, index, all) => all.indexOf(cls) !== index);
+    if (duplicateClasses.length) {
+        alert('اختر صورة واحدة فقط لكل فصل في عملية الرفع الواحدة. يوجد تكرار للفصل: ' + [...new Set(duplicateClasses)].join('، '));
+        return;
+    }
+
+    const summary = jobs.map(job => job.file.name + ' ← فصل ' + job.className).join('\n');
+    if (!confirm('سيتم رفع ' + jobs.length + ' صورة بالتتابع واستبدال قوائم الفصول المختارة إن وجدت:\n\n' + summary + '\n\nهل تريد المتابعة؟')) {
+        return;
+    }
+
+    button.disabled = true;
+    input.disabled = true;
+    assignments.forEach(select => select.disabled = true);
+    progress.classList.remove('hidden');
+    results.innerHTML = '';
+    progressBar.style.width = '0%';
+
+    let succeeded = 0;
+    const failures = [];
+
+    for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
+        status.textContent = 'جارٍ رفع ' + (i + 1) + ' من ' + jobs.length + ': ' + job.file.name;
+        progressText.textContent = i + ' / ' + jobs.length;
+
+        const line = document.createElement('div');
+        line.className = 'text-slate-600';
+        line.textContent = 'قيد الرفع: فصل ' + job.className + ' — ' + job.file.name;
+        results.appendChild(line);
+
+        try {
+            const result = await uploadOneScheduleFile(job.file, job.className, i);
+            succeeded++;
+            line.className = 'text-emerald-700 font-bold';
+            line.textContent = '✓ تم رفع فصل ' + job.className + ': ' + job.file.name;
+        } catch (error) {
+            failures.push({ className: job.className, fileName: job.file.name, message: error.message });
+            line.className = 'text-red-600 font-bold';
+            line.textContent = '✕ فشل فصل ' + job.className + ': ' + job.file.name + ' — ' + error.message;
+        }
+
+        progressText.textContent = (i + 1) + ' / ' + jobs.length;
+        progressBar.style.width = (((i + 1) / jobs.length) * 100) + '%';
+    }
+
+    status.textContent = 'انتهى الرفع: نجح ' + succeeded + ' من ' + jobs.length + '، وفشل ' + failures.length + '.';
+    input.disabled = false;
+    button.disabled = false;
+    assignments.forEach(select => select.disabled = false);
+
+    if (!failures.length) {
+        input.value = '';
+        document.getElementById('scheduleFileAssignments').innerHTML = '';
+        setTimeout(() => {
+            document.getElementById('scheduleModal').classList.add('hidden');
+        }, 1200);
+    }
+
+    await loadSchedulesFromDrive();
+}
 
         
 function deleteScheduleImage(cls) {
