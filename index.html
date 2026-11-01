@@ -948,7 +948,10 @@ async function saveAllPageChanges() {
         return el ? { id: id, text: el.textContent.trim() } : null;
     });
     if (changes.some(item => !item)) {
-        alert('تعذر الحفظ: بعض عناصر النص المحددة غير موجودة في الصفحة.');
+        const missingIds = allowedIds.filter(id =>
+            !document.querySelector('[data-page-edit-id="' + id + '"]')
+        );
+        alert('العناصر غير الموجودة في الصفحة: ' + missingIds.join(' - '));
         return;
     }
     const payload = JSON.stringify({ changes });
