@@ -1680,8 +1680,9 @@ function readScheduleFileAsBase64(file) {
     });
 }
 
-function uploadOneScheduleFile(file, className, index) {
-    return readScheduleFileAsBase64(file).then(data => new Promise((resolve, reject) => {
+function uploadOneScheduleFile(file, className, index, preparedData) {
+    const dataPromise = preparedData ? Promise.resolve(preparedData) : readScheduleFileAsBase64(file);
+    return dataPromise.then(data => new Promise((resolve, reject) => {
         const nonce = (window.crypto && crypto.randomUUID)
             ? crypto.randomUUID()
             : 'schedule-' + Date.now() + '-' + index + '-' + Math.random().toString(36).slice(2);
@@ -1799,6 +1800,22 @@ async function saveScheduleImage() {
     let succeeded = 0;
     const failures = [];
 
+    // تجهيز بيانات الصور بالتوازي قبل الإرسال، مع إبقاء الرفع إلى Drive بالتتابع
+    // لتجنب تعارض عمليات الاستبدال والحذف داخل Apps Script.
+    status.textContent = 'جارٍ تجهيز الصور الأصلية للإرسال...';
+    let preparedImages;
+    try {
+        preparedImages = await Promise.all(
+            jobs.map(job => readScheduleFileAsBase64(job.file))
+        );
+    } catch (error) {
+        status.textContent = 'تعذر تجهيز الصور للإرسال.';
+        fileInputs.forEach(input => input.disabled = false);
+        button.disabled = false;
+        alert(error.message || 'تعذرت قراءة إحدى الصور.');
+        return;
+    }
+
     for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
         status.textContent = 'جارٍ حفظ قائمة فصل ' + job.className + ' (' + (i + 1) + ' من ' + jobs.length + ')';
@@ -1809,7 +1826,7 @@ async function saveScheduleImage() {
         results.appendChild(line);
 
         try {
-            await uploadOneScheduleFile(job.file, job.className, i);
+            await uploadOneScheduleFile(job.file, job.className, i, preparedImages[i]);
             succeeded++;
             line.className = 'text-emerald-700 font-bold';
             line.textContent = '✓ تم حفظ قائمة فصل ' + job.className;
