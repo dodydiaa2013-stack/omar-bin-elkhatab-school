@@ -1730,8 +1730,8 @@ function uploadOneScheduleFile(file, className, index) {
             callback(value);
         };
         const onMessage = event => {
-            if (event.source !== frame.contentWindow) return;
             const message = event.data;
+            // الاعتماد على nonce الفريد بدل مقارنة event.source؛ رد Apps Script قد يمر عبر إطار Google الوسيط.
             if (!message || message.type !== 'scheduleUploadResult' || message.nonce !== nonce) return;
             if (message.result && message.result.success) {
                 finish(resolve, message.result);
@@ -1793,6 +1793,7 @@ async function saveScheduleImage() {
     fileInputs.forEach(input => input.disabled = true);
     progress.classList.remove('hidden');
     results.innerHTML = '';
+    progressText.textContent = '0 / ' + jobs.length;
     progressBar.style.width = '0%';
 
     let succeeded = 0;
