@@ -582,6 +582,8 @@
                     <li><a data-page-edit-id="quick-results-link" href="#" onclick="switchTab('results')" class="hover:text-gold">استعلام نتائج الطلاب</a></li>
                     <li><a data-page-edit-id="quick-tablet-link" href="#" onclick="switchTab('tablet')" class="hover:text-gold">قسم التطوير والتابلت</a></li>
                     <li><a data-page-edit-id="quick-schedules-link" href="#" onclick="switchTab('schedules')" class="hover:text-gold">قوائم الفصول الدراسية</a></li>
+                    <li><a data-page-edit-id="quick-gallery-link" href="#" onclick="switchTab('alerts')" class="hover:text-gold">معرض الصور والأنشطة</a></li>
+                    <li><a data-page-edit-id="quick-student-queries-link" href="#" onclick="switchTab('student-queries')" class="hover:text-gold">استعلامات طلابية</a></li>
                 </ul>
             </div>
             <div class="space-y-3">
@@ -987,7 +989,7 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","results-title","results-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description","republic-header","academic-year","header-manager","home-intro","footer-leadership","quick-links-title","quick-results-link","quick-tablet-link","quick-schedules-link","support-section-title","footer-manager","support-responsibles-title","support-diaa-name","support-mona-name"];
+    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","results-title","results-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description","republic-header","academic-year","header-manager","home-intro","footer-leadership","quick-links-title","quick-results-link","quick-tablet-link","quick-schedules-link","quick-gallery-link","quick-student-queries-link","support-section-title","footer-manager","support-responsibles-title","support-diaa-name","support-mona-name"];
     const changes = allowedIds.map(id => {
         const el = document.querySelector('[data-page-edit-id="' + id + '"]');
         return el ? { id: id, text: el.textContent.trim() } : null;
