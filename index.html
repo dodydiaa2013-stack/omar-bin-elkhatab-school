@@ -185,6 +185,9 @@
                 <button onclick="switchTab('alerts')" id="tab-alerts" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
                     <i class="fa-solid fa-images"></i> معرض الصور والأنشطة
                 </button>
+                <button onclick="switchTab('student-queries')" id="tab-student-queries" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
+                    <i class="fa-solid fa-magnifying-glass"></i> استعلامات طلابية
+                </button>
             </div>
         </nav>
     </header>
@@ -458,6 +461,48 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="schedulesGrid"></div>
+            </div>
+        </section>
+
+        <!-- TAB: STUDENT QUERIES -->
+        <section id="content-student-queries" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl p-5 md:p-6 border border-slate-200 shadow-sm space-y-6">
+                <div class="border-b border-slate-100 pb-4">
+                    <h2 class="text-2xl font-bold text-navy flex items-center gap-2">
+                        <i class="fa-solid fa-magnifying-glass text-gold"></i> استعلامات طلابية
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">اختر خدمة الاستعلام المطلوبة من خلال النوافذ التالية.</p>
+                </div>
+
+                <div class="space-y-3">
+                    <h3 class="text-lg font-bold text-navy">الاستعلام الأول</h3>
+                    <div class="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                        <iframe
+                            src="https://script.google.com/macros/s/AKfycbzTtzdeAjeqcuH7zD7ja-Yy3CRAc5N0xc8kHFZcrQpVKx_l4tA8MDGaYBxHg3ofn53VaQ/exec"
+                            title="الاستعلام الطلابي الأول"
+                            class="w-full"
+                            style="height: 720px; border: 0;"
+                            loading="lazy"
+                            referrerpolicy="strict-origin-when-cross-origin"
+                            allow="clipboard-read; clipboard-write">
+                        </iframe>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <h3 class="text-lg font-bold text-navy">الاستعلام الثاني</h3>
+                    <div class="rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                        <iframe
+                            src="https://script.google.com/macros/s/AKfycbywS4rvQHAB9U0hv8Qy09dsXzLyRraXUjY-xn-FpCDkPz06QUddYUClogndZ7bCRlx4tA/exec"
+                            title="الاستعلام الطلابي الثاني"
+                            class="w-full"
+                            style="height: 720px; border: 0;"
+                            loading="lazy"
+                            referrerpolicy="strict-origin-when-cross-origin"
+                            allow="clipboard-read; clipboard-write">
+                        </iframe>
+                    </div>
+                </div>
             </div>
         </section>
 
