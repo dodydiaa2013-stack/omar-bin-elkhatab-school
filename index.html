@@ -4,36 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>مدرسة عمر بن الخطاب الثانوية بنين - إدارة المستقبل التعليمية</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS v4 Browser CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Font Cairo -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        navy: {
-                            DEFAULT: '#0B132B',
-                            light: '#1C2541',
-                            lighter: '#3A506B'
-                        },
-                        gold: {
-                            DEFAULT: '#F59E0B',
-                            hover: '#D97706',
-                            light: '#FEF3C7'
-                        }
-                    },
-                    fontFamily: {
-                        cairo: ['Cairo', 'sans-serif']
-                    }
-                }
-            }
+    <style type="text/tailwindcss">
+        @theme {
+            --color-navy: #0B132B;
+            --color-navy-light: #1C2541;
+            --color-navy-lighter: #3A506B;
+            --color-gold: #F59E0B;
+            --color-gold-hover: #D97706;
+            --color-gold-light: #FEF3C7;
+            --font-cairo: 'Cairo', sans-serif;
         }
-    </script>
+    </style>
     <style>
         html.page-changes-loading [data-page-edit-id] { visibility: hidden; }
         body {
@@ -408,9 +396,9 @@
                     <label class="block text-xs font-bold text-navy">إضافة صورة جديدة لنشرة التطوير (خاص بالمعلم):</label>
                     <div id="googleSignInButton" class="my-2"></div>
 <p id="googleSignInStatus" class="text-xs text-slate-600">سجّل الدخول بحساب Google المصرح له برفع الصور.</p>
-                    <div class="flex gap-2">
+                    <div id="tabletImageUploadControls" class="hidden gap-2">
                         <input type="file" id="tabletImgInput" accept="image/*" class="block w-full text-xs text-slate-500 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy file:text-white">
-                        <button onclick="uploadTabletImage()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-lg text-xs shrink-0">
+                        <button type="button" onclick="uploadTabletImage()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-lg text-xs shrink-0">
                             رفع وحفظ داخل الكود
                         </button>
                     </div>
@@ -628,6 +616,32 @@
                     تأكيد الدخول
                 </button>
             </div>
+            <div class="text-center">
+                <button type="button" onclick="showPasswordRecovery()" class="text-sm text-blue-700 hover:text-blue-900 font-bold underline">
+                    نسيت كلمة المرور؟
+                </button>
+            </div>
+            <div id="passwordRecoveryPanel" class="hidden border-t border-slate-200 pt-4 space-y-3">
+                <div class="text-center">
+                    <h4 class="font-extrabold text-navy">استعادة كلمة المرور</h4>
+                    <p class="text-xs text-slate-500">سيتم إرسال رمز تحقق إلى البريد الإلكتروني المعتمد.</p>
+                </div>
+                <div id="recoveryStepRequest" class="space-y-3">
+                    <input id="recoveryEmailInput" type="email" inputmode="email" autocomplete="email" required placeholder="أدخل البريد الإلكتروني المعتمد" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
+                    <button type="button" id="recoverySendButton" onclick="requestPasswordRecovery()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">إرسال رمز التحقق</button>
+                </div>
+                <div id="recoveryStepVerify" class="hidden space-y-3">
+                    <input id="recoveryCodeInput" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="أدخل رمز التحقق المكوّن من 6 أرقام" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
+                    <button type="button" id="recoveryVerifyButton" onclick="verifyPasswordRecoveryCode()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">التحقق من الرمز</button>
+                </div>
+                <div id="recoveryStepReset" class="hidden space-y-3">
+                    <input id="recoveryNewPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="كلمة المرور الجديدة (12 حرفًا على الأقل)" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
+                    <input id="recoveryConfirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="أعد كتابة كلمة المرور الجديدة" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
+                    <button type="button" id="recoveryResetButton" onclick="resetAdminPassword()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl transition">حفظ كلمة المرور الجديدة</button>
+                </div>
+                <div id="recoveryMessage" role="status" aria-live="polite" class="text-xs text-center font-bold"></div>
+                <button type="button" onclick="hidePasswordRecovery()" class="w-full text-xs text-slate-500 hover:text-slate-700 underline">إغلاق استعادة كلمة المرور</button>
+            </div>
         </div>
     </div>
 
@@ -683,6 +697,7 @@
                     <i class="fa-solid fa-floppy-disk ml-1"></i> حفظ كل قوائم الفصول مرة واحدة
                 </button>
             </div>
+
         </div>
     </div>
 
@@ -844,7 +859,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const fields = {
         action: 'adminLogin',
         password: password,
-        nonce: nonce
+        nonce: nonce,
+        origin: window.location.origin
     };
 
     Object.entries(fields).forEach(([name, value]) => {
@@ -859,6 +875,183 @@ window.addEventListener('DOMContentLoaded', () => {
     form.submit();
     form.remove();
 }
+
+        // استعادة كلمة المرور: معزولة عن مسار تسجيل الدخول الأصلي.
+        let recoveryResetToken = "";
+
+        function showPasswordRecovery() {
+            document.getElementById('passwordRecoveryPanel').classList.remove('hidden');
+            document.getElementById('recoveryStepRequest').classList.remove('hidden');
+            document.getElementById('recoveryStepVerify').classList.add('hidden');
+            document.getElementById('recoveryStepReset').classList.add('hidden');
+            setRecoveryMessage('', false);
+        }
+
+        function hidePasswordRecovery() {
+            document.getElementById('passwordRecoveryPanel').classList.add('hidden');
+            recoveryResetToken = '';
+            ['recoveryCodeInput', 'recoveryNewPassword', 'recoveryConfirmPassword'].forEach(id => {
+                const field = document.getElementById(id);
+                if (field) field.value = '';
+            });
+            setRecoveryMessage('', false);
+        }
+
+        function setRecoveryMessage(message, isError) {
+            const element = document.getElementById('recoveryMessage');
+            element.textContent = message || '';
+            element.className = 'text-xs text-center font-bold ' + (isError ? 'text-red-600' : 'text-emerald-700');
+        }
+
+        function recoveryPost(action, fields) {
+            return new Promise((resolve, reject) => {
+                let frame = document.getElementById('passwordRecoveryFrame');
+                if (!frame) {
+                    frame = document.createElement('iframe');
+                    frame.name = 'passwordRecoveryFrame';
+                    frame.id = 'passwordRecoveryFrame';
+                    frame.style.display = 'none';
+                    document.body.appendChild(frame);
+                }
+                const nonce = (window.crypto && crypto.randomUUID)
+                    ? crypto.randomUUID()
+                    : String(Date.now()) + Math.random().toString(36).slice(2);
+
+                const handleMessage = function(event) {
+                    if (event.origin !== 'https://script.google.com' &&
+                        !event.origin.endsWith('.googleusercontent.com')) return;
+                    const data = event.data;
+                    if (!data || data.type !== 'passwordRecoveryResult' || data.nonce !== nonce) return;
+                    window.removeEventListener('message', handleMessage);
+                    clearTimeout(timeout);
+                    resolve(data.result || { success: false, message: 'استجابة غير مكتملة من الخادم.' });
+                };
+                window.addEventListener('message', handleMessage);
+
+                const timeout = setTimeout(() => {
+                    window.removeEventListener('message', handleMessage);
+                    reject(new Error('لم يصل رد من الخادم. حاول مرة أخرى.'));
+                }, 20000);
+
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = GOOGLE_SCRIPT_URL;
+                form.target = 'passwordRecoveryFrame';
+                form.style.display = 'none';
+                const payload = Object.assign({}, fields, { action: action, nonce: nonce, origin: window.location.origin });
+                Object.entries(payload).forEach(([name, value]) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = name;
+                    input.value = String(value == null ? '' : value);
+                    form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
+                form.remove();
+            });
+        }
+
+        async function requestPasswordRecovery() {
+            const emailField = document.getElementById('recoveryEmailInput');
+            const email = emailField.value.trim().toLowerCase();
+            const approvedEmail = 'dodydiaa2013@gmail.com';
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                setRecoveryMessage('أدخل بريدًا إلكترونيًا صحيحًا أولاً.', true);
+                emailField.focus();
+                return;
+            }
+            if (email !== approvedEmail) {
+                setRecoveryMessage('البريد الإلكتروني غير مطابق للبريد المعتمد لاستعادة كلمة المرور.', true);
+                emailField.focus();
+                return;
+            }
+            const button = document.getElementById('recoverySendButton');
+            button.disabled = true;
+            button.textContent = 'جارٍ إرسال الرمز...';
+            setRecoveryMessage('', false);
+            try {
+                const result = await recoveryPost('requestPasswordRecovery', { email: email });
+                if (!result.success) throw new Error(result.message || 'تعذر إرسال رمز التحقق.');
+                document.getElementById('recoveryStepRequest').classList.add('hidden');
+                document.getElementById('recoveryStepVerify').classList.remove('hidden');
+                setRecoveryMessage(result.message || 'تم إرسال رمز التحقق إلى البريد المعتمد.', false);
+            } catch (error) {
+                const message = error && error.message ? error.message : '';
+                if (message.includes('لم يصل رد من الخادم')) {
+                    document.getElementById('recoveryStepRequest').classList.add('hidden');
+                    document.getElementById('recoveryStepVerify').classList.remove('hidden');
+                    setRecoveryMessage('إذا وصلك رمز التحقق على البريد، أدخله هنا. تعذّر فقط استلام تأكيد الإرسال من الخادم.', true);
+                } else {
+                    setRecoveryMessage(message || 'تعذر إرسال رمز التحقق.', true);
+                }
+            } finally {
+                button.disabled = false;
+                button.textContent = 'إرسال رمز التحقق';
+            }
+        }
+
+        async function verifyPasswordRecoveryCode() {
+            const code = document.getElementById('recoveryCodeInput').value.trim();
+            if (!/^\d{6}$/.test(code)) {
+                setRecoveryMessage('أدخل رمز التحقق المكوّن من 6 أرقام.', true);
+                return;
+            }
+            const button = document.getElementById('recoveryVerifyButton');
+            button.disabled = true;
+            button.textContent = 'جارٍ التحقق...';
+            try {
+                const result = await recoveryPost('verifyPasswordRecoveryCode', { code: code });
+                if (!result.success || !result.resetToken) throw new Error(result.message || 'رمز التحقق غير صحيح.');
+                recoveryResetToken = result.resetToken;
+                document.getElementById('recoveryStepVerify').classList.add('hidden');
+                document.getElementById('recoveryStepReset').classList.remove('hidden');
+                setRecoveryMessage('تم التحقق بنجاح. أدخل كلمة المرور الجديدة.', false);
+            } catch (error) {
+                setRecoveryMessage(error.message || 'تعذر التحقق من الرمز.', true);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'التحقق من الرمز';
+            }
+        }
+
+        async function resetAdminPassword() {
+            const newPassword = document.getElementById('recoveryNewPassword').value;
+            const confirmation = document.getElementById('recoveryConfirmPassword').value;
+            if (newPassword.length < 12 || newPassword.length > 128) {
+                setRecoveryMessage('كلمة المرور يجب أن تكون من 12 إلى 128 حرفًا.', true);
+                return;
+            }
+            if (newPassword !== confirmation) {
+                setRecoveryMessage('كلمتا المرور غير متطابقتين.', true);
+                return;
+            }
+            if (!recoveryResetToken) {
+                setRecoveryMessage('انتهت صلاحية الاستعادة. ابدأ من جديد واطلب رمزًا آخر.', true);
+                return;
+            }
+            const button = document.getElementById('recoveryResetButton');
+            button.disabled = true;
+            button.textContent = 'جارٍ حفظ كلمة المرور...';
+            try {
+                const result = await recoveryPost('resetAdminPassword', {
+                    resetToken: recoveryResetToken,
+                    newPassword: newPassword
+                });
+                if (!result.success) throw new Error(result.message || 'تعذر تغيير كلمة المرور.');
+                recoveryResetToken = '';
+                document.getElementById('adminPasswordInput').value = '';
+                document.getElementById('recoveryNewPassword').value = '';
+                document.getElementById('recoveryConfirmPassword').value = '';
+                document.getElementById('recoveryStepReset').classList.add('hidden');
+                setRecoveryMessage('تم تغيير كلمة المرور بنجاح. أغلق النافذة ثم سجّل الدخول بكلمة المرور الجديدة.', false);
+            } catch (error) {
+                setRecoveryMessage(error.message || 'تعذر تغيير كلمة المرور.', true);
+            } finally {
+                button.disabled = false;
+                button.textContent = 'حفظ كلمة المرور الجديدة';
+            }
+        }
 
         function updateTeacherUI() {
             if (isAdminLoggedIn) {
@@ -1377,7 +1570,9 @@ function handleGoogleCredentialResponse(response) {
     }
 
     googleUploadToken = response.credential;
-    status.textContent = 'تم تسجيل الدخول بنجاح. يمكنك الآن رفع الصور وحذفها.';
+    const uploadControls = document.getElementById('tabletImageUploadControls');
+    if (uploadControls) { uploadControls.classList.remove('hidden'); uploadControls.classList.add('flex'); }
+    status.textContent = 'تم تسجيل الدخول بنجاح. يمكنك الآن اختيار الصور ورفعها وحذفها.';
 
     renderTabletGallery();
     renderSchedules();
