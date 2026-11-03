@@ -396,7 +396,7 @@
                     <label class="block text-xs font-bold text-navy">إضافة صورة جديدة لنشرة التطوير (خاص بالمعلم):</label>
                     <div id="googleSignInButton" class="my-2"></div>
 <p id="googleSignInStatus" class="text-xs text-slate-600">سجّل الدخول بحساب Google المصرح له برفع الصور.</p>
-                    <div id="tabletImageUploadControls" class="hidden flex gap-2">
+                    <div id="tabletImageUploadControls" class="hidden gap-2">
                         <input type="file" id="tabletImgInput" accept="image/*" class="block w-full text-xs text-slate-500 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy file:text-white">
                         <button type="button" onclick="uploadTabletImage()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-lg text-xs shrink-0">
                             رفع وحفظ داخل الكود
@@ -1571,7 +1571,7 @@ function handleGoogleCredentialResponse(response) {
 
     googleUploadToken = response.credential;
     const uploadControls = document.getElementById('tabletImageUploadControls');
-    if (uploadControls) uploadControls.classList.remove('hidden');
+    if (uploadControls) { uploadControls.classList.remove('hidden'); uploadControls.classList.add('flex'); }
     status.textContent = 'تم تسجيل الدخول بنجاح. يمكنك الآن اختيار الصور ورفعها وحذفها.';
 
     renderTabletGallery();
