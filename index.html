@@ -639,6 +639,7 @@
                     <p class="text-xs text-slate-500">سيتم إرسال رمز تحقق إلى البريد الإلكتروني المعتمد.</p>
                 </div>
                 <div id="recoveryStepRequest" class="space-y-3">
+                    <input id="recoveryEmailInput" type="email" inputmode="email" autocomplete="email" required placeholder="أدخل البريد الإلكتروني المعتمد" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
                     <button type="button" id="recoverySendButton" onclick="requestPasswordRecovery()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">إرسال رمز التحقق</button>
                 </div>
                 <div id="recoveryStepVerify" class="hidden space-y-3">
@@ -963,12 +964,25 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         async function requestPasswordRecovery() {
+            const emailField = document.getElementById('recoveryEmailInput');
+            const email = emailField.value.trim().toLowerCase();
+            const approvedEmail = 'dodydiaa2013@gmail.com';
+            if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+                setRecoveryMessage('أدخل بريدًا إلكترونيًا صحيحًا أولاً.', true);
+                emailField.focus();
+                return;
+            }
+            if (email !== approvedEmail) {
+                setRecoveryMessage('البريد الإلكتروني غير مطابق للبريد المعتمد لاستعادة كلمة المرور.', true);
+                emailField.focus();
+                return;
+            }
             const button = document.getElementById('recoverySendButton');
             button.disabled = true;
             button.textContent = 'جارٍ إرسال الرمز...';
             setRecoveryMessage('', false);
             try {
-                const result = await recoveryPost('requestPasswordRecovery', {});
+                const result = await recoveryPost('requestPasswordRecovery', { email: email });
                 if (!result.success) throw new Error(result.message || 'تعذر إرسال رمز التحقق.');
                 document.getElementById('recoveryStepRequest').classList.add('hidden');
                 document.getElementById('recoveryStepVerify').classList.remove('hidden');
