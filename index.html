@@ -967,7 +967,7 @@ window.addEventListener('DOMContentLoaded', () => {
             const emailField = document.getElementById('recoveryEmailInput');
             const email = emailField.value.trim().toLowerCase();
             const approvedEmail = 'dodydiaa2013@gmail.com';
-            if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 setRecoveryMessage('أدخل بريدًا إلكترونيًا صحيحًا أولاً.', true);
                 emailField.focus();
                 return;
