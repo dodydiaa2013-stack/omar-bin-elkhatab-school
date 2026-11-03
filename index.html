@@ -49,6 +49,10 @@
             display: inline-block;
             animation: ticker 30s linear infinite;
         }
+        .ticker-message { display: none; }
+        .ticker-message.active { display: inline; }
+        .ticker-text.ticker-editing .ticker-message { display: inline; }
+        .ticker-text.ticker-editing .ticker-message + .ticker-message { margin-right: 1.5rem; }
         .ticker-paused {
             animation-play-state: paused;
         }
@@ -152,7 +156,10 @@
             </div>
             <div class="ticker-container flex-grow overflow-hidden text-sm text-slate-200" id="tickerContainer">
                 <div class="ticker-text font-medium" id="tickerText">
-                    أهلاً بكم في الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين • تحت قيادة مدير المدرسة أ. محمد السويسي • استعلام نتائج الطلاب متاح الآن برقم الجلوس • يرجى من طلاب الصف الأول والثاني الثانوي مراجعة قسم التطوير والتابلت.
+                    <span class="ticker-message active" data-page-edit-id="ticker-message-1">أهلاً بكم في الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين • تحت قيادة مدير المدرسة أ. محمد السويسي.</span>
+                    <span class="ticker-message" data-page-edit-id="ticker-message-2">استعلام نتائج الطلاب متاح الآن برقم الجلوس أو كود الطالب.</span>
+                    <span class="ticker-message" data-page-edit-id="ticker-message-3">يرجى من جميع الطلاب التأكد من تحديث منصة الامتحان بالتابلت المدرسي.</span>
+                    <span class="ticker-message" data-page-edit-id="ticker-message-4">جداول الحصص الدراسية للفصول معلنة بالفصول.</span>
                 </div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
@@ -686,13 +693,6 @@
 
 
 
-        const INITIAL_NEWS = [
-            "أهلاً بكم في الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين • تحت قيادة مدير المدرسة أ. محمد السويسي.",
-            "استعلام نتائج الطلاب متاح الآن برقم الجلوس أو كود الطالب.",
-            "يرجى من جميع الطلاب التأكد من تحديث منصة الامتحان بالتابلت المدرسي.",
-            "جداول الحصص الدراسية للفصول معلنة بالفصول ."
-        ];
-
         let currentNewsIndex = 0;
         let tickerPaused = false;
         let isAdminLoggedIn = false;
@@ -759,8 +759,11 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         function changeNews() {
-            currentNewsIndex = (currentNewsIndex + 1) % INITIAL_NEWS.length;
-            document.getElementById('tickerText').innerText = INITIAL_NEWS[currentNewsIndex];
+            const messages = document.querySelectorAll('#tickerText .ticker-message');
+            if (!messages.length) return;
+            messages[currentNewsIndex].classList.remove('active');
+            currentNewsIndex = (currentNewsIndex + 1) % messages.length;
+            messages[currentNewsIndex].classList.add('active');
         }
 
         function toggleAdminModal() {
@@ -882,6 +885,7 @@ function toggleLiveEditing() {
             el.classList.remove('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
         }
     });
+    document.getElementById('tickerText').classList.toggle('ticker-editing', isLiveEditing);
     const btn = document.getElementById('editToggleBtn');
     if (isLiveEditing) {
         btn.innerHTML = '<i class="fa-solid fa-check"></i> إنهاء التعديل';
@@ -901,7 +905,7 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description","republic-header","academic-year","header-manager","home-intro","footer-leadership","quick-links-title","quick-results-link","quick-tablet-link","quick-schedules-link","quick-gallery-link","quick-student-queries-link","quick-leaders-link","support-section-title","footer-manager","support-responsibles-title","support-diaa-name","support-mona-name","motto-tablet-title","motto-tablet-description","motto-dev-title","motto-dev-description","student-queries-title","student-queries-description","student-query-one-title","student-query-two-title","server-tip-1","server-tip-2","server-tip-3","server-tip-4","tablet-support-tip-1","tablet-support-tip-2","tablet-support-tip-3","tablet-support-tip-4"];
+    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description","republic-header","academic-year","header-manager","home-intro","footer-leadership","quick-links-title","quick-results-link","quick-tablet-link","quick-schedules-link","quick-gallery-link","quick-student-queries-link","quick-leaders-link","support-section-title","footer-manager","support-responsibles-title","support-diaa-name","support-mona-name","motto-tablet-title","motto-tablet-description","motto-dev-title","motto-dev-description","student-queries-title","student-queries-description","student-query-one-title","student-query-two-title","server-tip-1","server-tip-2","server-tip-3","server-tip-4","tablet-support-tip-1","tablet-support-tip-2","tablet-support-tip-3","tablet-support-tip-4","ticker-message-1","ticker-message-2","ticker-message-3","ticker-message-4"];
     const changes = allowedIds.map(id => {
         const el = document.querySelector('[data-page-edit-id="' + id + '"]');
         return el ? { id: id, text: el.textContent.trim() } : null;
@@ -987,6 +991,8 @@ function receivePageChanges(data) {
         const element=document.querySelector('[data-page-edit-id="'+CSS.escape(item.id)+'"]');
         if(element) element.textContent=item.text;
     });
+    const messages = document.querySelectorAll('#tickerText .ticker-message');
+    messages.forEach((message, index) => message.classList.toggle('active', index === currentNewsIndex));
 }
         function exportUpdatedHTML() {
     if (isLiveEditing) toggleLiveEditing();
