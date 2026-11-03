@@ -10,8 +10,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Font Cairo -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- SheetJS for Excel files -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <script>
         tailwind.config = {
@@ -292,26 +290,7 @@
                 </p>
             </div>
 
-            <div id="teacherResultControls" class="hidden bg-amber-50 border-2 border-gold rounded-2xl p-6 shadow-md space-y-4">
-                <div class="flex items-center justify-between border-b border-gold/30 pb-3">
-                    <h3 class="text-lg font-bold text-navy flex items-center gap-2">
-                        <i class="fa-solid fa-file-excel text-emerald-600"></i> لوحة تحكم المعلم - رفع وتحديث النتائج (Excel)
-                    </h3>
-                    <span class="text-xs font-bold bg-gold/20 text-gold-hover px-2.5 py-1 rounded-full">خاص بالمطورين والمعلمين</span>
-                </div>
-                <p class="text-xs text-slate-600">يمكنك هنا رفع ملف Excel يحتوي على بيانات الطلاب والدرجات لتحديث قاعدة البيانات فورياً.</p>
-                
-                <div class="flex flex-col md:flex-row items-center gap-4">
-                    <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="block w-full text-xs text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-navy file:text-white hover:file:bg-navy-light cursor-pointer">
-                    <button onclick="processExcelUpload()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs transition shrink-0 flex items-center gap-2">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> رفع واستبدال قاعدة البيانات
-                    </button>
-                    <button onclick="resetDefaultResults()" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shrink-0">
-                        إعادة النتائج للوضع الافتراضي
-                    </button>
-                </div>
-                <div id="uploadStatus" class="text-xs font-bold text-emerald-700 hidden"></div>
-            </div>
+            
         </section>
 
         <!-- TAB: TOP TEN STUDENTS -->
@@ -661,93 +640,9 @@
     <!-- JAVASCRIPT LOGIC -->
     <script>
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
-        const DEFAULT_STUDENTS = [
-            {
-                code: "1001",
-                name: "أحمد محمد محمود علي",
-                grade: "الصف الأول الثانوي",
-                class: "1/2",
-                subjects: {
-                    arabic: { score: 75, max: 80 },
-                    english: { score: 54, max: 60 },
-                    secondLang: { score: 38, max: 40 },
-                    math: { score: 52, max: 60 },
-                    integratedScience: { score: 55, max: 60 },
-                    history: { score: 36, max: 40 },
-                    philosophy: { score: 37, max: 40 }
-                }
-            },
-            {
-                code: "1002",
-                name: "عمر خالد عبد الرحمن",
-                grade: "الصف الأول الثانوي",
-                class: "1/3",
-                subjects: {
-                    arabic: { score: 68, max: 80 },
-                    english: { score: 48, max: 60 },
-                    secondLang: { score: 32, max: 40 },
-                    math: { score: 45, max: 60 },
-                    integratedScience: { score: 49, max: 60 },
-                    history: { score: 30, max: 40 },
-                    philosophy: { score: 34, max: 40 }
-                }
-            },
-            {
-                code: "1003",
-                name: "يوسف حسن مصطفى",
-                grade: "الصف الأول الثانوي",
-                class: "1/4",
-                subjects: {
-                    arabic: { score: 78, max: 80 },
-                    english: { score: 58, max: 60 },
-                    secondLang: { score: 40, max: 40 },
-                    math: { score: 59, max: 60 },
-                    integratedScience: { score: 58, max: 60 },
-                    history: { score: 39, max: 40 },
-                    philosophy: { score: 40, max: 40 }
-                }
-            },
-            {
-                code: "1004",
-                name: "محمود إبراهيم السيد",
-                grade: "الصف الأول الثانوي",
-                class: "1/5",
-                subjects: {
-                    arabic: { score: 60, max: 80 },
-                    english: { score: 35, max: 60 },
-                    secondLang: { score: 28, max: 40 },
-                    math: { score: 33, max: 60 },
-                    integratedScience: { score: 38, max: 40 },
-                    history: { score: 25, max: 40 },
-                    philosophy: { score: 29, max: 40 }
-                }
-            },
-            {
-                code: "1005",
-                name: "كريم طارق عبد الله",
-                grade: "الصف الأول الثانوي",
-                class: "1/7",
-                subjects: {
-                    arabic: { score: 80, max: 80 },
-                    english: { score: 59, max: 60 },
-                    secondLang: { score: 39, max: 40 },
-                    math: { score: 60, max: 60 },
-                    integratedScience: { score: 60, max: 60 },
-                    history: { score: 40, max: 40 },
-                    philosophy: { score: 40, max: 40 }
-                }
-            }
-        ];
 
-        const SUBJECT_NAMES = {
-            arabic: "اللغة العربية",
-            english: "اللغة الأجنبية الأولى",
-            secondLang: "اللغة الأجنبية الثانية",
-            math: "الرياضيات",
-            integratedScience: "العلوم المتكاملة",
-            history: "التاريخ",
-            philosophy: "الفلسفة والمنطق"
-        };
+
+
 
         const INITIAL_NEWS = [
             "أهلاً بكم في الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين • تحت قيادة مدير المدرسة أ. محمد السويسي.",
@@ -773,9 +668,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
 
         function initLocalStorage() {
-            if (!localStorage.getItem('obk_students')) {
-                localStorage.setItem('obk_students', JSON.stringify(DEFAULT_STUDENTS));
-            }
             if (!localStorage.getItem('obk_alerts')) {
                 const defaultAlerts = [
                     { id: 1, title: "تنبيه بخصوص امتحانات الشهر", text: "على جميع الطلاب الالتزام بالحضور بالزي المدرسي واصطحاب التابلت مشحون بالكامل.", date: "2026-10-25" },
@@ -927,7 +819,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('adminBadge').classList.remove('hidden');
                 document.getElementById('devControlBar').classList.remove('hidden');
                 document.getElementById('loginBtnText').innerText = 'المعلم مفعّل';
-                document.getElementById('teacherResultControls').classList.remove('hidden');
                 document.getElementById('tabletTeacherUpload').classList.remove('hidden');
                 document.getElementById('scheduleTeacherControl').classList.remove('hidden');
                 document.getElementById('alertsTeacherControl').classList.remove('hidden');
@@ -1097,145 +988,6 @@ function receivePageChanges(data) {
 
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
-        function searchResult() {
-            const codeInput = document.getElementById('studentCodeInput').value.trim();
-            const errorEl = document.getElementById('searchError');
-            const resultDisplay = document.getElementById('resultDisplay');
-
-            if (!codeInput) {
-                errorEl.innerText = "يرجى إدخال رقم الجلوس أو الكود أولاً.";
-                errorEl.classList.remove('hidden');
-                resultDisplay.classList.add('hidden');
-                return;
-            }
-
-            const students = JSON.parse(localStorage.getItem('obk_students')) || [];
-            const student = students.find(s => s.code === codeInput);
-
-            if (student) {
-                errorEl.classList.add('hidden');
-                displayStudentCard(student);
-                resultDisplay.classList.remove('hidden');
-            } else {
-                resultDisplay.classList.add('hidden');
-                errorEl.innerText = "لم يتم العثور على طالب بهذا الرقم. جرب الأكواد التجريبية (1001، 1002، إلخ).";
-                errorEl.classList.remove('hidden');
-            }
-        }
-
-        function displayStudentCard(student) {
-            document.getElementById('resName').innerText = student.name;
-            document.getElementById('resCode').innerText = student.code;
-            document.getElementById('resGrade').innerText = student.grade || "الصف الأول الثانوي";
-            document.getElementById('resClass').innerText = student.class || "---";
-
-            const tbody = document.getElementById('resSubjectsBody');
-            tbody.innerHTML = '';
-
-            let totalObtained = 0;
-            let totalMax = 0;
-
-            for (const [key, sub] of Object.entries(student.subjects)) {
-                totalObtained += Number(sub.score);
-                totalMax += Number(sub.max);
-
-                const ratio = (sub.score / sub.max) * 100;
-                let gradeText = "ممتاز";
-                let gradeClass = "text-emerald-600 font-bold";
-                if (ratio < 50) { gradeText = "ضعيف"; gradeClass = "text-red-600 font-bold"; }
-                else if (ratio < 65) { gradeText = "مقبول"; gradeClass = "text-amber-600 font-bold"; }
-                else if (ratio < 75) { gradeText = "جيد"; gradeClass = "text-sky-600 font-bold"; }
-                else if (ratio < 85) { gradeText = "جيد جداً"; gradeClass = "text-blue-600 font-bold"; }
-
-                const row = document.createElement('tr');
-                row.className = "hover:bg-slate-100 transition";
-                row.innerHTML = `
-                    <td class="p-2.5 font-bold text-slate-800">${SUBJECT_NAMES[key] || key}</td>
-                    <td class="p-2.5 text-center text-slate-500">${sub.max}</td>
-                    <td class="p-2.5 text-center font-bold text-navy">${sub.score}</td>
-                    <td class="p-2.5 text-center ${gradeClass}">${gradeText}</td>
-                `;
-                tbody.appendChild(row);
-            }
-
-            const percentage = totalMax > 0 ? ((totalObtained / totalMax) * 100).toFixed(1) : 0;
-            document.getElementById('resTotal').innerText = `${totalObtained} / ${totalMax}`;
-            document.getElementById('resPercentage').innerText = `${percentage}%`;
-
-            let overallStatus = "ناجح";
-            let statusColor = "text-emerald-400";
-            if (percentage < 50) {
-                overallStatus = "له دور ثاني";
-                statusColor = "text-red-400";
-            }
-            document.getElementById('resStatus').innerText = overallStatus;
-            document.getElementById('resStatus').className = `text-xl font-black ${statusColor}`;
-        }
-
-        function processExcelUpload() {
-            const fileInput = document.getElementById('excelFileInput');
-            const statusEl = document.getElementById('uploadStatus');
-
-            if (!fileInput.files.length) {
-                alert('يرجى اختيار ملف Excel أولاً.');
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-                    if (jsonData.length === 0) {
-                        alert('الملف المرفوع فارغ!');
-                        return;
-                    }
-
-                    const newStudents = jsonData.map(row => ({
-                        code: String(row["الكود"] || row["رقم الجلوس"] || row["Code"] || "000"),
-                        name: row["الاسم"] || row["اسم الطالب"] || row["Name"] || "طالب جديد",
-                        grade: row["الصف"] || "الصف الأول الثانوي",
-                        class: row["الفصل"] || "1/1",
-                        subjects: {
-                            arabic: { score: Number(row["عربي"] || row["اللغة العربية"] || 0), max: 80 },
-                            english: { score: Number(row["انجليزي"] || row["اللغة الأجنبية الأولى"] || 0), max: 60 },
-                            secondLang: { score: Number(row["لغة ثانية"] || 0), max: 40 },
-                            math: { score: Number(row["رياضيات"] || 0), max: 60 },
-                            integratedScience: { score: Number(row["علوم متكاملة"] || 0), max: 60 },
-                            history: { score: Number(row["تاريخ"] || 0), max: 40 },
-                            philosophy: { score: Number(row["فلسفة"] || 0), max: 40 }
-                        }
-                    }));
-
-                    localStorage.setItem('obk_students', JSON.stringify(newStudents));
-                    statusEl.innerText = `تم رفع وتحديث البيانات بنجاح لـ (${newStudents.length}) طالب!`;
-                    statusEl.classList.remove('hidden');
-                    alert(`تم استيراد ${newStudents.length} طالب بنجاح!`);
-                } catch (err) {
-                    console.error(err);
-                    alert('حدث خطأ أثناء قراءة ملف Excel. تأكد من صحة التنسيق.');
-                }
-            };
-
-            reader.readAsArrayBuffer(file);
-        }
-
-        function resetDefaultResults() {
-            if (confirm('هل أنت تأكد من إعادة النتائج للبيانات الافتراضية؟')) {
-                localStorage.setItem('obk_students', JSON.stringify(DEFAULT_STUDENTS));
-                alert('تمت الإعادة للوضع الافتراضي.');
-            }
-        }
-
-        
-
 
 async function renderTabletGallery() {
     const gallery = document.getElementById('tabletGallery');
