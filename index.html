@@ -859,7 +859,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const fields = {
         action: 'adminLogin',
         password: password,
-        nonce: nonce
+        nonce: nonce,
+        origin: window.location.origin
     };
 
     Object.entries(fields).forEach(([name, value]) => {
