@@ -988,7 +988,14 @@ window.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('recoveryStepVerify').classList.remove('hidden');
                 setRecoveryMessage(result.message || 'تم إرسال رمز التحقق إلى البريد المعتمد.', false);
             } catch (error) {
-                setRecoveryMessage(error.message || 'تعذر إرسال رمز التحقق.', true);
+                const message = error && error.message ? error.message : '';
+                if (message.includes('لم يصل رد من الخادم')) {
+                    document.getElementById('recoveryStepRequest').classList.add('hidden');
+                    document.getElementById('recoveryStepVerify').classList.remove('hidden');
+                    setRecoveryMessage('إذا وصلك رمز التحقق على البريد، أدخله هنا. تعذّر فقط استلام تأكيد الإرسال من الخادم.', true);
+                } else {
+                    setRecoveryMessage(message || 'تعذر إرسال رمز التحقق.', true);
+                }
             } finally {
                 button.disabled = false;
                 button.textContent = 'إرسال رمز التحقق';
