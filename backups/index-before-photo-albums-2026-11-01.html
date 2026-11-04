@@ -265,7 +265,7 @@
                 <div class="max-w-xl mx-auto space-y-4">
                     <div class="flex gap-2">
                         <div class="relative flex-grow">
-                            <input type="text" id="studentCodeInput" placeholder="أدخل رقم الجلوس أو الكود (مثال: 1001)..." 
+                            <input type="text" id="studentCodeInput" placeholder="أدخل رقم الجلوس أو الكود..." 
                                    class="w-full pl-4 pr-10 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-gold font-bold text-slate-700 shadow-sm">
                             <i class="fa-solid fa-id-card absolute left-3 top-3.5 text-slate-400"></i>
                         </div>
@@ -600,83 +600,7 @@
     <!-- JAVASCRIPT LOGIC -->
     <script>
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
-        const DEFAULT_STUDENTS = [
-            {
-                code: "1001",
-                name: "أحمد محمد محمود علي",
-                grade: "الصف الأول الثانوي",
-                class: "1/2",
-                subjects: {
-                    arabic: { score: 75, max: 80 },
-                    english: { score: 54, max: 60 },
-                    secondLang: { score: 38, max: 40 },
-                    math: { score: 52, max: 60 },
-                    integratedScience: { score: 55, max: 60 },
-                    history: { score: 36, max: 40 },
-                    philosophy: { score: 37, max: 40 }
-                }
-            },
-            {
-                code: "1002",
-                name: "عمر خالد عبد الرحمن",
-                grade: "الصف الأول الثانوي",
-                class: "1/3",
-                subjects: {
-                    arabic: { score: 68, max: 80 },
-                    english: { score: 48, max: 60 },
-                    secondLang: { score: 32, max: 40 },
-                    math: { score: 45, max: 60 },
-                    integratedScience: { score: 49, max: 60 },
-                    history: { score: 30, max: 40 },
-                    philosophy: { score: 34, max: 40 }
-                }
-            },
-            {
-                code: "1003",
-                name: "يوسف حسن مصطفى",
-                grade: "الصف الأول الثانوي",
-                class: "1/4",
-                subjects: {
-                    arabic: { score: 78, max: 80 },
-                    english: { score: 58, max: 60 },
-                    secondLang: { score: 40, max: 40 },
-                    math: { score: 59, max: 60 },
-                    integratedScience: { score: 58, max: 60 },
-                    history: { score: 39, max: 40 },
-                    philosophy: { score: 40, max: 40 }
-                }
-            },
-            {
-                code: "1004",
-                name: "محمود إبراهيم السيد",
-                grade: "الصف الأول الثانوي",
-                class: "1/5",
-                subjects: {
-                    arabic: { score: 60, max: 80 },
-                    english: { score: 35, max: 60 },
-                    secondLang: { score: 28, max: 40 },
-                    math: { score: 33, max: 60 },
-                    integratedScience: { score: 38, max: 40 },
-                    history: { score: 25, max: 40 },
-                    philosophy: { score: 29, max: 40 }
-                }
-            },
-            {
-                code: "1005",
-                name: "كريم طارق عبد الله",
-                grade: "الصف الأول الثانوي",
-                class: "1/7",
-                subjects: {
-                    arabic: { score: 80, max: 80 },
-                    english: { score: 59, max: 60 },
-                    secondLang: { score: 39, max: 40 },
-                    math: { score: 60, max: 60 },
-                    integratedScience: { score: 60, max: 60 },
-                    history: { score: 40, max: 40 },
-                    philosophy: { score: 40, max: 40 }
-                }
-            }
-        ];
+        const DEFAULT_STUDENTS = [];
 
         const SUBJECT_NAMES = {
             arabic: "اللغة العربية",
@@ -1058,7 +982,7 @@ function receivePageChanges(data) {
                 resultDisplay.classList.remove('hidden');
             } else {
                 resultDisplay.classList.add('hidden');
-                errorEl.innerText = "لم يتم العثور على طالب بهذا الرقم. جرب الأكواد التجريبية (1001، 1002، إلخ).";
+                errorEl.innerText = "لم يتم العثور على طالب بهذا الرقم. يرجى التأكد من البيانات والمحاولة مرة أخرى.";
                 errorEl.classList.remove('hidden');
             }
         }
