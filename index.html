@@ -70,7 +70,7 @@
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
 
     <!-- Developer Live Control Bar (يظهر فقط عند تفعيل وضع المعلم) -->
-    <div id="devControlBar" class="hidden bg-amber-500 text-navy px-4 py-2 flex flex-wrap justify-between items-center text-xs font-bold shadow-md sticky top-0 z-50">
+    <div id="devControlBar" class="hidden bg-amber-500 text-navy px-4 py-2 flex flex-wrap justify-between items-center text-xs font-bold shadow-md sticky top-0 z-50" style="display: none;">
         <div class="flex items-center gap-2">
             <i class="fa-solid fa-code text-lg"></i>
             <span>وضع المطور الشامل: يمكنك تعديل أي نص أو عنصر في الصفحة مباشرة!</span>
@@ -705,12 +705,18 @@
     <script>
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
 
+        function isTrustedAppsScriptMessage(event) {
+            return event.origin === "https://script.google.com" ||
+                event.origin.endsWith(".googleusercontent.com");
+        }
+
 
 
 
         let currentNewsIndex = 0;
         let tickerPaused = false;
         let isAdminLoggedIn = false;
+        let isDeveloperLoggedIn = false;
         let isLiveEditing = false;
 
         
@@ -1056,7 +1062,6 @@ window.addEventListener('DOMContentLoaded', () => {
         function updateTeacherUI() {
             if (isAdminLoggedIn) {
                 document.getElementById('adminBadge').classList.remove('hidden');
-                document.getElementById('devControlBar').classList.remove('hidden');
                 document.getElementById('loginBtnText').innerText = 'المعلم مفعّل';
                 document.getElementById('tabletTeacherUpload').classList.remove('hidden');
                 document.getElementById('scheduleTeacherControl').classList.remove('hidden');
@@ -1064,10 +1069,23 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        function updateDeveloperUI() {
+            const bar = document.getElementById('devControlBar');
+            const googleVerified = isDeveloperLoggedIn === true && Boolean(googleUploadToken);
+            if (bar) {
+                bar.style.display = googleVerified ? 'flex' : 'none';
+                bar.classList.toggle('hidden', !googleVerified);
+            }
+        }
+
         let pendingPageChangesNonce = null;
 let pageChangesTimeout = null;
 
 function toggleLiveEditing() {
+    if (!isDeveloperLoggedIn || !googleUploadToken) {
+        alert("يجب تسجيل الدخول بحساب Google المصرح به لاستخدام أدوات المطور.");
+        return;
+    }
     isLiveEditing = !isLiveEditing;
     document.querySelectorAll('[data-page-edit-id]').forEach(el => {
         if (isLiveEditing) {
@@ -1090,8 +1108,8 @@ function toggleLiveEditing() {
 }
 
 async function saveAllPageChanges() {
-    if (!isAdminLoggedIn || !googleUploadToken || !window.adminSessionToken) {
-        alert('انتهت جلسة المسؤول. سجّل الدخول مرة أخرى.');
+    if (!isDeveloperLoggedIn || !googleUploadToken) {
+        alert('سجّل الدخول بحساب Google المصرح به لاستخدام أدوات المطور.');
         return;
     }
     if (pendingPageChangesNonce) {
@@ -1127,7 +1145,7 @@ async function saveAllPageChanges() {
     form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
     form.target = 'pageChangesUploadFrame';
     form.style.display = 'none';
-    const fields = { action:'savePageChanges', token:googleUploadToken, adminSessionToken:window.adminSessionToken, nonce:nonce, changes:payload };
+    const fields = { action:'savePageChanges', googleUploadToken:googleUploadToken, nonce:nonce, origin:location.origin, changes:payload };
     Object.entries(fields).forEach(([name,value]) => {
         const input=document.createElement('input'); input.type='hidden'; input.name=name; input.value=value; form.appendChild(input);
     });
@@ -1144,10 +1162,7 @@ async function saveAllPageChanges() {
 }
 
 window.addEventListener('message',function(event) {
-    if (
-    event.origin !== 'https://script.google.com' &&
-    !event.origin.endsWith('.googleusercontent.com')
-) return;
+    if (!isTrustedAppsScriptMessage(event)) return;
     const data=event.data;
     if(!data || data.type!=='savePageChangesResult' || !pendingPageChangesNonce || data.nonce!==pendingPageChangesNonce) return;
     clearTimeout(pageChangesTimeout); pendingPageChangesNonce=null;
@@ -1188,6 +1203,10 @@ function receivePageChanges(data) {
     messages.forEach((message, index) => message.classList.toggle('active', index === currentNewsIndex));
 }
         function exportUpdatedHTML() {
+    if (!isDeveloperLoggedIn) {
+        alert('سجّل الدخول بحساب Google المصرح به أولاً.');
+        return;
+    }
     if (isLiveEditing) toggleLiveEditing();
 
     // إنشاء نسخة مستقلة من الصفحة
@@ -1565,14 +1584,93 @@ function handleGoogleCredentialResponse(response) {
     const status = document.getElementById('googleSignInStatus');
 
     if (!response || !response.credential) {
-        status.textContent = 'تعذر تسجيل الدخول بحساب Google.';
+        googleUploadToken = null;
+        isDeveloperLoggedIn = false;
+        updateDeveloperUI();
+        if (status) status.textContent = 'تعذر تسجيل الدخول بحساب Google.';
         return;
     }
 
     googleUploadToken = response.credential;
+    isDeveloperLoggedIn = false;
+    updateDeveloperUI();
+
     const uploadControls = document.getElementById('tabletImageUploadControls');
     if (uploadControls) { uploadControls.classList.remove('hidden'); uploadControls.classList.add('flex'); }
-    status.textContent = 'تم تسجيل الدخول بنجاح. يمكنك الآن اختيار الصور ورفعها وحذفها.';
+    if (status) status.textContent = 'تم تسجيل الدخول بحساب Google. جارٍ التحقق من صلاحية أدوات المطور...';
+
+    const nonce = (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+
+    let frame = document.getElementById('developerGoogleFrame');
+    if (!frame) {
+        frame = document.createElement('iframe');
+        frame.id = 'developerGoogleFrame';
+        frame.name = 'developerGoogleFrame';
+        frame.style.display = 'none';
+        document.body.appendChild(frame);
+    }
+
+    const onMessage = function(event) {
+        if (!isTrustedAppsScriptMessage(event)) return;
+        const data = event.data;
+        if (!data || data.type !== 'developerGoogleVerification' || data.nonce !== nonce) return;
+
+        window.removeEventListener('message', onMessage);
+        clearTimeout(timeout);
+
+        if (data.result && data.result.success &&
+            data.result.email === 'dodydiaa2013@gmail.com') {
+            isDeveloperLoggedIn = true;
+            updateDeveloperUI();
+            if (status) status.textContent = 'تم التحقق من الحساب المصرح به. أدوات المطور أصبحت متاحة.';
+        } else {
+            googleUploadToken = null;
+            isDeveloperLoggedIn = false;
+            updateDeveloperUI();
+            if (status) status.textContent =
+                (data.result && data.result.message) || 'هذا الحساب غير مصرح له باستخدام أدوات المطور.';
+        }
+
+        renderTabletGallery();
+        renderSchedules();
+    };
+
+    window.addEventListener('message', onMessage);
+
+    const timeout = setTimeout(() => {
+        window.removeEventListener('message', onMessage);
+        googleUploadToken = null;
+        isDeveloperLoggedIn = false;
+        updateDeveloperUI();
+        if (status) status.textContent = 'لم يصل تأكيد التحقق من Google. حاول تسجيل الدخول مرة أخرى.';
+    }, 20000);
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = GOOGLE_SCRIPT_URL;
+    form.target = 'developerGoogleFrame';
+    form.style.display = 'none';
+
+    const fields = {
+        action: 'verifyDeveloperGoogle',
+        token: googleUploadToken,
+        nonce: nonce,
+        origin: location.origin
+    };
+
+    Object.entries(fields).forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
 
     renderTabletGallery();
     renderSchedules();
