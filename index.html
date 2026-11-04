@@ -1071,7 +1071,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
         function updateDeveloperUI() {
             const bar = document.getElementById('devControlBar');
-            if (bar) bar.classList.toggle('hidden', !isDeveloperLoggedIn);
+            const googleVerified = isDeveloperLoggedIn === true && Boolean(googleUploadToken);
+            if (bar) bar.classList.toggle('hidden', !googleVerified);
         }
 
         let pendingPageChangesNonce = null;
