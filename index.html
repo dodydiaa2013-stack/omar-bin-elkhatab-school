@@ -2815,35 +2815,26 @@ async function deleteScheduleImage(cls) {
         }
 
         async function loadPhotoAlbums() {
-            const status = document.getElementById('photoAlbumsStatus');
-            const grid = document.getElementById('photoAlbumsGrid');
-            if (!status || !grid) return;
-            status.textContent = 'جارٍ تحميل ألبومات الصور...';
-            try {
-                const callback = 'photoAlbumsCallback_' + Date.now();
-                const albums = await new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    const timer = setTimeout(() => { cleanup(); reject(new Error('انتهت مهلة تحميل الألبومات.')); }, 15000);
-                    function cleanup(){ clearTimeout(timer); script.remove(); delete window[callback]; }
-                    window[callback] = result => {
-                        cleanup();
-                        if (result && result.success && Array.isArray(result.albums)) resolve(result.albums);
-                        else reject(new Error((result && result.message) || 'خدمة الألبومات غير مفعلة بعد.'));
-                    };
-                    script.onerror = () => { cleanup(); reject(new Error('تعذر الاتصال بخدمة الألبومات.')); };
-                    script.src = PHOTO_ALBUMS_SCRIPT_URL + '?action=photoAlbums&callback=' + callback + '&_=' + Date.now();
-                    document.body.appendChild(script);
-                });
-                photoAlbumsCache = albums;
-                renderPhotoAlbums();
-                status.textContent = albums.length ? 'اختر ألبومًا لعرض الصور بداخله.' : 'لا توجد ألبومات حتى الآن. يمكن للمعلم إضافة أول ألبوم.';
-            } catch (error) {
-                status.textContent = error.message + ' بعد تفعيل وظائف الألبومات في Apps Script سيظهر المعرض هنا.';
-                grid.innerHTML = '';
-            }
-        }
+    const status = document.getElementById('photoAlbumsStatus');
+    const grid = document.getElementById('photoAlbumsGrid');
+    if (!status || !grid) return;
+    status.textContent = 'جارٍ تحميل ألبومات الصور...';
+    try {
+        const albums = await fetchPhotoAlbumsSnapshot();
+        photoAlbumsCache = albums;
+        renderPhotoAlbums();
+        status.textContent = albums.length
+            ? 'اختر ألبومًا لعرض الصور بداخله.'
+            : 'لا توجد ألبومات حتى الآن. يمكن للمعلم إضافة أول ألبوم.';
+        return albums;
+    } catch (error) {
+        status.textContent = error.message + ' بعد تفعيل وظائف الألبومات في Apps Script سيظهر المعرض هنا.';
+        grid.innerHTML = '';
+        throw error;
+    }
+}
 
-        async function refreshPhotoAlbums(button) {
+async function refreshPhotoAlbums(button) {
             const oldHtml = button ? button.innerHTML : '';
             if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ التحديث...'; }
             try { await loadPhotoAlbums(); }
@@ -2929,8 +2920,20 @@ async function deleteScheduleImage(cls) {
             try {
                 const fields = { albumId: photoAlbumEditId || '', title, description };
                 if (cover) { fields.coverName = cover.name; fields.coverMimeType = cover.type; fields.coverData = await photoAlbumReadFile(cover); }
-                await photoAlbumPost(photoAlbumEditId ? 'updatePhotoAlbum' : 'createPhotoAlbum', fields);
-                closePhotoAlbumEditor(); await loadPhotoAlbums();
+                const saved = await photoAlbumPost(photoAlbumEditId ? 'updatePhotoAlbum' : 'createPhotoAlbum', fields);
+                const expectedAlbumId = String(photoAlbumEditId || (saved.album && saved.album.id) || '');
+                if (!expectedAlbumId) throw new Error('لم يرجع الخادم معرّف الألبوم المحفوظ.');
+                await waitForConfirmedImageState(
+                    fetchPhotoAlbumsSnapshot,
+                    albums => albums.some(album =>
+                        String(album.id) === expectedAlbumId &&
+                        String(album.title || '') === title &&
+                        String(album.description || '') === description
+                    ),
+                    'حفظ بيانات الألبوم'
+                );
+                closePhotoAlbumEditor();
+                await loadPhotoAlbums();
                 if (photoAlbumEditId) openPhotoAlbum(photoAlbumEditId);
             } catch(error) { status.textContent = error.message; }
             finally { button.disabled = false; }
@@ -2982,69 +2985,184 @@ async function deleteScheduleImage(cls) {
         }
 
         async function uploadPhotoAlbumImages(input) {
-            const files = Array.from(input.files || []);
-            if (!files.length || !currentPhotoAlbumId) return;
-            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); input.value=''; return; }
-            for (const file of files) {
-                if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) {
-                    alert('الملف ' + file.name + ' غير مناسب. الأنواع المسموحة JPG وPNG وWEBP وGIF، بحد أقصى 4 ميجابايت للصورة.'); input.value=''; return;
-                }
-            }
-            const status = document.getElementById('photoAlbumViewerMeta');
-            status.textContent = 'جارٍ تجهيز الصور الأصلية ورفعها...';
-            try {
-                for (const file of files) {
-                    const data = await photoAlbumReadFile(file);
-                    await photoAlbumPost('uploadPhotoAlbumImage', {
-                        albumId: currentPhotoAlbumId, fileName: file.name, mimeType: file.type, data
-                    });
-                }
-                await loadPhotoAlbums();
-                const album = photoAlbumsCache.find(item => String(item.id) === String(currentPhotoAlbumId));
-                if (album) { openPhotoAlbum(album.id); status.textContent = 'تم تحديث صور الألبوم.'; }
-            } catch(error) { status.textContent = error.message; }
-            finally { input.value = ''; }
+    const files = Array.from(input.files || []);
+    if (!files.length || !currentPhotoAlbumId) return;
+    if (!hasDualAdminAuthorization()) {
+        alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+        input.value = '';
+        return;
+    }
+
+    const albumId = String(currentPhotoAlbumId);
+    const operationKey = 'album-upload-' + albumId;
+    if (!beginImageOperation(operationKey)) return;
+
+    for (const file of files) {
+        if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) {
+            alert('الملف ' + file.name + ' غير مناسب. الأنواع المسموحة JPG وPNG وWEBP وGIF، بحد أقصى 4 ميجابايت للصورة.');
+            input.value = '';
+            endImageOperation(operationKey);
+            return;
+        }
+    }
+
+    const status = document.getElementById('photoAlbumViewerMeta');
+    status.textContent = 'جارٍ تجهيز الصور الأصلية ورفعها...';
+    try {
+        for (let index = 0; index < files.length; index++) {
+            const file = files[index];
+            status.textContent = 'جارٍ رفع الصورة ' + (index + 1) + ' من ' + files.length + ': ' + file.name;
+            const data = await photoAlbumReadFile(file);
+            const uploadResult = await photoAlbumPost('uploadPhotoAlbumImage', {
+                albumId: albumId,
+                fileName: file.name,
+                mimeType: file.type,
+                data: data
+            });
+            const imageId = String((uploadResult.image && uploadResult.image.id) || '');
+            if (!imageId) throw new Error('لم يرجع الخادم معرّف الصورة المرفوعة.');
+
+            await waitForConfirmedImageState(
+                fetchPhotoAlbumsSnapshot,
+                albums => {
+                    const album = albums.find(item => String(item.id) === albumId);
+                    return !!album && (
+                        String(album.coverFileId || '') === imageId ||
+                        (album.images || []).some(image => String(image.id) === imageId)
+                    );
+                },
+                'ظهور الصورة ' + file.name + ' داخل الألبوم'
+            );
         }
 
-        async function replacePhotoAlbumImage(imageId) {
-            if (!hasDualAdminAuthorization()) return;
-            const picker = document.createElement('input');
-            picker.type = 'file'; picker.accept = 'image/jpeg,image/png,image/webp,image/gif';
-            picker.onchange = async () => {
-                const file = picker.files[0]; if (!file) return;
-                if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) {
-                    alert('الصورة يجب أن تكون من الأنواع المسموحة وبحجم لا يتجاوز 4 ميجابايت.'); return;
-                }
-                try {
-                    const data = await photoAlbumReadFile(file);
-                    await photoAlbumPost('replacePhotoAlbumImage', {albumId:currentPhotoAlbumId,imageId,fileName:file.name,mimeType:file.type,data});
-                    await loadPhotoAlbums();
-                    const album = photoAlbumsCache.find(item => String(item.id) === String(currentPhotoAlbumId));
-                    if (album) openPhotoAlbum(album.id);
-                } catch(error) { alert(error.message); }
-            };
-            picker.click();
-        }
+        await loadPhotoAlbums();
+        const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+        if (!album) throw new Error('تم رفع الصور، لكن تعذر العثور على الألبوم بعد التحديث.');
+        openPhotoAlbum(album.id);
+        status.textContent = 'تم رفع الصور والتأكد من ظهورها داخل الألبوم.';
+    } catch(error) {
+        status.textContent = error.message;
+    } finally {
+        input.value = '';
+        endImageOperation(operationKey);
+    }
+}
 
-        async function deletePhotoAlbumImage(imageId) {
-            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); return; }
-            if (!confirm('هل تريد حذف هذه الصورة نهائيًا من الألبوم؟')) return;
-            try {
-                await photoAlbumPost('deletePhotoAlbumImage', {albumId:currentPhotoAlbumId,imageId});
-                await loadPhotoAlbums();
-                const album = photoAlbumsCache.find(item => String(item.id) === String(currentPhotoAlbumId));
-                if (album) openPhotoAlbum(album.id);
-            } catch(error) { alert(error.message); }
-        }
+async function replacePhotoAlbumImage(imageId) {
+    if (!hasDualAdminAuthorization()) return;
+    const albumId = String(currentPhotoAlbumId || '');
+    const operationKey = 'album-replace-' + albumId + '-' + imageId;
+    if (!beginImageOperation(operationKey)) return;
 
-        async function deleteCurrentPhotoAlbum() {
-            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); return; }
-            if (!currentPhotoAlbumId || !confirm('سيتم حذف الألبوم وصورة غلافه وجميع الصور الموجودة بداخله. هل أنت متأكد؟')) return;
-            try {
-                await photoAlbumPost('deletePhotoAlbum', {albumId:currentPhotoAlbumId});
-                closePhotoAlbumViewer(); await loadPhotoAlbums();
-            } catch(error) { alert(error.message); }
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/jpeg,image/png,image/webp,image/gif';
+    picker.onchange = async () => {
+        const file = picker.files[0];
+        if (!file) {
+            endImageOperation(operationKey);
+            return;
         }
+        if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) {
+            alert('الصورة يجب أن تكون من الأنواع المسموحة وبحجم لا يتجاوز 4 ميجابايت.');
+            endImageOperation(operationKey);
+            return;
+        }
+        try {
+            const data = await photoAlbumReadFile(file);
+            const result = await photoAlbumPost('replacePhotoAlbumImage', {
+                albumId: albumId,
+                imageId: imageId,
+                fileName: file.name,
+                mimeType: file.type,
+                data: data
+            });
+            const newId = String((result.image && result.image.id) || '');
+            if (!newId) throw new Error('لم يرجع الخادم معرّف الصورة البديلة.');
+
+            await waitForConfirmedImageState(
+                fetchPhotoAlbumsSnapshot,
+                albums => {
+                    const album = albums.find(item => String(item.id) === albumId);
+                    if (!album) return false;
+                    const newExists = String(album.coverFileId || '') === newId ||
+                        (album.images || []).some(image => String(image.id) === newId);
+                    const oldExists = String(album.coverFileId || '') === String(imageId) ||
+                        (album.images || []).some(image => String(image.id) === String(imageId));
+                    return newExists && !oldExists;
+                },
+                'استبدال الصورة القديمة بالصورة الجديدة'
+            );
+            await loadPhotoAlbums();
+            const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+            if (album) openPhotoAlbum(album.id);
+        } catch(error) {
+            alert(error.message);
+        } finally {
+            endImageOperation(operationKey);
+        }
+    };
+    picker.click();
+}
+
+async function deletePhotoAlbumImage(imageId) {
+    if (!hasDualAdminAuthorization()) {
+        alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+        return;
+    }
+    if (!confirm('هل تريد حذف هذه الصورة نهائيًا من الألبوم؟')) return;
+
+    const albumId = String(currentPhotoAlbumId || '');
+    const operationKey = 'album-delete-image-' + albumId + '-' + imageId;
+    if (!beginImageOperation(operationKey)) return;
+    try {
+        await photoAlbumPost('deletePhotoAlbumImage', { albumId: albumId, imageId: imageId });
+        await waitForConfirmedImageState(
+            fetchPhotoAlbumsSnapshot,
+            albums => {
+                const album = albums.find(item => String(item.id) === albumId);
+                return !!album &&
+                    String(album.coverFileId || '') !== String(imageId) &&
+                    !(album.images || []).some(image => String(image.id) === String(imageId));
+            },
+            'اختفاء الصورة المحذوفة من الألبوم'
+        );
+        await loadPhotoAlbums();
+        const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+        if (album) openPhotoAlbum(album.id);
+    } catch(error) {
+        alert(error.message);
+    } finally {
+        endImageOperation(operationKey);
+    }
+}
+
+async function deleteCurrentPhotoAlbum() {
+    if (!hasDualAdminAuthorization()) {
+        alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+        return;
+    }
+    if (!currentPhotoAlbumId ||
+        !confirm('سيتم حذف الألبوم وصورة غلافه وجميع الصور الموجودة بداخله. هل أنت متأكد؟')) return;
+
+    const albumId = String(currentPhotoAlbumId);
+    const operationKey = 'album-delete-' + albumId;
+    if (!beginImageOperation(operationKey)) return;
+    try {
+        await photoAlbumPost('deletePhotoAlbum', { albumId: albumId });
+        await waitForConfirmedImageState(
+            fetchPhotoAlbumsSnapshot,
+            albums => !albums.some(album => String(album.id) === albumId),
+            'حذف الألبوم بالكامل'
+        );
+        closePhotoAlbumViewer();
+        await loadPhotoAlbums();
+    } catch(error) {
+        alert(error.message);
+    } finally {
+        endImageOperation(operationKey);
+    }
+}
 
         window.addEventListener('load', () => {
             setTimeout(loadPhotoAlbums, 1800);
