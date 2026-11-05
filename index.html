@@ -2648,6 +2648,17 @@ async function saveScheduleImage() {
         return;
     }
 
+    let initialSchedules;
+    try {
+        initialSchedules = await fetchSchedulesSnapshot();
+    } catch (error) {
+        status.textContent = 'تعذر قراءة قوائم الفصول قبل الرفع؛ لم يتم إرسال أي صورة.';
+        fileInputs.forEach(input => input.disabled = false);
+        button.disabled = false;
+        alert(error.message || 'تعذر التحقق من الحالة الحالية لقوائم الفصول.');
+        return;
+    }
+
     for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
         status.textContent = 'جارٍ حفظ قائمة فصل ' + job.className + ' (' + (i + 1) + ' من ' + jobs.length + ')';
@@ -2658,14 +2669,16 @@ async function saveScheduleImage() {
         results.appendChild(line);
 
         try {
-            const uploadResult = await uploadOneScheduleFile(job.file, job.className, i, preparedImages[i]);
-            const savedFileId = String(uploadResult && uploadResult.fileId || '');
-            if (!savedFileId) throw new Error('لم يرجع الخادم معرّف الصورة المحفوظة.');
-            await waitForConfirmedImageState(
+            await uploadOneScheduleFile(job.file, job.className, i, preparedImages[i]);
+            const previousFileId = String(initialSchedules[job.className] && initialSchedules[job.className].id || '');
+            const confirmedSchedules = await waitForConfirmedImageState(
                 fetchSchedulesSnapshot,
-                schedules => schedules[job.className] && String(schedules[job.className].id || '') === savedFileId,
-                'ظهور قائمة فصل ' + job.className
+                schedules => schedules[job.className] &&
+                    String(schedules[job.className].id || '') !== '' &&
+                    String(schedules[job.className].id || '') !== previousFileId,
+                'ظهور قائمة الفصل الجديدة ' + job.className
             );
+            initialSchedules = confirmedSchedules;
             succeeded++;
             line.className = 'text-emerald-700 font-bold';
             line.textContent = '✓ تم حفظ قائمة فصل ' + job.className;
