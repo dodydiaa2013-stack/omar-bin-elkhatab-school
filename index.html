@@ -2039,32 +2039,37 @@ async function uploadTabletImage() {
     if (button) button.disabled = true;
     status.textContent = 'جارٍ تجهيز الصورة ورفعها إلى Google Drive...';
     try {
-        const initialImages = await fetchTabletGalleryImages();
+        // قراءة القائمة السابقة مساعدة للتحقق الاحتياطي فقط؛ لا تمنع الرفع إذا تعذر جلبها.
+        let initialImages = null;
+        try {
+            initialImages = await fetchTabletGalleryImages();
+        } catch (snapshotError) {
+            console.warn('تعذر جلب المعرض قبل الرفع؛ سيعتمد التأكيد على رد الخادم:', snapshotError);
+        }
+
         const data = await readScheduleFileAsBase64(file);
-        const uploadResult = await galleryUploadPost({
+        await galleryUploadPost({
             fileName: file.name,
             mimeType: file.type,
             data: data
         }, initialImages);
 
-        const fileId = String(uploadResult.fileId ||
-            (uploadResult.image && uploadResult.image.id) || '');
-        if (!fileId) throw new Error('لم يرجع الخادم معرّف الصورة المحفوظة.');
+        // نجاح رد Apps Script هو تأكيد الحفظ. تحديث العرض خطوة منفصلة لا تلغي نجاح الرفع.
+        let refreshed = false;
+        try {
+            const images = await fetchTabletGalleryImages();
+            await renderTabletGallery(images);
+            refreshed = Array.isArray(images);
+        } catch (refreshError) {
+            console.warn('تم تأكيد الرفع لكن تعذر تحديث المعرض تلقائيًا:', refreshError);
+        }
 
-        const images = await waitForConfirmedImageState(
-            fetchTabletGalleryImages,
-            currentImages => currentImages.some(item => {
-                const image = typeof item === 'string' ? { id: '', url: item } : item;
-                return String(image.id || '') === fileId;
-            }),
-            'ظهور الصورة الجديدة في المعرض'
-        );
-
-        await renderTabletGallery(images);
-        status.textContent = 'تم رفع الصورة وحفظها والتأكد من ظهورها في المعرض.';
+        status.textContent = refreshed
+            ? 'تم رفع الصورة بنجاح وتحديث المعرض.'
+            : 'تم رفع الصورة بنجاح. تعذر تحديث المعرض تلقائيًا؛ استخدم زر تحديث المعرض.';
         input.value = '';
     } catch (error) {
-        status.textContent = error.message || 'تعذر تأكيد رفع الصورة. حدّث المعرض قبل إعادة المحاولة.';
+        status.textContent = error.message || 'تعذر تأكيد الرفع من الخادم. حدّث المعرض قبل إعادة المحاولة.';
     } finally {
         if (button) button.disabled = false;
         endImageOperation(operationKey);
@@ -2648,17 +2653,6 @@ async function saveScheduleImage() {
         return;
     }
 
-    let initialSchedules;
-    try {
-        initialSchedules = await fetchSchedulesSnapshot();
-    } catch (error) {
-        status.textContent = 'تعذر قراءة قوائم الفصول قبل الرفع؛ لم يتم إرسال أي صورة.';
-        fileInputs.forEach(input => input.disabled = false);
-        button.disabled = false;
-        alert(error.message || 'تعذر التحقق من الحالة الحالية لقوائم الفصول.');
-        return;
-    }
-
     for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
         status.textContent = 'جارٍ حفظ قائمة فصل ' + job.className + ' (' + (i + 1) + ' من ' + jobs.length + ')';
@@ -2669,19 +2663,22 @@ async function saveScheduleImage() {
         results.appendChild(line);
 
         try {
+            // uploadOneScheduleFile لا يحل الوعد إلا بعد استلام تأكيد success موثوق من Apps Script.
+            // لا نشترط تغيّر Drive fileId؛ الاستبدال قد يحتفظ بنفس المعرّف.
             await uploadOneScheduleFile(job.file, job.className, i, preparedImages[i]);
-            const previousFileId = String(initialSchedules[job.className] && initialSchedules[job.className].id || '');
-            const confirmedSchedules = await waitForConfirmedImageState(
-                fetchSchedulesSnapshot,
-                schedules => schedules[job.className] &&
-                    String(schedules[job.className].id || '') !== '' &&
-                    String(schedules[job.className].id || '') !== previousFileId,
-                'ظهور قائمة الفصل الجديدة ' + job.className
-            );
-            initialSchedules = confirmedSchedules;
             succeeded++;
             line.className = 'text-emerald-700 font-bold';
-            line.textContent = '✓ تم حفظ قائمة فصل ' + job.className;
+            line.textContent = '✓ تم رفع وحفظ قائمة فصل ' + job.className;
+
+            // تحديث العرض بعد الحفظ، دون تحويل فشل القراءة إلى فشل في عملية الرفع.
+            try {
+                const refreshedSchedules = await fetchSchedulesSnapshot();
+                driveSchedules = refreshedSchedules;
+                renderSchedules();
+            } catch (refreshError) {
+                console.warn('تم حفظ قائمة الفصل لكن تعذر تحديث العرض تلقائيًا:', refreshError);
+                line.textContent += ' (تم الحفظ؛ حدّث القوائم لإظهار التغيير)';
+            }
         } catch (error) {
             failures.push(job.className);
             line.className = 'text-red-600 font-bold';
@@ -2942,21 +2939,17 @@ async function refreshPhotoAlbums(button) {
             try {
                 const fields = { albumId: photoAlbumEditId || '', title, description };
                 if (cover) { fields.coverName = cover.name; fields.coverMimeType = cover.type; fields.coverData = await photoAlbumReadFile(cover); }
-                const saved = await photoAlbumPost(photoAlbumEditId ? 'updatePhotoAlbum' : 'createPhotoAlbum', fields);
-                const expectedAlbumId = String(photoAlbumEditId || (saved.album && saved.album.id) || '');
-                if (!expectedAlbumId) throw new Error('لم يرجع الخادم معرّف الألبوم المحفوظ.');
-                await waitForConfirmedImageState(
-                    fetchPhotoAlbumsSnapshot,
-                    albums => albums.some(album =>
-                        String(album.id) === expectedAlbumId &&
-                        String(album.title || '') === title &&
-                        String(album.description || '') === description
-                    ),
-                    'حفظ بيانات الألبوم'
-                );
+                await photoAlbumPost(photoAlbumEditId ? 'updatePhotoAlbum' : 'createPhotoAlbum', fields);
+                // رد success من Apps Script يؤكد الحفظ؛ تحديث القائمة لا يعيد تصنيف العملية كفشل.
                 closePhotoAlbumEditor();
-                await loadPhotoAlbums();
-                if (photoAlbumEditId) openPhotoAlbum(photoAlbumEditId);
+                const refreshedAlbums = await loadPhotoAlbums();
+                if (photoAlbumEditId) {
+                    const editedAlbum = photoAlbumsCache.find(item => String(item.id) === String(photoAlbumEditId));
+                    if (editedAlbum) openPhotoAlbum(editedAlbum.id);
+                }
+                if (!Array.isArray(refreshedAlbums)) {
+                    status.textContent = 'تم حفظ بيانات الألبوم بنجاح. تعذر تحديث القائمة تلقائيًا؛ استخدم تحديث الألبومات.';
+                }
             } catch(error) { status.textContent = error.message; }
             finally { button.disabled = false; }
         }
@@ -3041,27 +3034,19 @@ async function refreshPhotoAlbums(button) {
                 mimeType: file.type,
                 data: data
             });
-            const imageId = String((uploadResult.image && uploadResult.image.id) || '');
-            if (!imageId) throw new Error('لم يرجع الخادم معرّف الصورة المرفوعة.');
-
-            await waitForConfirmedImageState(
-                fetchPhotoAlbumsSnapshot,
-                albums => {
-                    const album = albums.find(item => String(item.id) === albumId);
-                    return !!album && (
-                        String(album.coverFileId || '') === imageId ||
-                        (album.images || []).some(image => String(image.id) === imageId)
-                    );
-                },
-                'ظهور الصورة ' + file.name + ' داخل الألبوم'
-            );
+            // photoAlbumPost لا يحل إلا بعد تأكيد success موثوق؛ لا نشترط وجود ID في الرد.
+            // بعض ردود Apps Script القديمة تؤكد الحفظ دون إرجاع كائن الصورة.
+            if (uploadResult && uploadResult.success === false) {
+                throw new Error(uploadResult.message || 'فشل رفع الصورة ' + file.name);
+            }
         }
 
-        await loadPhotoAlbums();
+        const refreshedAlbums = await loadPhotoAlbums();
         const album = photoAlbumsCache.find(item => String(item.id) === albumId);
-        if (!album) throw new Error('تم رفع الصور، لكن تعذر العثور على الألبوم بعد التحديث.');
-        openPhotoAlbum(album.id);
-        status.textContent = 'تم رفع الصور والتأكد من ظهورها داخل الألبوم.';
+        if (album) openPhotoAlbum(album.id);
+        status.textContent = Array.isArray(refreshedAlbums)
+            ? 'تم رفع الصور بنجاح وتحديث الألبوم.'
+            : 'تم رفع الصور بنجاح. تعذر تحديث عرض الألبوم تلقائيًا؛ استخدم تحديث الألبومات.';
     } catch(error) {
         status.textContent = error.message;
     } finally {
@@ -3098,22 +3083,7 @@ async function replacePhotoAlbumImage(imageId) {
                 mimeType: file.type,
                 data: data
             });
-            const newId = String((result.image && result.image.id) || '');
-            if (!newId) throw new Error('لم يرجع الخادم معرّف الصورة البديلة.');
-
-            await waitForConfirmedImageState(
-                fetchPhotoAlbumsSnapshot,
-                albums => {
-                    const album = albums.find(item => String(item.id) === albumId);
-                    if (!album) return false;
-                    const newExists = String(album.coverFileId || '') === newId ||
-                        (album.images || []).some(image => String(image.id) === newId);
-                    const oldExists = String(album.coverFileId || '') === String(imageId) ||
-                        (album.images || []).some(image => String(image.id) === String(imageId));
-                    return newExists && !oldExists;
-                },
-                'استبدال الصورة القديمة بالصورة الجديدة'
-            );
+            // تأكيد الخادم هو مرجع نجاح الاستبدال؛ قراءة القائمة مجرد تحديث للواجهة.
             await loadPhotoAlbums();
             const album = photoAlbumsCache.find(item => String(item.id) === albumId);
             if (album) openPhotoAlbum(album.id);
@@ -3138,16 +3108,7 @@ async function deletePhotoAlbumImage(imageId) {
     if (!beginImageOperation(operationKey)) return;
     try {
         await photoAlbumPost('deletePhotoAlbumImage', { albumId: albumId, imageId: imageId });
-        await waitForConfirmedImageState(
-            fetchPhotoAlbumsSnapshot,
-            albums => {
-                const album = albums.find(item => String(item.id) === albumId);
-                return !!album &&
-                    String(album.coverFileId || '') !== String(imageId) &&
-                    !(album.images || []).some(image => String(image.id) === String(imageId));
-            },
-            'اختفاء الصورة المحذوفة من الألبوم'
-        );
+        // لا نعرض فشل الحذف بعد استلام تأكيد success لمجرد تأخر تحديث feed.
         await loadPhotoAlbums();
         const album = photoAlbumsCache.find(item => String(item.id) === albumId);
         if (album) openPhotoAlbum(album.id);
@@ -3171,11 +3132,6 @@ async function deleteCurrentPhotoAlbum() {
     if (!beginImageOperation(operationKey)) return;
     try {
         await photoAlbumPost('deletePhotoAlbum', { albumId: albumId });
-        await waitForConfirmedImageState(
-            fetchPhotoAlbumsSnapshot,
-            albums => !albums.some(album => String(album.id) === albumId),
-            'حذف الألبوم بالكامل'
-        );
         closePhotoAlbumViewer();
         await loadPhotoAlbums();
     } catch(error) {
