@@ -464,6 +464,13 @@
                     </div>
                 </div>
 
+                <div id="scheduleBulkManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <span class="text-xs font-bold text-navy">حذف قوائم الفصول:</span>
+                    <button type="button" onclick="selectAllSchedulesForBulkDelete()" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
+                    <button type="button" onclick="clearScheduleBulkSelection()" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
+                    <button type="button" onclick="bulkDeleteSelectedSchedules()" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف القوائم المحددة</button>
+                    <span id="scheduleBulkSelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد قوائم.</span>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="schedulesGrid"></div>
             </div>
         </section>
@@ -2446,6 +2453,8 @@ function renderSchedules() {
     if (!grid) return;
 
     const schedules = driveSchedules || {};
+    const management = document.getElementById('scheduleBulkManagement');
+    if (management) management.classList.toggle('hidden', !hasDualAdminAuthorization());
     grid.innerHTML = '';
 
     CLASSES.forEach(cls => {
@@ -2507,12 +2516,29 @@ function renderSchedules() {
             </div>
         `;
 
+        if (fileId && hasDualAdminAuthorization()) {
+            const selectionRow = document.createElement('div');
+            selectionRow.className = 'flex items-center gap-2 border-t border-slate-200 bg-white px-4 py-3';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'h-4 w-4 accent-blue-700';
+            checkbox.checked = scheduleBulkSelection.has(String(fileId));
+            checkbox.setAttribute('aria-label', 'تحديد قائمة فصل ' + cls);
+            checkbox.addEventListener('change', () => toggleScheduleBulkSelection(fileId, checkbox.checked));
+            const label = document.createElement('span');
+            label.className = 'text-xs text-slate-600';
+            label.textContent = 'تحديد للحذف الجماعي';
+            selectionRow.append(checkbox, label);
+            card.appendChild(selectionRow);
+        }
+
         grid.appendChild(card);
         const previewButton = card.querySelector('.schedule-image-preview');
         if (previewButton && imgUrl) {
             previewButton.addEventListener('click', () => openSchoolImageViewer(imgUrl, 'قائمة فصل ' + cls));
         }
     });
+    updateScheduleBulkSelectionStatus();
 }
 
 
@@ -2816,6 +2842,125 @@ async function deleteScheduleImage(cls) {
         endImageOperation(operationKey);
     }
 }
+
+
+        // تحديد وحذف قوائم الفصول جماعيًا فقط؛ لا يوجد ترتيب للقوائم.
+        const scheduleBulkSelection = new Set();
+
+        function getSelectedScheduleEntries() {
+            const selected = [];
+            CLASSES.forEach(className => {
+                const item = driveSchedules && driveSchedules[className];
+                if (item && item.id && scheduleBulkSelection.has(String(item.id))) {
+                    selected.push({ className: className, fileId: String(item.id) });
+                }
+            });
+            return selected;
+        }
+
+        function updateScheduleBulkSelectionStatus() {
+            const status = document.getElementById('scheduleBulkSelectionStatus');
+            if (status) status.textContent = 'تم تحديد ' + scheduleBulkSelection.size + ' من ' +
+                CLASSES.filter(cls => driveSchedules && driveSchedules[cls] && driveSchedules[cls].id).length + ' قائمة';
+        }
+
+        function toggleScheduleBulkSelection(fileId, checked) {
+            const id = String(fileId || '');
+            if (!id) return;
+            if (checked) scheduleBulkSelection.add(id);
+            else scheduleBulkSelection.delete(id);
+            updateScheduleBulkSelectionStatus();
+        }
+
+        function selectAllSchedulesForBulkDelete() {
+            if (!hasDualAdminAuthorization()) return;
+            scheduleBulkSelection.clear();
+            CLASSES.forEach(cls => {
+                const item = driveSchedules && driveSchedules[cls];
+                if (item && item.id) scheduleBulkSelection.add(String(item.id));
+            });
+            renderSchedules();
+        }
+
+        function clearScheduleBulkSelection() {
+            scheduleBulkSelection.clear();
+            renderSchedules();
+        }
+
+        async function bulkDeleteSelectedSchedules() {
+            if (!hasDualAdminAuthorization()) {
+                alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
+                return;
+            }
+            const selections = getSelectedScheduleEntries();
+            if (!selections.length) {
+                alert('حدد قائمة فصل واحدة على الأقل أولًا.');
+                return;
+            }
+            const summary = selections.map(item => 'فصل ' + item.className).join('، ');
+            if (!confirm('سيتم نقل ' + selections.length + ' قائمة محددة (' + summary +
+                ') إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
+
+            const operationKey = 'schedule-bulk-delete';
+            if (!beginImageOperation(operationKey)) return;
+            let frame = null;
+            let form = null;
+            try {
+                const status = document.getElementById('scheduleOperationStatus');
+                if (status) status.textContent = 'جارٍ حذف قوائم الفصول المحددة والتحقق من الحذف...';
+
+                frame = document.createElement('iframe');
+                const target = 'scheduleBulkDeleteFrame_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+                frame.name = target;
+                frame.style.display = 'none';
+                form = document.createElement('form');
+                form.method = 'POST';
+                form.action = GOOGLE_SCRIPT_URL;
+                form.target = target;
+                form.style.display = 'none';
+
+                const fields = {
+                    action: 'bulkDeleteSchedules',
+                    token: googleUploadToken,
+                    adminSessionToken: window.adminSessionToken,
+                    selections: JSON.stringify(selections)
+                };
+                Object.entries(fields).forEach(([name, value]) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = name;
+                    input.value = String(value == null ? '' : value);
+                    form.appendChild(input);
+                });
+                document.body.appendChild(frame);
+                document.body.appendChild(form);
+                form.submit();
+                form.remove();
+                form = null;
+
+                await waitForConfirmedImageState(
+                    fetchSchedulesSnapshot,
+                    schedules => selections.every(item =>
+                        !schedules[item.className] ||
+                        String(schedules[item.className].id || '') !== item.fileId
+                    ),
+                    'حذف قوائم الفصول المحددة'
+                );
+                scheduleBulkSelection.clear();
+                await loadSchedulesFromDrive();
+                if (status) status.textContent = 'تم حذف ' + selections.length +
+                    ' قائمة فصل ونقلها إلى سلة مهملات Google Drive.';
+            } catch (error) {
+                const status = document.getElementById('scheduleOperationStatus');
+                if (status) status.textContent = 'تعذر تأكيد الحذف الجماعي: ' + error.message;
+                else alert(error.message);
+            } finally {
+                if (form) form.remove();
+                if (frame) frame.remove();
+                endImageOperation(operationKey);
+                updateScheduleBulkSelectionStatus();
+            }
+        }
 
         // Photo albums module: deliberately isolated from the existing development/tablet gallery.
         const PHOTO_ALBUMS_SCRIPT_URL = GOOGLE_SCRIPT_URL;
