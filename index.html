@@ -1072,19 +1072,26 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        function hasDualAdminAuthorization() {
+            return isAdminLoggedIn === true &&
+                isDeveloperLoggedIn === true &&
+                Boolean(googleUploadToken) &&
+                Boolean(window.adminSessionToken);
+        }
+
         function updateTeacherUI() {
             if (isAdminLoggedIn) {
                 document.getElementById('adminBadge').classList.remove('hidden');
                 document.getElementById('loginBtnText').innerText = 'المعلم مفعّل';
                 document.getElementById('tabletTeacherUpload').classList.remove('hidden');
-                document.getElementById('alertsTeacherControl').classList.remove('hidden');
             }
 
+            const canManage = hasDualAdminAuthorization();
+            const albumControl = document.getElementById('alertsTeacherControl');
+            if (albumControl) albumControl.classList.toggle('hidden', !canManage);
+
             const scheduleControl = document.getElementById('scheduleTeacherControl');
-            const canManageSchedules = isAdminLoggedIn === true &&
-                isDeveloperLoggedIn === true && Boolean(googleUploadToken) &&
-                Boolean(window.adminSessionToken);
-            if (scheduleControl) scheduleControl.classList.toggle('hidden', !canManageSchedules);
+            if (scheduleControl) scheduleControl.classList.toggle('hidden', !canManage);
         }
 
         function updateDeveloperUI() {
@@ -2221,7 +2228,7 @@ function deleteScheduleImage(cls) {
         }
 
         function openPhotoAlbumCreate() {
-            if (!googleUploadToken) { alert('سجّل الدخول بحساب Google المصرح له أولاً.'); return; }
+            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); return; }
             photoAlbumEditId = null;
             document.getElementById('photoAlbumEditorTitle').textContent = 'إضافة ألبوم جديد';
             document.getElementById('photoAlbumNameInput').value = '';
@@ -2233,7 +2240,7 @@ function deleteScheduleImage(cls) {
 
         function openPhotoAlbumEdit() {
             const album = photoAlbumsCache.find(item => String(item.id) === String(currentPhotoAlbumId));
-            if (!album || !googleUploadToken) return;
+            if (!album || !hasDualAdminAuthorization()) return;
             photoAlbumEditId = album.id;
             document.getElementById('photoAlbumEditorTitle').textContent = 'تعديل بيانات الألبوم';
             document.getElementById('photoAlbumNameInput').value = album.title || '';
@@ -2248,7 +2255,7 @@ function deleteScheduleImage(cls) {
         }
 
         async function savePhotoAlbum() {
-            if (!googleUploadToken) { alert('سجّل الدخول بحساب Google أولاً.'); return; }
+            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); return; }
             const title = document.getElementById('photoAlbumNameInput').value.trim();
             const description = document.getElementById('photoAlbumDescriptionInput').value.trim();
             const cover = document.getElementById('photoAlbumCoverInput').files[0];
@@ -2278,7 +2285,7 @@ function deleteScheduleImage(cls) {
             document.getElementById('photoAlbumViewer').classList.remove('hidden');
             document.getElementById('photoAlbumsGrid').classList.add('hidden');
             document.getElementById('photoAlbumsStatus').classList.add('hidden');
-            document.getElementById('photoAlbumActions').classList.toggle('hidden', !googleUploadToken);
+            document.getElementById('photoAlbumActions').classList.toggle('hidden', !hasDualAdminAuthorization());
             renderPhotoAlbumImages(album);
             document.getElementById('photoAlbumViewer').scrollIntoView({behavior:'smooth',block:'start'});
         }
@@ -2301,7 +2308,7 @@ function deleteScheduleImage(cls) {
                         <img src="${photoAlbumEscape(image.url)}" alt="${photoAlbumEscape(image.name || 'صورة نشاط')}" loading="lazy" class="w-full h-36 sm:h-44 object-cover">
                     </a>
                     <div class="p-2 text-[11px] text-navy font-bold truncate">${photoAlbumEscape(image.name || ('صورة ' + (index+1)))}</div>
-                    ${googleUploadToken ? `<div class="flex gap-1 p-2 pt-0">
+                    ${hasDualAdminAuthorization() ? `<div class="flex gap-1 p-2 pt-0">
                         <button type="button" onclick="replacePhotoAlbumImage('${photoAlbumEscape(image.id)}')" class="flex-1 rounded-md bg-amber-100 text-amber-900 py-1.5 text-[10px] font-bold">استبدال</button>
                         <button type="button" onclick="deletePhotoAlbumImage('${photoAlbumEscape(image.id)}')" class="flex-1 rounded-md bg-red-100 text-red-700 py-1.5 text-[10px] font-bold">حذف</button>
                     </div>` : ''}`;
@@ -2313,7 +2320,7 @@ function deleteScheduleImage(cls) {
         async function uploadPhotoAlbumImages(input) {
             const files = Array.from(input.files || []);
             if (!files.length || !currentPhotoAlbumId) return;
-            if (!googleUploadToken) { alert('سجّل الدخول بحساب Google أولاً.'); input.value=''; return; }
+            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); input.value=''; return; }
             for (const file of files) {
                 if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) {
                     alert('الملف ' + file.name + ' غير مناسب. الأنواع المسموحة JPG وPNG وWEBP وGIF، بحد أقصى 4 ميجابايت للصورة.'); input.value=''; return;
@@ -2336,7 +2343,7 @@ function deleteScheduleImage(cls) {
         }
 
         async function replacePhotoAlbumImage(imageId) {
-            if (!googleUploadToken) return;
+            if (!hasDualAdminAuthorization()) return;
             const picker = document.createElement('input');
             picker.type = 'file'; picker.accept = 'image/jpeg,image/png,image/webp,image/gif';
             picker.onchange = async () => {
@@ -2356,6 +2363,7 @@ function deleteScheduleImage(cls) {
         }
 
         async function deletePhotoAlbumImage(imageId) {
+            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); return; }
             if (!confirm('هل تريد حذف هذه الصورة نهائيًا من الألبوم؟')) return;
             try {
                 await photoAlbumPost('deletePhotoAlbumImage', {albumId:currentPhotoAlbumId,imageId});
@@ -2366,6 +2374,7 @@ function deleteScheduleImage(cls) {
         }
 
         async function deleteCurrentPhotoAlbum() {
+            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); return; }
             if (!currentPhotoAlbumId || !confirm('سيتم حذف الألبوم وصورة غلافه وجميع الصور الموجودة بداخله. هل أنت متأكد؟')) return;
             try {
                 await photoAlbumPost('deletePhotoAlbum', {albumId:currentPhotoAlbumId});
