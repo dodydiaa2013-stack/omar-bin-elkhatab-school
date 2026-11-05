@@ -1926,7 +1926,6 @@ async function loadSchedulesFromDrive() {
     } catch (error) {
         console.error('Schedules loading error:', error);
         console.error('تعذر تحميل قوائم الفصول من Google Drive.');
-        throw error;
     }
 }
 
@@ -1935,10 +1934,10 @@ async function deleteDriveTabletImage(fileId, fileName) {
         alert('سجّل الدخول بحساب Google وكلمة مرور المسؤول أولاً.');
         return;
     }
+    if (!confirm('هل أنت متأكد من حذف "' + fileName + '" من صور المدرسة؟')) return;
 
-    if (!confirm('هل أنت متأكد من حذف "' + fileName + '" من صور المدرسة؟')) {
-        return;
-    }
+    const operationKey = 'gallery-delete-' + String(fileId);
+    if (!beginImageOperation(operationKey)) return;
 
     const status = document.getElementById('googleSignInStatus');
     const deleteButtons = document.querySelectorAll('#tabletGallery button');
@@ -1946,74 +1945,63 @@ async function deleteDriveTabletImage(fileId, fileName) {
         if (button.textContent.trim() === 'حذف الصورة') button.disabled = true;
     });
 
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = GOOGLE_SCRIPT_URL;
-    form.target = 'schoolPhotoUploadFrame';
-    form.style.display = 'none';
-
-    let frame = document.getElementById('schoolPhotoUploadFrame');
-    if (!frame) {
-        frame = document.createElement('iframe');
-        frame.name = 'schoolPhotoUploadFrame';
-        frame.id = 'schoolPhotoUploadFrame';
-        frame.style.display = 'none';
-        document.body.appendChild(frame);
-    }
-
-    const fields = {
-        action: 'delete',
-        token: googleUploadToken,
-        adminSessionToken: window.adminSessionToken,
-        fileId: fileId
-    };
-
-    Object.entries(fields).forEach(([name, value]) => {
-        const field = document.createElement('input');
-        field.type = 'hidden';
-        field.name = name;
-        field.value = String(value == null ? '' : value);
-        form.appendChild(field);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
-
-    if (status) status.textContent = 'جارٍ تنفيذ الحذف والتحقق من اختفاء الصورة...';
-
-    const startedAt = Date.now();
-    const maxWait = 45000;
-
+    let frame = null;
+    let form = null;
     try {
-        while (Date.now() - startedAt < maxWait) {
-            await new Promise(resolve => setTimeout(resolve, 1800));
-            const images = await fetchTabletGalleryImages();
-            await renderTabletGallery(images);
+        frame = document.createElement('iframe');
+        const target = 'galleryDeleteFrame_' + Date.now() + '_' +
+            Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
+        frame.name = target;
+        frame.style.display = 'none';
 
-            const stillExists = images.some(item => {
-                const image = typeof item === 'string' ? { url: item } : item;
+        form = document.createElement('form');
+        form.method = 'POST';
+        form.action = GOOGLE_SCRIPT_URL;
+        form.target = target;
+        form.style.display = 'none';
+
+        const fields = {
+            action: 'delete',
+            token: googleUploadToken,
+            adminSessionToken: window.adminSessionToken,
+            fileId: fileId
+        };
+        Object.entries(fields).forEach(([name, value]) => {
+            const field = document.createElement('input');
+            field.type = 'hidden';
+            field.name = name;
+            field.value = String(value == null ? '' : value);
+            form.appendChild(field);
+        });
+
+        document.body.appendChild(frame);
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+        form = null;
+
+        if (status) status.textContent = 'جارٍ تنفيذ الحذف والتحقق من اختفاء الصورة...';
+        const images = await waitForConfirmedImageState(
+            fetchTabletGalleryImages,
+            currentImages => !currentImages.some(item => {
+                const image = typeof item === 'string' ? { id: '', url: item } : item;
                 return String(image.id || '') === String(fileId);
-            });
+            }),
+            'اختفاء الصورة المحذوفة من المعرض'
+        );
 
-            if (!stillExists) {
-                if (status) status.textContent = 'تم حذف الصورة بنجاح.';
-                return;
-            }
-        }
-
-        if (status) {
-            status.textContent = 'تم إرسال طلب الحذف، لكن تعذر تأكيد اختفاء الصورة. حدّث المعرض للتحقق.';
-        }
+        await renderTabletGallery(images);
+        if (status) status.textContent = 'تم حذف الصورة والتأكد من اختفائها من المعرض.';
     } catch (error) {
-        if (status) {
-            status.textContent = 'تم إرسال طلب الحذف، لكن تعذر التحقق من النتيجة. حدّث المعرض للتأكد.';
-        }
-        console.error('Gallery delete verification error:', error);
+        if (status) status.textContent = error.message;
+        else alert(error.message);
     } finally {
+        if (form) form.remove();
+        if (frame) frame.remove();
         deleteButtons.forEach(button => {
             if (button.isConnected) button.disabled = false;
         });
+        endImageOperation(operationKey);
     }
 }
 
@@ -2032,44 +2020,58 @@ async function uploadTabletImage() {
         return;
     }
 
+    const operationKey = 'gallery-upload';
+    if (!beginImageOperation(operationKey)) return;
+
     const file = input.files[0];
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedTypes.includes(file.type)) {
         status.textContent = 'نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF.';
+        endImageOperation(operationKey);
         return;
     }
     if (file.size > 4 * 1024 * 1024) {
         status.textContent = 'حجم الصورة يجب ألا يتجاوز 4 ميجابايت.';
+        endImageOperation(operationKey);
         return;
     }
 
     if (button) button.disabled = true;
     status.textContent = 'جارٍ تجهيز الصورة ورفعها إلى Google Drive...';
-
     try {
-        let initialImages = null;
-        try {
-            initialImages = await fetchTabletGalleryImages();
-        } catch (snapshotError) {
-            console.warn('تعذر أخذ لقطة أولية للمعرض قبل الرفع:', snapshotError);
-        }
-
+        const initialImages = await fetchTabletGalleryImages();
         const data = await readScheduleFileAsBase64(file);
-        await galleryUploadPost({
+        const uploadResult = await galleryUploadPost({
             fileName: file.name,
             mimeType: file.type,
             data: data
         }, initialImages);
 
-        await renderTabletGallery();
-        status.textContent = 'تم رفع الصورة وحفظها بنجاح، وتم تحديث المعرض.';
+        const fileId = String(uploadResult.fileId ||
+            (uploadResult.image && uploadResult.image.id) || '');
+        if (!fileId) throw new Error('لم يرجع الخادم معرّف الصورة المحفوظة.');
+
+        const images = await waitForConfirmedImageState(
+            fetchTabletGalleryImages,
+            currentImages => currentImages.some(item => {
+                const image = typeof item === 'string' ? { id: '', url: item } : item;
+                return String(image.id || '') === fileId;
+            }),
+            'ظهور الصورة الجديدة في المعرض'
+        );
+
+        await renderTabletGallery(images);
+        status.textContent = 'تم رفع الصورة وحفظها والتأكد من ظهورها في المعرض.';
         input.value = '';
     } catch (error) {
         status.textContent = error.message || 'تعذر تأكيد رفع الصورة. حدّث المعرض قبل إعادة المحاولة.';
     } finally {
         if (button) button.disabled = false;
+        endImageOperation(operationKey);
     }
 }
+
+
 
 async function galleryUploadPost(fields, baselineImages) {
     const nonce = 'gallery-' + Date.now() + '-' + Math.random().toString(36).slice(2);
@@ -2152,9 +2154,16 @@ async function galleryUploadPost(fields, baselineImages) {
                 });
 
                 if (addedImages.length && (matchingName || currentImages.length > previous.length)) {
+                    const confirmedImage = addedImages.find(item => {
+                        const image = typeof item === 'string' ? { id: '', name: '', url: item } : item;
+                        return String(image.name || '').trim().toLowerCase() === expectedName;
+                    }) || addedImages[0];
+
                     acceptResult({
                         success: true,
-                        message: 'تم التأكد من ظهور الصورة الجديدة في المعرض.'
+                        message: 'تم التأكد من ظهور الصورة الجديدة في المعرض.',
+                        fileId: String(confirmedImage.id || ''),
+                        image: confirmedImage
                     });
                 }
             } catch (galleryError) {
