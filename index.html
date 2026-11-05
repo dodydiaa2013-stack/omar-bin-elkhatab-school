@@ -1439,52 +1439,62 @@ async function refreshSchedules(button) {
     finally { if (button) { button.disabled = false; button.innerHTML = oldHtml; } }
 }
 
-async function renderTabletGallery() {
-    const gallery = document.getElementById('tabletGallery');
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+async function fetchTabletGalleryImages() {
+    const scriptUrl = GOOGLE_SCRIPT_URL;
+    const callbackName = 'schoolGalleryFetch_' + Date.now() + '_' +
+        Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
 
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let finished = false;
+
+        const cleanup = () => {
+            if (finished) return;
+            finished = true;
+            clearTimeout(timeout);
+            script.remove();
+            delete window[callbackName];
+        };
+
+        const timeout = setTimeout(() => {
+            cleanup();
+            reject(new Error('انتهت مهلة تحديث المعرض.'));
+        }, 15000);
+
+        window[callbackName] = result => {
+            cleanup();
+            if (result && result.success && Array.isArray(result.images)) {
+                resolve(result.images);
+            } else {
+                reject(new Error('تعذر جلب معرض الصور.'));
+            }
+        };
+
+        script.onerror = () => {
+            cleanup();
+            reject(new Error('تعذر الاتصال بمعرض الصور.'));
+        };
+
+        script.src = scriptUrl + '?action=gallery&callback=' +
+            encodeURIComponent(callbackName) + '&_=' + Date.now();
+        document.body.appendChild(script);
+    });
+}
+
+async function renderTabletGallery(imagesOverride) {
+    const gallery = document.getElementById('tabletGallery');
     gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">جارٍ تحميل النشرات...</p>';
 
     try {
-        const callbackName = 'schoolGalleryCallback_' + Date.now();
-
-        const images = await new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            const timeout = setTimeout(() => {
-                cleanup();
-                reject(new Error('انتهت مهلة تحميل الصور.'));
-            }, 15000);
-
-            function cleanup() {
-                clearTimeout(timeout);
-                script.remove();
-                delete window[callbackName];
-            }
-
-            window[callbackName] = (result) => {
-                cleanup();
-
-                if (result && result.success && Array.isArray(result.images)) {
-                    resolve(result.images);
-                } else {
-                    reject(new Error('تعذر جلب معرض الصور.'));
-                }
-            };
-
-            script.src = scriptUrl + '?action=gallery&callback=' + callbackName + '&_=' + Date.now();
-            script.onerror = () => {
-                cleanup();
-                reject(new Error('تعذر الاتصال بمعرض الصور.'));
-            };
-
-            document.body.appendChild(script);
-        });
+        const images = Array.isArray(imagesOverride)
+            ? imagesOverride
+            : await fetchTabletGalleryImages();
 
         gallery.innerHTML = '';
 
         if (images.length === 0) {
             gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">لا توجد نشرات مضافة حتى الآن.</p>';
-            return;
+            return images;
         }
 
         images.forEach((item, idx) => {
@@ -1572,6 +1582,7 @@ if (fileId && googleUploadToken) {
     } catch (error) {
         gallery.innerHTML = '<p class="text-xs text-red-500 col-span-full text-center py-4">تعذر تحميل النشرات. حدّث الصفحة وحاول مرة أخرى.</p>';
         console.error('Gallery loading error:', error);
+        return null;
     }
 }
 
@@ -1624,9 +1635,9 @@ async function loadSchedulesFromDrive() {
     }
 }
 
-function deleteDriveTabletImage(fileId, fileName) {
-    if (!googleUploadToken) {
-        alert('سجّل الدخول بحساب Google المصرح له بالحذف أولاً.');
+async function deleteDriveTabletImage(fileId, fileName) {
+    if (!googleUploadToken || !window.adminSessionToken) {
+        alert('سجّل الدخول بحساب Google وكلمة مرور المسؤول أولاً.');
         return;
     }
 
@@ -1635,9 +1646,18 @@ function deleteDriveTabletImage(fileId, fileName) {
     }
 
     const status = document.getElementById('googleSignInStatus');
+    const deleteButtons = document.querySelectorAll('#tabletGallery button');
+    deleteButtons.forEach(button => {
+        if (button.textContent.trim() === 'حذف الصورة') button.disabled = true;
+    });
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = GOOGLE_SCRIPT_URL;
+    form.target = 'schoolPhotoUploadFrame';
+    form.style.display = 'none';
 
     let frame = document.getElementById('schoolPhotoUploadFrame');
-
     if (!frame) {
         frame = document.createElement('iframe');
         frame.name = 'schoolPhotoUploadFrame';
@@ -1646,24 +1666,18 @@ function deleteDriveTabletImage(fileId, fileName) {
         document.body.appendChild(frame);
     }
 
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
-    form.target = 'schoolPhotoUploadFrame';
-    form.style.display = 'none';
-
     const fields = {
-    action: 'delete',
-    token: googleUploadToken,
-    adminSessionToken: window.adminSessionToken,
-    fileId: fileId
-};
+        action: 'delete',
+        token: googleUploadToken,
+        adminSessionToken: window.adminSessionToken,
+        fileId: fileId
+    };
 
     Object.entries(fields).forEach(([name, value]) => {
         const field = document.createElement('input');
         field.type = 'hidden';
         field.name = name;
-        field.value = value;
+        field.value = String(value == null ? '' : value);
         form.appendChild(field);
     });
 
@@ -1671,11 +1685,41 @@ function deleteDriveTabletImage(fileId, fileName) {
     form.submit();
     form.remove();
 
-    status.textContent = 'تم إرسال طلب الحذف، جارٍ تحديث المعرض للتحقق من النتيجة.';
+    if (status) status.textContent = 'جارٍ تنفيذ الحذف والتحقق من اختفاء الصورة...';
 
-    setTimeout(() => {
-        renderTabletGallery();
-    }, 2500);
+    const startedAt = Date.now();
+    const maxWait = 45000;
+
+    try {
+        while (Date.now() - startedAt < maxWait) {
+            await new Promise(resolve => setTimeout(resolve, 1800));
+            const images = await fetchTabletGalleryImages();
+            await renderTabletGallery(images);
+
+            const stillExists = images.some(item => {
+                const image = typeof item === 'string' ? { url: item } : item;
+                return String(image.id || '') === String(fileId);
+            });
+
+            if (!stillExists) {
+                if (status) status.textContent = 'تم حذف الصورة بنجاح.';
+                return;
+            }
+        }
+
+        if (status) {
+            status.textContent = 'تم إرسال طلب الحذف، لكن تعذر تأكيد اختفاء الصورة. حدّث المعرض للتحقق.';
+        }
+    } catch (error) {
+        if (status) {
+            status.textContent = 'تم إرسال طلب الحذف، لكن تعذر التحقق من النتيجة. حدّث المعرض للتأكد.';
+        }
+        console.error('Gallery delete verification error:', error);
+    } finally {
+        deleteButtons.forEach(button => {
+            if (button.isConnected) button.disabled = false;
+        });
+    }
 }
 
         
@@ -1705,25 +1749,34 @@ async function uploadTabletImage() {
     }
 
     if (button) button.disabled = true;
-    status.textContent = 'جاري رفع الصورة إلى Google Drive...';
+    status.textContent = 'جارٍ تجهيز الصورة ورفعها إلى Google Drive...';
+
     try {
+        let initialImages = [];
+        try {
+            initialImages = await fetchTabletGalleryImages();
+        } catch (snapshotError) {
+            console.warn('تعذر أخذ لقطة أولية للمعرض قبل الرفع:', snapshotError);
+        }
+
         const data = await readScheduleFileAsBase64(file);
-        const result = await galleryUploadPost({
+        await galleryUploadPost({
             fileName: file.name,
             mimeType: file.type,
             data: data
-        });
-        status.textContent = 'تم رفع الصورة وحفظها بنجاح.';
+        }, initialImages);
+
+        await renderTabletGallery();
+        status.textContent = 'تم رفع الصورة وحفظها بنجاح، وتم تحديث المعرض.';
         input.value = '';
-        renderTabletGallery();
     } catch (error) {
-        status.textContent = error.message || 'تعذر تأكيد رفع الصورة.';
+        status.textContent = error.message || 'تعذر تأكيد رفع الصورة. حدّث المعرض قبل إعادة المحاولة.';
     } finally {
         if (button) button.disabled = false;
     }
 }
 
-async function galleryUploadPost(fields) {
+async function galleryUploadPost(fields, baselineImages) {
     const nonce = 'gallery-' + Date.now() + '-' + Math.random().toString(36).slice(2);
     const frame = document.createElement('iframe');
     const frameName = 'galleryUploadFrame_' + nonce.replace(/[^a-zA-Z0-9_]/g, '');
@@ -1756,6 +1809,7 @@ async function galleryUploadPost(fields) {
         let settled = false;
         let pollTimer = null;
         let deadlineTimer = null;
+        let galleryCheckInProgress = false;
 
         const cleanup = () => {
             window.removeEventListener('message', onMessage);
@@ -1777,6 +1831,42 @@ async function galleryUploadPost(fields) {
             if (result.success) finish(resolve, result);
             else finish(reject, new Error(result.message || 'فشل رفع الصورة.'));
             return true;
+        };
+
+        const verifyGalleryUpload = async () => {
+            if (settled || galleryCheckInProgress) return;
+            galleryCheckInProgress = true;
+
+            try {
+                const currentImages = await fetchTabletGalleryImages();
+                const previous = Array.isArray(baselineImages) ? baselineImages : [];
+                const previousIds = new Set(previous.map(item => {
+                    const image = typeof item === 'string' ? { url: item } : item;
+                    return String(image.id || '');
+                }).filter(Boolean));
+
+                const addedImages = currentImages.filter(item => {
+                    const image = typeof item === 'string' ? { url: item } : item;
+                    return image.id && !previousIds.has(String(image.id));
+                });
+
+                const expectedName = String((fields || {}).fileName || '').trim().toLowerCase();
+                const matchingName = addedImages.some(item => {
+                    const image = typeof item === 'string' ? { name: '', url: item } : item;
+                    return String(image.name || '').trim().toLowerCase() === expectedName;
+                });
+
+                if (addedImages.length && (matchingName || currentImages.length > previous.length)) {
+                    acceptResult({
+                        success: true,
+                        message: 'تم التأكد من ظهور الصورة الجديدة في المعرض.'
+                    });
+                }
+            } catch (galleryError) {
+                console.warn('تعذر التحقق الاحتياطي من ظهور الصورة:', galleryError);
+            } finally {
+                galleryCheckInProgress = false;
+            }
         };
 
         const onMessage = event => {
@@ -1806,13 +1896,18 @@ async function galleryUploadPost(fields) {
                 finishPoll();
                 if (response && response.found && response.result) {
                     acceptResult(response.result);
+                } else if (!settled) {
+                    verifyGalleryUpload();
                 }
                 if (!settled) pollTimer = setTimeout(pollStatus, 2500);
             };
 
             script.onerror = () => {
                 finishPoll();
-                if (!settled) pollTimer = setTimeout(pollStatus, 4000);
+                if (!settled) {
+                    verifyGalleryUpload();
+                    pollTimer = setTimeout(pollStatus, 4000);
+                }
             };
 
             script.src = GOOGLE_SCRIPT_URL +
