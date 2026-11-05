@@ -755,10 +755,10 @@
                                 </button>
                             </div>
                         </div>
-                        <div id="schoolImageViewerStage" class="min-h-0 w-full flex-1 overflow-auto rounded-lg text-center cursor-grab select-none" style="overscroll-behavior:contain; touch-action:pan-x pan-y;">
+                        <div id="schoolImageViewerStage" class="min-h-0 w-full flex-1 overflow-auto rounded-lg text-center cursor-grab select-none" style="overscroll-behavior:contain; touch-action:none;">
                             <img id="schoolImageViewerImage" class="inline-block max-w-none rounded-lg shadow-2xl" style="object-fit:contain;" alt="">
                         </div>
-                        <p class="mt-2 shrink-0 text-center text-xs text-white/70">استخدم + و− أو عجلة الماوس للتكبير، وبعد التكبير اضغط واسحب باليد لتحريك الصورة، أو استخدم أشرطة التمرير.</p>
+                        <p class="mt-2 shrink-0 text-center text-xs text-white/70">على الموبايل كبّر أو صغّر بإصبعين، واسحب بإصبع واحد لتحريك الصورة بعد التكبير. ويمكنك استخدام + و− أو عجلة الماوس أيضًا.</p>
                     </div>`;
                 const image = viewer.querySelector('#schoolImageViewerImage');
                 const stage = viewer.querySelector('#schoolImageViewerStage');
@@ -790,44 +790,113 @@
                     event.preventDefault();
                     viewer._changeZoom(event.deltaY < 0 ? 1.15 : 0.87);
                 }, { passive: false });
-                // السحب بالماوس لتحريك الصورة عند تكبيرها.
-                let panPointerId = null;
-                let panStartX = 0;
-                let panStartY = 0;
-                let panStartScrollLeft = 0;
-                let panStartScrollTop = 0;
+                // دعم السحب بالماوس/اللمس، والتكبير والتصغير بإصبعين على الشاشات اللمسية.
+                const activePointers = new Map();
+                let panState = null;
+                let pinchState = null;
+
+                const getPointerMidpoint = () => {
+                    const points = Array.from(activePointers.values());
+                    return {
+                        x: (points[0].x + points[1].x) / 2,
+                        y: (points[0].y + points[1].y) / 2
+                    };
+                };
+                const getPointerDistance = () => {
+                    const points = Array.from(activePointers.values());
+                    return Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
+                };
+                const beginPinch = () => {
+                    if (activePointers.size < 2) return;
+                    const midpoint = getPointerMidpoint();
+                    const imageRect = image.getBoundingClientRect();
+                    pinchState = {
+                        distance: Math.max(1, getPointerDistance()),
+                        zoom: viewer._zoom,
+                        midpoint,
+                        anchorX: imageRect.width ? (midpoint.x - imageRect.left) / imageRect.width : 0.5,
+                        anchorY: imageRect.height ? (midpoint.y - imageRect.top) / imageRect.height : 0.5
+                    };
+                    panState = null;
+                };
                 stage.addEventListener('pointerdown', event => {
-                    if (viewer._zoom <= 1 || event.button !== 0) return;
-                    panPointerId = event.pointerId;
-                    panStartX = event.clientX;
-                    panStartY = event.clientY;
-                    panStartScrollLeft = stage.scrollLeft;
-                    panStartScrollTop = stage.scrollTop;
-                    stage.setPointerCapture(event.pointerId);
-                    stage.classList.remove('cursor-grab');
-                    stage.classList.add('cursor-grabbing');
-                    event.preventDefault();
+                    if (event.pointerType === 'mouse' && event.button !== 0) return;
+                    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                    try { stage.setPointerCapture(event.pointerId); } catch (_) {}
+
+                    if (activePointers.size >= 2) {
+                        beginPinch();
+                    } else if (viewer._zoom > 1) {
+                        panState = {
+                            pointerId: event.pointerId,
+                            x: event.clientX,
+                            y: event.clientY,
+                            scrollLeft: stage.scrollLeft,
+                            scrollTop: stage.scrollTop
+                        };
+                        stage.classList.remove('cursor-grab');
+                        stage.classList.add('cursor-grabbing');
+                    }
+                    if (event.pointerType !== 'mouse') event.preventDefault();
                 });
                 stage.addEventListener('pointermove', event => {
-                    if (panPointerId !== event.pointerId) return;
-                    stage.scrollLeft = panStartScrollLeft - (event.clientX - panStartX);
-                    stage.scrollTop = panStartScrollTop - (event.clientY - panStartY);
-                });
-                const finishPan = event => {
-                    if (panPointerId !== event.pointerId) return;
-                    panPointerId = null;
-                    stage.classList.remove('cursor-grabbing');
-                    stage.classList.add('cursor-grab');
-                    if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
-                };
-                stage.addEventListener('pointerup', finishPan);
-                stage.addEventListener('pointercancel', finishPan);
-                stage.addEventListener('lostpointercapture', event => {
-                    if (panPointerId === event.pointerId) {
-                        panPointerId = null;
+                    if (!activePointers.has(event.pointerId)) return;
+                    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+                    if (activePointers.size >= 2 && pinchState) {
+                        const midpoint = getPointerMidpoint();
+                        const nextZoom = Math.max(0.5, Math.min(5,
+                            pinchState.zoom * getPointerDistance() / pinchState.distance
+                        ));
+                        viewer._zoom = nextZoom;
+                        viewer._applyZoom();
+                        const imageRect = image.getBoundingClientRect();
+                        stage.scrollLeft = Math.max(0,
+                            imageRect.left + stage.scrollLeft + pinchState.anchorX * image.offsetWidth - midpoint.x
+                        );
+                        stage.scrollTop = Math.max(0,
+                            imageRect.top + stage.scrollTop + pinchState.anchorY * image.offsetHeight - midpoint.y
+                        );
+                        event.preventDefault();
+                        return;
+                    }
+
+                    if (activePointers.size === 1 && panState && panState.pointerId === event.pointerId && viewer._zoom > 1) {
+                        stage.scrollLeft = panState.scrollLeft - (event.clientX - panState.x);
+                        stage.scrollTop = panState.scrollTop - (event.clientY - panState.y);
+                        event.preventDefault();
+                    }
+                }, { passive: false });
+
+                const finishPointer = event => {
+                    if (!activePointers.has(event.pointerId)) return;
+                    activePointers.delete(event.pointerId);
+                    pinchState = null;
+                    panState = null;
+                    if (activePointers.size === 1 && viewer._zoom > 1) {
+                        const remaining = Array.from(activePointers.entries())[0];
+                        panState = {
+                            pointerId: remaining[0],
+                            x: remaining[1].x,
+                            y: remaining[1].y,
+                            scrollLeft: stage.scrollLeft,
+                            scrollTop: stage.scrollTop
+                        };
+                    }
+                    if (activePointers.size === 0) {
                         stage.classList.remove('cursor-grabbing');
                         stage.classList.add('cursor-grab');
+                    } else if (activePointers.size >= 2) {
+                        beginPinch();
                     }
+                    try {
+                        if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+                    } catch (_) {}
+                };
+                stage.addEventListener('pointerup', finishPointer);
+                stage.addEventListener('pointercancel', finishPointer);
+                stage.addEventListener('lostpointercapture', event => {
+                    if (activePointers.has(event.pointerId)) finishPointer(event);
                 });
                 image.addEventListener('load', () => {
                     viewer._zoom = 1;
