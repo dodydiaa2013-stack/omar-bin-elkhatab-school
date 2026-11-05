@@ -552,7 +552,7 @@
                         </div>
                     </div>
                 </div>
-                <p id="photoAlbumsStatus" class="text-xs text-slate-500 text-center py-2">جارٍ تحميل ألبومات الصور...</p>
+                <p id="photoAlbumsStatus" class="text-xs text-slate-500 text-center py-2" role="status" aria-live="polite">جارٍ تحميل ألبومات الصور...</p>
                 <div id="photoAlbumsManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <span class="text-xs font-bold text-navy">ترتيب وإدارة الألبومات:</span>
                     <button type="button" onclick="selectAllContent('albums')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
@@ -576,6 +576,16 @@
                         </div>
                     </div>
                     <input id="photoAlbumImagesInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="hidden" onchange="uploadPhotoAlbumImages(this)">
+                    <div id="photoAlbumUploadProgress" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2" role="status" aria-live="polite">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <p id="photoAlbumUploadStatus" class="text-xs font-bold text-slate-700">جاهز لرفع الصور.</p>
+                            <span id="photoAlbumUploadProgressText" class="text-xs font-bold text-slate-500">0 / 0</span>
+                        </div>
+                        <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                            <div id="photoAlbumUploadProgressBar" class="h-full rounded-full bg-emerald-600 transition-all" style="width:0%"></div>
+                        </div>
+                        <div id="photoAlbumUploadResults" class="space-y-1 text-xs"></div>
+                    </div>
                     <div id="albumImagesManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                         <span class="text-xs font-bold text-navy">ترتيب وإدارة الصور:</span>
                         <button type="button" onclick="selectAllContent('albumImages')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
@@ -3310,6 +3320,9 @@ async function refreshPhotoAlbums(button) {
                 const fields = { albumId: photoAlbumEditId || '', title, description };
                 if (cover) { fields.coverName = cover.name; fields.coverMimeType = cover.type; fields.coverData = await photoAlbumReadFile(cover); }
                 await photoAlbumPost(photoAlbumEditId ? 'updatePhotoAlbum' : 'createPhotoAlbum', fields);
+                const operationLabel = photoAlbumEditId ? 'تم حفظ تعديلات الألبوم بنجاح.' : 'تم إنشاء الألبوم وحفظه بنجاح.';
+                const albumsStatus = document.getElementById('photoAlbumsStatus');
+                if (albumsStatus) albumsStatus.textContent = operationLabel;
                 // رد success من Apps Script يؤكد الحفظ؛ تحديث القائمة لا يعيد تصنيف العملية كفشل.
                 closePhotoAlbumEditor();
                 const refreshedAlbums = await loadPhotoAlbums();
@@ -3402,7 +3415,9 @@ async function refreshPhotoAlbums(button) {
     const files = Array.from(input.files || []);
     if (!files.length || !currentPhotoAlbumId) return;
     if (!hasDualAdminAuthorization()) {
-        alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+        const status = document.getElementById('photoAlbumUploadStatus');
+        if (status) status.textContent = 'يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.';
+        document.getElementById('photoAlbumUploadProgress')?.classList.remove('hidden');
         input.value = '';
         return;
     }
@@ -3411,45 +3426,103 @@ async function refreshPhotoAlbums(button) {
     const operationKey = 'album-upload-' + albumId;
     if (!beginImageOperation(operationKey)) return;
 
-    for (const file of files) {
-        if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) {
-            alert('الملف ' + file.name + ' غير مناسب. الأنواع المسموحة JPG وPNG وWEBP وGIF، بحد أقصى 4 ميجابايت للصورة.');
-            input.value = '';
-            endImageOperation(operationKey);
-            return;
+    const progress = document.getElementById('photoAlbumUploadProgress');
+    const status = document.getElementById('photoAlbumUploadStatus');
+    const progressText = document.getElementById('photoAlbumUploadProgressText');
+    const progressBar = document.getElementById('photoAlbumUploadProgressBar');
+    const results = document.getElementById('photoAlbumUploadResults');
+    const addButton = document.querySelector('#photoAlbumActions button[onclick*="photoAlbumImagesInput"]');
+
+    progress?.classList.remove('hidden');
+    if (results) results.innerHTML = '';
+    if (progressText) progressText.textContent = '0 / ' + files.length;
+    if (progressBar) progressBar.style.width = '0%';
+
+    const allowedTypes = ['image/jpeg','image/png','image/webp','image/gif'];
+    const invalidFile = files.find(file => !allowedTypes.includes(file.type) || file.size > 4*1024*1024);
+    if (invalidFile) {
+        if (status) status.textContent = 'فشل الرفع: ' + invalidFile.name +
+            (!allowedTypes.includes(invalidFile.type)
+                ? ' — نوع الملف غير مسموح.'
+                : ' — حجم الصورة أكبر من 4 ميجابايت.');
+        if (results) {
+            results.innerHTML = '';
+            const line = document.createElement('p');
+            line.className = 'font-bold text-red-600';
+            line.textContent = '✕ ' + status.textContent;
+            results.appendChild(line);
         }
+        input.value = '';
+        endImageOperation(operationKey);
+        return;
     }
 
-    const status = document.getElementById('photoAlbumViewerMeta');
-    status.textContent = 'جارٍ تجهيز الصور الأصلية ورفعها...';
+    let succeeded = 0;
+    const failures = [];
+    if (input) input.disabled = true;
+    if (addButton) addButton.disabled = true;
+    if (status) status.textContent = 'جارٍ تجهيز ' + files.length + ' صورة للرفع...';
+
     try {
         for (let index = 0; index < files.length; index++) {
             const file = files[index];
-            status.textContent = 'جارٍ رفع الصورة ' + (index + 1) + ' من ' + files.length + ': ' + file.name;
-            const data = await photoAlbumReadFile(file);
-            const uploadResult = await photoAlbumPost('uploadPhotoAlbumImage', {
-                albumId: albumId,
-                fileName: file.name,
-                mimeType: file.type,
-                data: data
-            });
-            // photoAlbumPost لا يحل إلا بعد تأكيد success موثوق؛ لا نشترط وجود ID في الرد.
-            // بعض ردود Apps Script القديمة تؤكد الحفظ دون إرجاع كائن الصورة.
-            if (uploadResult && uploadResult.success === false) {
-                throw new Error(uploadResult.message || 'فشل رفع الصورة ' + file.name);
+            const line = document.createElement('p');
+            line.className = 'text-slate-600';
+            line.textContent = 'جارٍ رفع الصورة ' + (index + 1) + ' من ' + files.length + ': ' + file.name;
+            results?.appendChild(line);
+            if (status) status.textContent = 'جارٍ رفع الصورة ' + (index + 1) + ' من ' + files.length + ': ' + file.name;
+
+            try {
+                const data = await photoAlbumReadFile(file);
+                const uploadResult = await photoAlbumPost('uploadPhotoAlbumImage', {
+                    albumId: albumId,
+                    fileName: file.name,
+                    mimeType: file.type,
+                    data: data
+                });
+                if (uploadResult && uploadResult.success === false) {
+                    throw new Error(uploadResult.message || 'لم يؤكد الخادم حفظ الصورة.');
+                }
+                succeeded++;
+                line.className = 'font-bold text-emerald-700';
+                line.textContent = '✓ تم رفع وحفظ الصورة: ' + file.name;
+            } catch (error) {
+                failures.push({ name: file.name, message: error.message || 'حدث خطأ غير معروف.' });
+                line.className = 'font-bold text-red-600';
+                line.textContent = '✕ فشل رفع ' + file.name + ': ' + (error.message || 'حدث خطأ غير معروف.');
+            }
+
+            if (progressText) progressText.textContent = (index + 1) + ' / ' + files.length;
+            if (progressBar) progressBar.style.width = (((index + 1) / files.length) * 100) + '%';
+        }
+
+        if (succeeded > 0) {
+            try {
+                const refreshedAlbums = await loadPhotoAlbums();
+                const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+                if (album) openPhotoAlbum(album.id);
+                if (!Array.isArray(refreshedAlbums) && status) {
+                    status.textContent = 'تم تأكيد حفظ الصور، لكن تعذر تحديث عرض الألبوم تلقائيًا.';
+                }
+            } catch (refreshError) {
+                console.warn('تم تأكيد رفع الصور لكن تعذر تحديث عرض الألبوم:', refreshError);
+                if (status) status.textContent = 'تم تأكيد حفظ الصور، لكن تعذر تحديث عرض الألبوم تلقائيًا.';
             }
         }
 
-        const refreshedAlbums = await loadPhotoAlbums();
-        const album = photoAlbumsCache.find(item => String(item.id) === albumId);
-        if (album) openPhotoAlbum(album.id);
-        status.textContent = Array.isArray(refreshedAlbums)
-            ? 'تم رفع الصور بنجاح وتحديث الألبوم.'
-            : 'تم رفع الصور بنجاح. تعذر تحديث عرض الألبوم تلقائيًا؛ استخدم تحديث الألبومات.';
-    } catch(error) {
-        status.textContent = error.message;
+        if (status) {
+            if (failures.length === 0) {
+                status.textContent = 'اكتمل الرفع بنجاح: ' + succeeded + ' صورة محفوظة.';
+            } else if (succeeded > 0) {
+                status.textContent = 'اكتمل الرفع جزئيًا: ' + succeeded + ' ناجح، ' + failures.length + ' فشل.';
+            } else {
+                status.textContent = 'فشل رفع الصور: 0 ناجح، ' + failures.length + ' فشل.';
+            }
+        }
     } finally {
         input.value = '';
+        input.disabled = false;
+        if (addButton) addButton.disabled = false;
         endImageOperation(operationKey);
     }
 }
