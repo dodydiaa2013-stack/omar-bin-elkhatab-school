@@ -2153,12 +2153,13 @@ async function galleryUploadPost(fields, baselineImages) {
                     return String(image.name || '').trim().toLowerCase() === expectedName;
                 });
 
-                if (addedImages.length && (matchingName || currentImages.length > previous.length)) {
-                    const confirmedImage = addedImages.find(item => {
-                        const image = typeof item === 'string' ? { id: '', name: '', url: item } : item;
-                        return String(image.name || '').trim().toLowerCase() === expectedName;
-                    }) || addedImages[0];
+                const confirmedImage = addedImages.find(item => {
+                    const image = typeof item === 'string' ? { id: '', name: '', url: item } : item;
+                    return expectedName &&
+                        String(image.name || '').trim().toLowerCase() === expectedName;
+                }) || (!expectedName ? addedImages[0] : null);
 
+                if (confirmedImage) {
                     acceptResult({
                         success: true,
                         message: 'تم التأكد من ظهور الصورة الجديدة في المعرض.',
@@ -2839,7 +2840,6 @@ async function deleteScheduleImage(cls) {
     } catch (error) {
         status.textContent = error.message + ' بعد تفعيل وظائف الألبومات في Apps Script سيظهر المعرض هنا.';
         grid.innerHTML = '';
-        throw error;
     }
 }
 
@@ -3061,7 +3061,6 @@ async function replacePhotoAlbumImage(imageId) {
     if (!hasDualAdminAuthorization()) return;
     const albumId = String(currentPhotoAlbumId || '');
     const operationKey = 'album-replace-' + albumId + '-' + imageId;
-    if (!beginImageOperation(operationKey)) return;
 
     const picker = document.createElement('input');
     picker.type = 'file';
@@ -3074,9 +3073,9 @@ async function replacePhotoAlbumImage(imageId) {
         }
         if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) {
             alert('الصورة يجب أن تكون من الأنواع المسموحة وبحجم لا يتجاوز 4 ميجابايت.');
-            endImageOperation(operationKey);
             return;
         }
+        if (!beginImageOperation(operationKey)) return;
         try {
             const data = await photoAlbumReadFile(file);
             const result = await photoAlbumPost('replacePhotoAlbumImage', {
