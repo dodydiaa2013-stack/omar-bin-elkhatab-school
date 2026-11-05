@@ -85,6 +85,15 @@
             <button onclick="exportUpdatedHTML()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-file-code"></i> تحميل كود HTML المعدل
             </button>
+            <div id="manualBackupControls" class="hidden flex flex-wrap items-center gap-2 border-r border-amber-700 pr-2">
+                <button type="button" onclick="downloadManualSiteBackup()" class="bg-blue-700 hover:bg-blue-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                    <i class="fa-solid fa-download"></i> إنشاء نسخة احتياطية
+                </button>
+                <button type="button" onclick="document.getElementById('manualBackupFileInput').click()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                    <i class="fa-solid fa-rotate-left"></i> استعادة نسخة
+                </button>
+                <input id="manualBackupFileInput" type="file" accept=".json,application/json" class="hidden" onchange="restoreManualSiteBackup(this)">
+            </div>
         </div>
     </div>
 
@@ -917,6 +926,163 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        const MANUAL_BACKUP_FORMAT = 'obk-school-site-backup';
+        const MANUAL_BACKUP_VERSION = 1;
+        const MANUAL_BACKUP_KEYS = ['obk_alerts', 'obk_schedules', 'obk_tablet_imgs'];
+        const MANUAL_BACKUP_MAX_BYTES = 20 * 1024 * 1024;
+
+        function downloadManualSiteBackup() {
+            if (!hasDualAdminAuthorization()) {
+                alert('يلزم تسجيل الدخول بصلاحية المسؤول وحساب Google المعتمد لإنشاء النسخة الاحتياطية.');
+                return;
+            }
+
+            try {
+                const storage = {};
+                MANUAL_BACKUP_KEYS.forEach(key => {
+                    const value = localStorage.getItem(key);
+                    if (value === null) {
+                        throw new Error('تعذر العثور على بيانات التخزين: ' + key);
+                    }
+                    JSON.parse(value);
+                    storage[key] = value;
+                });
+
+                const backup = {
+                    format: MANUAL_BACKUP_FORMAT,
+                    version: MANUAL_BACKUP_VERSION,
+                    createdAt: new Date().toISOString(),
+                    site: 'مدرسة عمر بن الخطاب ث بنين',
+                    origin: location.origin,
+                    includedStorageKeys: MANUAL_BACKUP_KEYS,
+                    storage: storage,
+                    exclusions: [
+                        'صور وملفات Google Drive الفعلية',
+                        'ألبومات الصور وقوائم الفصول المحفوظة على الخادم',
+                        'تعديلات نصوص الموقع المحفوظة في Google Apps Script',
+                        'كلمات المرور ورموز الدخول والجلسات'
+                    ]
+                };
+
+                const json = JSON.stringify(backup, null, 2);
+                const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+                if (blob.size > MANUAL_BACKUP_MAX_BYTES) {
+                    throw new Error('حجم النسخة أكبر من الحد المسموح (20 ميجابايت).');
+                }
+
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+                link.href = url;
+                link.download = 'omar-school-backup-' + stamp + '.json';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1500);
+                alert('تم تجهيز النسخة الاحتياطية وتنزيلها. احتفظ بالملف في مكان آمن.');
+            } catch (error) {
+                console.error('Manual backup failed:', error);
+                alert('تعذر إنشاء النسخة الاحتياطية: ' + (error.message || 'خطأ غير معروف'));
+            }
+        }
+
+        function restoreManualSiteBackup(input) {
+            if (!hasDualAdminAuthorization()) {
+                alert('يلزم تسجيل الدخول بصلاحية المسؤول وحساب Google المعتمد لاستعادة النسخة الاحتياطية.');
+                input.value = '';
+                return;
+            }
+
+            const file = input.files && input.files[0];
+            if (!file) return;
+
+            if (file.size > MANUAL_BACKUP_MAX_BYTES) {
+                alert('حجم ملف النسخة أكبر من الحد المسموح (20 ميجابايت).');
+                input.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onerror = () => {
+                alert('تعذرت قراءة ملف النسخة الاحتياطية.');
+                input.value = '';
+            };
+            reader.onload = () => {
+                try {
+                    const backup = JSON.parse(String(reader.result || ''));
+                    if (!backup || backup.format !== MANUAL_BACKUP_FORMAT ||
+                        backup.version !== MANUAL_BACKUP_VERSION ||
+                        !backup.storage || typeof backup.storage !== 'object' ||
+                        Array.isArray(backup.storage)) {
+                        throw new Error('صيغة النسخة الاحتياطية أو إصدارها غير مدعوم.');
+                    }
+
+                    const missing = MANUAL_BACKUP_KEYS.filter(key =>
+                        !Object.prototype.hasOwnProperty.call(backup.storage, key) ||
+                        typeof backup.storage[key] !== 'string'
+                    );
+                    if (missing.length) {
+                        throw new Error('النسخة غير مكتملة؛ البيانات الناقصة: ' + missing.join(', '));
+                    }
+
+                    const parsed = {};
+                    MANUAL_BACKUP_KEYS.forEach(key => {
+                        parsed[key] = JSON.parse(backup.storage[key]);
+                    });
+                    if (!Array.isArray(parsed.obk_alerts) ||
+                        !parsed.obk_schedules || typeof parsed.obk_schedules !== 'object' ||
+                        Array.isArray(parsed.obk_schedules) ||
+                        !Array.isArray(parsed.obk_tablet_imgs)) {
+                        throw new Error('محتويات النسخة لا تطابق بنية بيانات الموقع.');
+                    }
+
+                    const created = backup.createdAt ? new Date(backup.createdAt) : null;
+                    const createdLabel = created && !Number.isNaN(created.getTime())
+                        ? created.toLocaleString('ar-EG')
+                        : 'تاريخ غير محدد';
+
+                    const confirmed = confirm(
+                        'سيتم استبدال بيانات هذا المتصفح الثلاثة بالبيانات الموجودة في النسخة.\n\n' +
+                        'تاريخ النسخة: ' + createdLabel + '\n' +
+                        'عدد أقسام البيانات: 3\n\n' +
+                        'لن تتغير صور Google Drive أو بيانات الخادم.\n' +
+                        'هل تريد المتابعة؟'
+                    );
+                    if (!confirmed) {
+                        input.value = '';
+                        return;
+                    }
+
+                    const previous = {};
+                    MANUAL_BACKUP_KEYS.forEach(key => {
+                        previous[key] = localStorage.getItem(key);
+                    });
+
+                    try {
+                        MANUAL_BACKUP_KEYS.forEach(key => {
+                            localStorage.setItem(key, backup.storage[key]);
+                        });
+                    } catch (writeError) {
+                        MANUAL_BACKUP_KEYS.forEach(key => {
+                            if (previous[key] === null) localStorage.removeItem(key);
+                            else localStorage.setItem(key, previous[key]);
+                        });
+                        throw new Error('لم تكتمل الاستعادة بسبب مساحة التخزين. تم إرجاع البيانات السابقة. ' +
+                            (writeError.message || ''));
+                    }
+
+                    alert('تمت استعادة بيانات النسخة الاحتياطية. سيتم تحديث الصفحة لعرض البيانات.');
+                    location.reload();
+                } catch (error) {
+                    console.error('Manual restore failed:', error);
+                    alert('تعذرت استعادة النسخة الاحتياطية: ' + (error.message || 'ملف غير صالح'));
+                } finally {
+                    input.value = '';
+                }
+            };
+            reader.readAsText(file);
+        }
+
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1241,6 +1407,13 @@ window.addEventListener('DOMContentLoaded', () => {
                 scheduleControl.classList.toggle('hidden', !canManage);
                 scheduleControl.hidden = !canManage;
                 scheduleControl.style.display = canManage ? '' : 'none';
+            }
+
+            const backupControls = document.getElementById('manualBackupControls');
+            if (backupControls) {
+                backupControls.classList.toggle('hidden', !canManage);
+                backupControls.hidden = !canManage;
+                backupControls.style.display = canManage ? 'flex' : 'none';
             }
         }
 
