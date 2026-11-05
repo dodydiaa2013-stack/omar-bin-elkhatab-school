@@ -2567,7 +2567,7 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
             callback(value);
         };
         const onMessage = event => {
-            if (!isTrustedAppsScriptMessage(event)) return;
+            if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
             const message = event.data;
             if (!message || message.type !== 'scheduleUploadResult' || message.nonce !== nonce) return;
             if (message.result && message.result.success) {
@@ -2813,7 +2813,7 @@ async function deleteScheduleImage(cls) {
                 };
                 const finish = (fn, value) => { if (settled) return; settled = true; cleanup(); fn(value); };
                 const onMessage = event => {
-                    if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+                    if (!isTrustedAppsScriptMessage(event)) return;
                     const msg = event.data;
                     if (!msg || msg.type !== 'photoAlbumResult' || msg.nonce !== nonce) return;
                     if (msg.result && msg.result.success) finish(resolve, msg.result);
