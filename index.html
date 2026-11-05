@@ -2453,6 +2453,12 @@ function renderSchedules() {
     if (!grid) return;
 
     const schedules = driveSchedules || {};
+    const activeScheduleIds = new Set(CLASSES
+        .map(cls => schedules[cls] && schedules[cls].id ? String(schedules[cls].id) : '')
+        .filter(Boolean));
+    Array.from(scheduleBulkSelection).forEach(id => {
+        if (!activeScheduleIds.has(String(id))) scheduleBulkSelection.delete(String(id));
+    });
     const management = document.getElementById('scheduleBulkManagement');
     if (management) management.classList.toggle('hidden', !hasDualAdminAuthorization());
     grid.innerHTML = '';
