@@ -1375,10 +1375,6 @@ async function renderTabletGallery() {
             if (!url) return;
 
             const fileId = image.id || '';
-            const openUrl = fileId
-                ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/view'
-                : url;
-
             const downloadUrl = fileId
                 ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId)
                 : '';
