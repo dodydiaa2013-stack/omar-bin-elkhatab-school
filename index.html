@@ -1686,7 +1686,7 @@ async function refreshSchedules(button) {
     finally { if (button) { button.disabled = false; button.innerHTML = oldHtml; } }
 }
 
-async const activeImageOperations = new Set();
+const activeImageOperations = new Set();
 
 function beginImageOperation(key) {
     if (activeImageOperations.has(key)) return false;
@@ -1766,7 +1766,7 @@ function fetchPhotoAlbumsSnapshot() {
     });
 }
 
-function fetchTabletGalleryImages() {
+async function fetchTabletGalleryImages() {
     const scriptUrl = GOOGLE_SCRIPT_URL;
     const callbackName = 'schoolGalleryFetch_' + Date.now() + '_' +
         Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
