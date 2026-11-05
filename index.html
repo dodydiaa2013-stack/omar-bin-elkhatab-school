@@ -1073,15 +1073,25 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         function updateTeacherUI() {
-            if (isAdminLoggedIn) {
-                document.getElementById('adminBadge').classList.remove('hidden');
-                document.getElementById('loginBtnText').innerText = 'المعلم مفعّل';
-                document.getElementById('tabletTeacherUpload').classList.remove('hidden');
-                document.getElementById('scheduleTeacherControl').classList.remove('hidden');
-                document.getElementById('alertsTeacherControl').classList.remove('hidden');
-            }
-        }
+    if (isAdminLoggedIn) {
+        document.getElementById('adminBadge').classList.remove('hidden');
+        document.getElementById('loginBtnText').innerText = 'المعلم مفعّل';
+        document.getElementById('tabletTeacherUpload').classList.remove('hidden');
+        document.getElementById('alertsTeacherControl').classList.remove('hidden');
+    }
 
+    const scheduleControl = document.getElementById('scheduleTeacherControl');
+
+    if (scheduleControl) {
+        const canManageSchedules =
+            isAdminLoggedIn === true &&
+            isDeveloperLoggedIn === true &&
+            Boolean(googleUploadToken) &&
+            Boolean(window.adminSessionToken);
+
+        scheduleControl.classList.toggle('hidden', !canManageSchedules);
+    }
+}
         function updateDeveloperUI() {
             const bar = document.getElementById('devControlBar');
             const googleVerified = isDeveloperLoggedIn === true && Boolean(googleUploadToken);
@@ -1593,6 +1603,7 @@ async function uploadTabletImage() {
 let googleUploadToken = null;
 
 
+
 function handleGoogleCredentialResponse(response) {
     const status = document.getElementById('googleSignInStatus');
 
@@ -1600,23 +1611,35 @@ function handleGoogleCredentialResponse(response) {
         googleUploadToken = null;
         isDeveloperLoggedIn = false;
         updateDeveloperUI();
-        if (status) status.textContent = 'تعذر تسجيل الدخول بحساب Google.';
+        updateTeacherUI();
+
+        if (status) {
+            status.textContent = 'تعذر تسجيل الدخول بحساب Google.';
+        }
         return;
     }
 
     googleUploadToken = response.credential;
     isDeveloperLoggedIn = false;
     updateDeveloperUI();
+    updateTeacherUI();
 
     const uploadControls = document.getElementById('tabletImageUploadControls');
-    if (uploadControls) { uploadControls.classList.remove('hidden'); uploadControls.classList.add('flex'); }
-    if (status) status.textContent = 'تم تسجيل الدخول بحساب Google. جارٍ التحقق من صلاحية أدوات المطور...';
+    if (uploadControls) {
+        uploadControls.classList.remove('hidden');
+        uploadControls.classList.add('flex');
+    }
+
+    if (status) {
+        status.textContent = 'تم تسجيل الدخول بحساب Google. جارٍ التحقق من صلاحية أدوات المطور...';
+    }
 
     const nonce = (window.crypto && crypto.randomUUID)
         ? crypto.randomUUID()
         : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
 
     let frame = document.getElementById('developerGoogleFrame');
+
     if (!frame) {
         frame = document.createElement('iframe');
         frame.id = 'developerGoogleFrame';
@@ -1627,25 +1650,39 @@ function handleGoogleCredentialResponse(response) {
 
     const onMessage = function(event) {
         if (!isTrustedAppsScriptMessage(event)) return;
+
         const data = event.data;
+
         if (!data || data.type !== 'developerGoogleVerification' || data.nonce !== nonce) return;
 
         window.removeEventListener('message', onMessage);
         clearTimeout(timeout);
 
-        if (data.result && data.result.success &&
-            data.result.email === 'dodydiaa2013@gmail.com') {
+        if (
+            data.result &&
+            data.result.success &&
+            data.result.email === 'dodydiaa2013@gmail.com'
+        ) {
             isDeveloperLoggedIn = true;
             updateDeveloperUI();
-            if (status) status.textContent = 'تم التحقق من الحساب المصرح به. أدوات المطور أصبحت متاحة.';
+
+            if (status) {
+                status.textContent = 'تم التحقق من الحساب المصرح به. أدوات المطور أصبحت متاحة.';
+            }
+
         } else {
             googleUploadToken = null;
             isDeveloperLoggedIn = false;
             updateDeveloperUI();
-            if (status) status.textContent =
-                (data.result && data.result.message) || 'هذا الحساب غير مصرح له باستخدام أدوات المطور.';
+
+            if (status) {
+                status.textContent =
+                    (data.result && data.result.message) ||
+                    'هذا الحساب غير مصرح له باستخدام أدوات المطور.';
+            }
         }
 
+        updateTeacherUI();
         renderTabletGallery();
         renderSchedules();
     };
@@ -1654,10 +1691,16 @@ function handleGoogleCredentialResponse(response) {
 
     const timeout = setTimeout(() => {
         window.removeEventListener('message', onMessage);
+
         googleUploadToken = null;
         isDeveloperLoggedIn = false;
+
         updateDeveloperUI();
-        if (status) status.textContent = 'لم يصل تأكيد التحقق من Google. حاول تسجيل الدخول مرة أخرى.';
+        updateTeacherUI();
+
+        if (status) {
+            status.textContent = 'لم يصل تأكيد التحقق من Google. حاول تسجيل الدخول مرة أخرى.';
+        }
     }, 20000);
 
     const form = document.createElement('form');
@@ -1688,6 +1731,7 @@ function handleGoogleCredentialResponse(response) {
     renderTabletGallery();
     renderSchedules();
 }
+
 
 
 function initGooglePhotoLogin() {
@@ -1773,28 +1817,28 @@ function renderSchedules() {
                 ${imageContent}
             </div>
 
-            <div class="px-4 pb-3 flex justify-between items-center text-xs">
-                <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
+           <div class="px-4 pb-3 flex justify-between items-center text-xs">
+    <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
 
-                <div class="flex items-center gap-2">
-                    ${imgUrl && googleUploadToken
-                        ? `<button onclick="deleteScheduleImage('${cls}')"
-                            class="text-red-600 hover:underline font-bold flex items-center gap-1">
-                            <i class="fa-solid fa-trash"></i> مسح
-                           </button>`
-                        : ''}
+    <div class="flex items-center gap-2">
+        ${imgUrl && isAdminLoggedIn && isDeveloperLoggedIn && googleUploadToken && window.adminSessionToken
+            ? `<button onclick="deleteScheduleImage('${cls}')"
+                class="text-red-600 hover:underline font-bold flex items-center gap-1">
+                <i class="fa-solid fa-trash"></i> مسح
+               </button>`
+            : ''}
 
-                    ${imgUrl
-                        ? `<a href="${fileId ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId) : imgUrl}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="text-navy font-bold hover:underline flex items-center gap-1">
-                            <i class="fa-solid fa-download"></i> تحميل
-                           </a>`
-                        : ''}
-                </div>
-            </div>
-        `;
+        ${imgUrl
+            ? `<a href="${fileId ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId) : imgUrl}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-navy font-bold hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-download"></i> تحميل
+               </a>`
+            : ''}
+    </div>
+</div>
+`;
 
         grid.appendChild(card);
     });
@@ -1802,11 +1846,26 @@ function renderSchedules() {
 
 
         function toggleScheduleUploadModal() {
-            const modal = document.getElementById('scheduleModal');
-            const willOpen = modal.classList.contains('hidden');
-            modal.classList.toggle('hidden');
-            if (willOpen) renderScheduleClassFileInputs();
-        }
+
+    if (
+        isAdminLoggedIn !== true ||
+        isDeveloperLoggedIn !== true ||
+        !googleUploadToken ||
+        !window.adminSessionToken
+    ) {
+        alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
+        return;
+    }
+
+    const modal = document.getElementById('scheduleModal');
+    const willOpen = modal.classList.contains('hidden');
+
+    modal.classList.toggle('hidden');
+
+    if (willOpen) {
+        renderScheduleClassFileInputs();
+    }
+}
 
         
 function renderScheduleClassFileInputs() {
@@ -1929,8 +1988,14 @@ async function saveScheduleImage() {
     const results = document.getElementById('scheduleUploadResults');
     const fileInputs = Array.from(document.querySelectorAll('#scheduleClassFiles input[type="file"]'));
 
-    if (!googleUploadToken) {
-        alert('سجّل الدخول بحساب Google المصرح له برفع قوائم الفصول أولاً.');
+    // التحقق من تسجيل الدخول بحساب Google وكلمة مرور المسؤول معًا
+    if (
+        isAdminLoggedIn !== true ||
+        isDeveloperLoggedIn !== true ||
+        !googleUploadToken ||
+        !window.adminSessionToken
+    ) {
+        alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
         return;
     }
 
@@ -1969,10 +2034,9 @@ async function saveScheduleImage() {
     let succeeded = 0;
     const failures = [];
 
-    // تجهيز بيانات الصور بالتوازي قبل الإرسال، مع إبقاء الرفع إلى Drive بالتتابع
-    // لتجنب تعارض عمليات الاستبدال والحذف داخل Apps Script.
     status.textContent = 'جارٍ تجهيز الصور الأصلية للإرسال...';
     let preparedImages;
+
     try {
         preparedImages = await Promise.all(
             jobs.map(job => readScheduleFileAsBase64(job.file))
@@ -2022,8 +2086,15 @@ async function saveScheduleImage() {
 
         
 function deleteScheduleImage(cls) {
-    if (!googleUploadToken) {
-        alert('سجّل الدخول بحساب Google المسؤول أولاً.');
+
+    // التحقق من تسجيل الدخول بحساب Google وكلمة مرور المسؤول معًا
+    if (
+        isAdminLoggedIn !== true ||
+        isDeveloperLoggedIn !== true ||
+        !googleUploadToken ||
+        !window.adminSessionToken
+    ) {
+        alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
         return;
     }
 
@@ -2080,7 +2151,6 @@ function deleteScheduleImage(cls) {
         loadSchedulesFromDrive();
     }, 3000);
 }
-
 
         // Photo albums module: deliberately isolated from the existing development/tablet gallery.
         const PHOTO_ALBUMS_SCRIPT_URL = GOOGLE_SCRIPT_URL;
