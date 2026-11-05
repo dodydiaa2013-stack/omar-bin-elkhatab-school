@@ -1483,7 +1483,9 @@ async function fetchTabletGalleryImages() {
 
 async function renderTabletGallery(imagesOverride) {
     const gallery = document.getElementById('tabletGallery');
-    gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">جارٍ تحميل النشرات...</p>';
+    if (!Array.isArray(imagesOverride)) {
+        gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">جارٍ تحميل النشرات...</p>';
+    }
 
     try {
         const images = Array.isArray(imagesOverride)
@@ -1579,6 +1581,7 @@ if (fileId && googleUploadToken) {
             gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">لا توجد صور قابلة للعرض.</p>';
         }
 
+        return images;
     } catch (error) {
         gallery.innerHTML = '<p class="text-xs text-red-500 col-span-full text-center py-4">تعذر تحميل النشرات. حدّث الصفحة وحاول مرة أخرى.</p>';
         console.error('Gallery loading error:', error);
@@ -1752,7 +1755,7 @@ async function uploadTabletImage() {
     status.textContent = 'جارٍ تجهيز الصورة ورفعها إلى Google Drive...';
 
     try {
-        let initialImages = [];
+        let initialImages = null;
         try {
             initialImages = await fetchTabletGalleryImages();
         } catch (snapshotError) {
@@ -1834,7 +1837,7 @@ async function galleryUploadPost(fields, baselineImages) {
         };
 
         const verifyGalleryUpload = async () => {
-            if (settled || galleryCheckInProgress) return;
+            if (settled || galleryCheckInProgress || !Array.isArray(baselineImages)) return;
             galleryCheckInProgress = true;
 
             try {
