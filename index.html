@@ -404,6 +404,11 @@
                     </div>
                 </div>
 
+                <div class="flex justify-end pt-2">
+                    <button type="button" onclick="refreshTabletGallery(this)" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-navy hover:bg-slate-50">
+                        <i class="fa-solid fa-rotate ml-1"></i> تحديث الصور
+                    </button>
+                </div>
                 <div id="tabletGallery" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"></div>
             </div>
         </section>
@@ -425,10 +430,15 @@
                         </h2>
                         <p class="text-xs text-slate-500 mt-1"><span data-page-edit-id="schedules-description">قوائم الفصول الرسمية (1/1 إلى 1/8)</span></p>
                     </div>
-                    <div id="scheduleTeacherControl" class="hidden">
-                        <button onclick="toggleScheduleUploadModal()" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow hover:bg-emerald-700">
-                            <i class="fa-solid fa-upload"></i> تعديل/رفع قائمة فصل
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" onclick="refreshSchedules(this)" class="bg-white border border-slate-300 text-navy font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-2 hover:bg-slate-50">
+                            <i class="fa-solid fa-rotate"></i> تحديث القوائم
                         </button>
+                        <div id="scheduleTeacherControl" class="hidden">
+                            <button onclick="toggleScheduleUploadModal()" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow hover:bg-emerald-700">
+                                <i class="fa-solid fa-upload"></i> تعديل/رفع قائمة فصل
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -502,10 +512,15 @@
                         </h2>
                         <p data-page-edit-id="alerts-description" class="text-xs text-slate-500 mt-1">ألبومات الندوات وورش العمل والتدريبات والاجتماعات والفعاليات المدرسية</p>
                     </div>
-                    <div id="alertsTeacherControl" class="hidden">
-                        <button type="button" onclick="openPhotoAlbumCreate()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2">
-                            <i class="fa-solid fa-plus"></i> إضافة ألبوم جديد
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button" onclick="refreshPhotoAlbums(this)" class="bg-white border border-slate-300 text-navy font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-2 hover:bg-slate-50">
+                            <i class="fa-solid fa-rotate"></i> تحديث الألبومات
                         </button>
+                        <div id="alertsTeacherControl" class="hidden">
+                            <button type="button" onclick="openPhotoAlbumCreate()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2">
+                                <i class="fa-solid fa-plus"></i> إضافة ألبوم جديد
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <p id="photoAlbumsStatus" class="text-xs text-slate-500 text-center py-2">جارٍ تحميل ألبومات الصور...</p>
@@ -518,6 +533,7 @@
                             <p id="photoAlbumViewerMeta" class="text-xs text-slate-500 mt-1"></p>
                         </div>
                         <div id="photoAlbumActions" class="hidden flex-wrap gap-2">
+                            <button type="button" onclick="refreshCurrentPhotoAlbum(this)" class="rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-xs font-bold"><i class="fa-solid fa-rotate ml-1"></i> تحديث الصور</button>
                             <button type="button" onclick="openPhotoAlbumEdit()" class="rounded-lg bg-amber-100 text-amber-900 px-3 py-2 text-xs font-bold"><i class="fa-solid fa-pen ml-1"></i> تعديل الألبوم</button>
                             <button type="button" onclick="document.getElementById('photoAlbumImagesInput').click()" class="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold"><i class="fa-solid fa-upload ml-1"></i> إضافة صور</button>
                             <button type="button" onclick="deleteCurrentPhotoAlbum()" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold"><i class="fa-solid fa-trash ml-1"></i> حذف الألبوم</button>
@@ -1409,6 +1425,20 @@ function receivePageChanges(data) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+async function refreshTabletGallery(button) {
+    const oldHtml = button ? button.innerHTML : '';
+    if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1"></i> جارٍ التحديث...'; }
+    try { await renderTabletGallery(); }
+    finally { if (button) { button.disabled = false; button.innerHTML = oldHtml; } }
+}
+
+async function refreshSchedules(button) {
+    const oldHtml = button ? button.innerHTML : '';
+    if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ التحديث...'; }
+    try { await loadSchedulesFromDrive(); }
+    finally { if (button) { button.disabled = false; button.innerHTML = oldHtml; } }
+}
+
 async function renderTabletGallery() {
     const gallery = document.getElementById('tabletGallery');
     const scriptUrl = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
@@ -1441,7 +1471,7 @@ async function renderTabletGallery() {
                 }
             };
 
-            script.src = scriptUrl + '?action=gallery&callback=' + callbackName;
+            script.src = scriptUrl + '?action=gallery&callback=' + callbackName + '&_=' + Date.now();
             script.onerror = () => {
                 cleanup();
                 reject(new Error('تعذر الاتصال بمعرض الصور.'));
@@ -1575,7 +1605,7 @@ async function loadSchedulesFromDrive() {
                 }
             };
 
-            script.src = scriptUrl + '?action=schedules&callback=' + callbackName;
+            script.src = scriptUrl + '?action=schedules&callback=' + callbackName + '&_=' + Date.now();
 
             script.onerror = () => {
                 cleanup();
@@ -1652,12 +1682,12 @@ function deleteDriveTabletImage(fileId, fileName) {
 async function uploadTabletImage() {
     const input = document.getElementById('tabletImgInput');
     const status = document.getElementById('googleSignInStatus');
+    const button = document.querySelector('#tabletImageUploadControls button');
 
-    if (!googleUploadToken) {
-        status.textContent = 'سجّل الدخول بحساب Google أولاً.';
+    if (!googleUploadToken || !window.adminSessionToken) {
+        status.textContent = 'سجّل الدخول بحساب Google وكلمة مرور المسؤول أولاً.';
         return;
     }
-
     if (!input.files || !input.files[0]) {
         alert('يرجى اختيار صورة أولاً.');
         return;
@@ -1665,69 +1695,94 @@ async function uploadTabletImage() {
 
     const file = input.files[0];
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-
     if (!allowedTypes.includes(file.type)) {
         status.textContent = 'نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF.';
         return;
     }
-
     if (file.size > 4 * 1024 * 1024) {
         status.textContent = 'حجم الصورة يجب ألا يتجاوز 4 ميجابايت.';
         return;
     }
 
-    status.textContent = 'جارٍ إرسال الصورة إلى Google Drive...';
-
+    if (button) button.disabled = true;
+    status.textContent = 'جارٍ تجهيز الصورة ورفعها إلى Google Drive...';
     try {
-        const data = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result).split(',')[1]);
-            reader.onerror = () => reject(new Error('تعذرت قراءة الصورة.'));
-            reader.readAsDataURL(file);
+        const data = await readScheduleFileAsBase64(file);
+        const result = await galleryUploadPost({
+            fileName: file.name,
+            mimeType: file.type,
+            data: data
         });
+        status.textContent = result.message || 'تم رفع الصورة بنجاح. جارٍ تحديث المعرض...';
+        input.value = '';
+        await renderTabletGallery();
+        status.textContent = 'تم رفع الصورة وتحديث المعرض بنجاح.';
+    } catch (error) {
+        status.textContent = error.message || 'تعذر تأكيد رفع الصورة.';
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+async function galleryUploadPost(fields) {
+    return new Promise((resolve, reject) => {
+        const nonce = 'gallery-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        const frame = document.createElement('iframe');
+        const frameName = 'galleryUploadFrame_' + nonce.replace(/[^a-zA-Z0-9_]/g, '');
+        frame.name = frameName;
+        frame.style.display = 'none';
 
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
-        form.target = 'schoolPhotoUploadFrame';
+        form.action = GOOGLE_SCRIPT_URL;
+        form.target = frameName;
         form.style.display = 'none';
 
-        const fields = {
-    token: googleUploadToken,
-    adminSessionToken: window.adminSessionToken,
-    fileName: file.name,
-    mimeType: file.type,
-    data: data
-};
+        const payload = Object.assign({
+            action: 'uploadGalleryImage',
+            nonce: nonce,
+            token: googleUploadToken || '',
+            adminSessionToken: window.adminSessionToken || '',
+            origin: window.location.origin
+        }, fields || {});
 
-        Object.entries(fields).forEach(([name, value]) => {
-            const field = document.createElement('input');
-            field.type = 'hidden';
-            field.name = name;
-            field.value = value;
-            form.appendChild(field);
+        Object.entries(payload).forEach(([name, value]) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = String(value == null ? '' : value);
+            form.appendChild(input);
         });
 
-        let frame = document.getElementById('schoolPhotoUploadFrame');
-        if (!frame) {
-            frame = document.createElement('iframe');
-            frame.name = 'schoolPhotoUploadFrame';
-            frame.id = 'schoolPhotoUploadFrame';
-            frame.style.display = 'none';
-            document.body.appendChild(frame);
-        }
+        let settled = false;
+        const cleanup = () => {
+            window.removeEventListener('message', onMessage);
+            clearTimeout(timer);
+            form.remove();
+            frame.remove();
+        };
+        const finish = (callback, value) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            callback(value);
+        };
+        const onMessage = event => {
+            if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+            const message = event.data;
+            if (!message || message.type !== 'galleryUploadResult' || message.nonce !== nonce) return;
+            if (message.result && message.result.success) finish(resolve, message.result);
+            else finish(reject, new Error((message.result && message.result.message) || 'فشل رفع الصورة.'));
+        };
+        const timer = setTimeout(() => {
+            finish(reject, new Error('لم يصل تأكيد من الخادم خلال 90 ثانية. إذا ظهرت الصورة بعد التحديث اليدوي، أعد المحاولة بعد التأكد من عدم تكرارها.'));
+        }, 90000);
 
+        window.addEventListener('message', onMessage);
+        document.body.appendChild(frame);
         document.body.appendChild(form);
         form.submit();
-        form.remove();
-
-        status.textContent =
-            'تم إرسال طلب الرفع. سنحتاج إلى التحقق من ظهوره في معرض الصور قبل تأكيد النجاح.';
-        input.value = '';
-
-    } catch (error) {
-        status.textContent = error.message || 'تعذر تجهيز الصورة للرفع.';
-    }
+    });
 }
 
         
@@ -2323,7 +2378,7 @@ function deleteScheduleImage(cls) {
                         else reject(new Error((result && result.message) || 'خدمة الألبومات غير مفعلة بعد.'));
                     };
                     script.onerror = () => { cleanup(); reject(new Error('تعذر الاتصال بخدمة الألبومات.')); };
-                    script.src = PHOTO_ALBUMS_SCRIPT_URL + '?action=photoAlbums&callback=' + callback;
+                    script.src = PHOTO_ALBUMS_SCRIPT_URL + '?action=photoAlbums&callback=' + callback + '&_=' + Date.now();
                     document.body.appendChild(script);
                 });
                 photoAlbumsCache = albums;
@@ -2332,6 +2387,27 @@ function deleteScheduleImage(cls) {
             } catch (error) {
                 status.textContent = error.message + ' بعد تفعيل وظائف الألبومات في Apps Script سيظهر المعرض هنا.';
                 grid.innerHTML = '';
+            }
+        }
+
+        async function refreshPhotoAlbums(button) {
+            const oldHtml = button ? button.innerHTML : '';
+            if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جارٍ التحديث...'; }
+            try { await loadPhotoAlbums(); }
+            finally { if (button) { button.disabled = false; button.innerHTML = oldHtml; } }
+        }
+
+        async function refreshCurrentPhotoAlbum(button) {
+            if (!currentPhotoAlbumId) return;
+            const albumId = currentPhotoAlbumId;
+            const oldHtml = button ? button.innerHTML : '';
+            if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1"></i> جارٍ التحديث...'; }
+            try {
+                await loadPhotoAlbums();
+                const album = photoAlbumsCache.find(item => String(item.id) === String(albumId));
+                if (album) openPhotoAlbum(album.id);
+            } finally {
+                if (button) { button.disabled = false; button.innerHTML = oldHtml; }
             }
         }
 
