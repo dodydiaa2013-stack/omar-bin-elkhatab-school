@@ -423,6 +423,13 @@
                         <i class="fa-solid fa-rotate ml-1"></i> تحديث الصور
                     </button>
                 </div>
+                <div id="tabletImageManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <span class="text-xs font-bold text-navy">إدارة الصور:</span>
+                    <button type="button" onclick="selectAllContent('gallery')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
+                    <button type="button" onclick="clearContentSelection('gallery')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
+                    <button type="button" onclick="bulkDeleteSelectedContent('gallery')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
+                    <span id="gallerySelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد صور.</span>
+                </div>
                 <div id="tabletGallery" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"></div>
             </div>
         </section>
@@ -457,6 +464,13 @@
                     </div>
                 </div>
 
+                <div id="scheduleBulkManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <span class="text-xs font-bold text-navy">حذف قوائم الفصول:</span>
+                    <button type="button" onclick="selectAllSchedulesForBulkDelete()" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
+                    <button type="button" onclick="clearScheduleBulkSelection()" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
+                    <button type="button" onclick="bulkDeleteSelectedSchedules()" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف القوائم المحددة</button>
+                    <span id="scheduleBulkSelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد قوائم.</span>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="schedulesGrid"></div>
             </div>
         </section>
@@ -539,6 +553,13 @@
                     </div>
                 </div>
                 <p id="photoAlbumsStatus" class="text-xs text-slate-500 text-center py-2">جارٍ تحميل ألبومات الصور...</p>
+                <div id="photoAlbumsManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <span class="text-xs font-bold text-navy">ترتيب وإدارة الألبومات:</span>
+                    <button type="button" onclick="selectAllContent('albums')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
+                    <button type="button" onclick="clearContentSelection('albums')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
+                    <button type="button" onclick="bulkDeleteSelectedContent('albums')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
+                    <span id="albumsSelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد ألبومات.</span>
+                </div>
                 <div id="photoAlbumsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
                 <div id="photoAlbumViewer" class="hidden space-y-4 border-t border-slate-100 pt-5">
                     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -555,6 +576,13 @@
                         </div>
                     </div>
                     <input id="photoAlbumImagesInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="hidden" onchange="uploadPhotoAlbumImages(this)">
+                    <div id="albumImagesManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <span class="text-xs font-bold text-navy">ترتيب وإدارة الصور:</span>
+                        <button type="button" onclick="selectAllContent('albumImages')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
+                        <button type="button" onclick="clearContentSelection('albumImages')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
+                        <button type="button" onclick="bulkDeleteSelectedContent('albumImages')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
+                        <span id="albumImagesSelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد صور.</span>
+                    </div>
                     <div id="photoAlbumImagesGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
                 </div>
             </div>
@@ -1811,6 +1839,8 @@ async function fetchTabletGalleryImages() {
 
 async function renderTabletGallery(imagesOverride) {
     const gallery = document.getElementById('tabletGallery');
+    const management = document.getElementById('tabletImageManagement');
+    if (management) management.classList.toggle('hidden', !hasDualAdminAuthorization());
     if (!Array.isArray(imagesOverride)) {
         gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">جارٍ تحميل النشرات...</p>';
     }
@@ -1819,6 +1849,7 @@ async function renderTabletGallery(imagesOverride) {
         const images = Array.isArray(imagesOverride)
             ? imagesOverride
             : await fetchTabletGalleryImages();
+        tabletGalleryCache = images.slice();
 
         gallery.innerHTML = '';
 
@@ -1903,6 +1934,33 @@ if (fileId && googleUploadToken) {
 
             footer.appendChild(actions);
             div.appendChild(footer);
+
+            if (hasDualAdminAuthorization() && fileId) {
+                const controls = document.createElement('div');
+                controls.className = 'flex items-center gap-2 border-t bg-white p-2';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'h-4 w-4 accent-blue-700';
+                checkbox.checked = imageContentSelections.gallery.has(String(fileId));
+                checkbox.setAttribute('aria-label', 'تحديد الصورة ' + (image.name || ''));
+                checkbox.addEventListener('change', () => toggleContentSelection('gallery', fileId, checkbox.checked));
+                const label = document.createElement('span');
+                label.className = 'text-xs text-slate-600 ml-auto';
+                label.textContent = 'تحديد';
+                controls.append(checkbox, label);
+                const up = document.createElement('button');
+                up.type = 'button'; up.textContent = '↑'; up.title = 'تقديم الصورة';
+                up.disabled = idx === 0;
+                up.className = 'rounded-md border bg-slate-50 px-3 py-1 text-sm disabled:opacity-30';
+                up.addEventListener('click', () => moveContentItem('gallery', fileId, -1));
+                const down = document.createElement('button');
+                down.type = 'button'; down.textContent = '↓'; down.title = 'تأخير الصورة';
+                down.disabled = idx === images.length - 1;
+                down.className = 'rounded-md border bg-slate-50 px-3 py-1 text-sm disabled:opacity-30';
+                down.addEventListener('click', () => moveContentItem('gallery', fileId, 1));
+                controls.append(up, down);
+                div.appendChild(controls);
+            }
             gallery.appendChild(div);
         });
 
@@ -1910,6 +1968,7 @@ if (fileId && googleUploadToken) {
             gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">لا توجد صور قابلة للعرض.</p>';
         }
 
+        contentSelectionStatus('gallery');
         return images;
     } catch (error) {
         gallery.innerHTML = '<p class="text-xs text-red-500 col-span-full text-center py-4">تعذر تحميل النشرات. حدّث الصفحة وحاول مرة أخرى.</p>';
@@ -2394,6 +2453,14 @@ function renderSchedules() {
     if (!grid) return;
 
     const schedules = driveSchedules || {};
+    const activeScheduleIds = new Set(CLASSES
+        .map(cls => schedules[cls] && schedules[cls].id ? String(schedules[cls].id) : '')
+        .filter(Boolean));
+    Array.from(scheduleBulkSelection).forEach(id => {
+        if (!activeScheduleIds.has(String(id))) scheduleBulkSelection.delete(String(id));
+    });
+    const management = document.getElementById('scheduleBulkManagement');
+    if (management) management.classList.toggle('hidden', !hasDualAdminAuthorization());
     grid.innerHTML = '';
 
     CLASSES.forEach(cls => {
@@ -2455,12 +2522,29 @@ function renderSchedules() {
             </div>
         `;
 
+        if (fileId && hasDualAdminAuthorization()) {
+            const selectionRow = document.createElement('div');
+            selectionRow.className = 'flex items-center gap-2 border-t border-slate-200 bg-white px-4 py-3';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'h-4 w-4 accent-blue-700';
+            checkbox.checked = scheduleBulkSelection.has(String(fileId));
+            checkbox.setAttribute('aria-label', 'تحديد قائمة فصل ' + cls);
+            checkbox.addEventListener('change', () => toggleScheduleBulkSelection(fileId, checkbox.checked));
+            const label = document.createElement('span');
+            label.className = 'text-xs text-slate-600';
+            label.textContent = 'تحديد للحذف الجماعي';
+            selectionRow.append(checkbox, label);
+            card.appendChild(selectionRow);
+        }
+
         grid.appendChild(card);
         const previewButton = card.querySelector('.schedule-image-preview');
         if (previewButton && imgUrl) {
             previewButton.addEventListener('click', () => openSchoolImageViewer(imgUrl, 'قائمة فصل ' + cls));
         }
     });
+    updateScheduleBulkSelectionStatus();
 }
 
 
@@ -2765,6 +2849,125 @@ async function deleteScheduleImage(cls) {
     }
 }
 
+
+        // تحديد وحذف قوائم الفصول جماعيًا فقط؛ لا يوجد ترتيب للقوائم.
+        const scheduleBulkSelection = new Set();
+
+        function getSelectedScheduleEntries() {
+            const selected = [];
+            CLASSES.forEach(className => {
+                const item = driveSchedules && driveSchedules[className];
+                if (item && item.id && scheduleBulkSelection.has(String(item.id))) {
+                    selected.push({ className: className, fileId: String(item.id) });
+                }
+            });
+            return selected;
+        }
+
+        function updateScheduleBulkSelectionStatus() {
+            const status = document.getElementById('scheduleBulkSelectionStatus');
+            if (status) status.textContent = 'تم تحديد ' + scheduleBulkSelection.size + ' من ' +
+                CLASSES.filter(cls => driveSchedules && driveSchedules[cls] && driveSchedules[cls].id).length + ' قائمة';
+        }
+
+        function toggleScheduleBulkSelection(fileId, checked) {
+            const id = String(fileId || '');
+            if (!id) return;
+            if (checked) scheduleBulkSelection.add(id);
+            else scheduleBulkSelection.delete(id);
+            updateScheduleBulkSelectionStatus();
+        }
+
+        function selectAllSchedulesForBulkDelete() {
+            if (!hasDualAdminAuthorization()) return;
+            scheduleBulkSelection.clear();
+            CLASSES.forEach(cls => {
+                const item = driveSchedules && driveSchedules[cls];
+                if (item && item.id) scheduleBulkSelection.add(String(item.id));
+            });
+            renderSchedules();
+        }
+
+        function clearScheduleBulkSelection() {
+            scheduleBulkSelection.clear();
+            renderSchedules();
+        }
+
+        async function bulkDeleteSelectedSchedules() {
+            if (!hasDualAdminAuthorization()) {
+                alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
+                return;
+            }
+            const selections = getSelectedScheduleEntries();
+            if (!selections.length) {
+                alert('حدد قائمة فصل واحدة على الأقل أولًا.');
+                return;
+            }
+            const summary = selections.map(item => 'فصل ' + item.className).join('، ');
+            if (!confirm('سيتم نقل ' + selections.length + ' قائمة محددة (' + summary +
+                ') إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
+
+            const operationKey = 'schedule-bulk-delete';
+            if (!beginImageOperation(operationKey)) return;
+            let frame = null;
+            let form = null;
+            try {
+                const status = document.getElementById('scheduleOperationStatus');
+                if (status) status.textContent = 'جارٍ حذف قوائم الفصول المحددة والتحقق من الحذف...';
+
+                frame = document.createElement('iframe');
+                const target = 'scheduleBulkDeleteFrame_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+                frame.name = target;
+                frame.style.display = 'none';
+                form = document.createElement('form');
+                form.method = 'POST';
+                form.action = GOOGLE_SCRIPT_URL;
+                form.target = target;
+                form.style.display = 'none';
+
+                const fields = {
+                    action: 'bulkDeleteSchedules',
+                    token: googleUploadToken,
+                    adminSessionToken: window.adminSessionToken,
+                    selections: JSON.stringify(selections)
+                };
+                Object.entries(fields).forEach(([name, value]) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = name;
+                    input.value = String(value == null ? '' : value);
+                    form.appendChild(input);
+                });
+                document.body.appendChild(frame);
+                document.body.appendChild(form);
+                form.submit();
+                form.remove();
+                form = null;
+
+                await waitForConfirmedImageState(
+                    fetchSchedulesSnapshot,
+                    schedules => selections.every(item =>
+                        !schedules[item.className] ||
+                        String(schedules[item.className].id || '') !== item.fileId
+                    ),
+                    'حذف قوائم الفصول المحددة'
+                );
+                scheduleBulkSelection.clear();
+                await loadSchedulesFromDrive();
+                if (status) status.textContent = 'تم حذف ' + selections.length +
+                    ' قائمة فصل ونقلها إلى سلة مهملات Google Drive.';
+            } catch (error) {
+                const status = document.getElementById('scheduleOperationStatus');
+                if (status) status.textContent = 'تعذر تأكيد الحذف الجماعي: ' + error.message;
+                else alert(error.message);
+            } finally {
+                if (form) form.remove();
+                if (frame) frame.remove();
+                endImageOperation(operationKey);
+                updateScheduleBulkSelectionStatus();
+            }
+        }
+
         // Photo albums module: deliberately isolated from the existing development/tablet gallery.
         const PHOTO_ALBUMS_SCRIPT_URL = GOOGLE_SCRIPT_URL;
         let photoAlbumsCache = [];
@@ -2775,6 +2978,141 @@ async function deleteScheduleImage(cls) {
             return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
                 '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
             })[ch]);
+        }
+
+
+        // إدارة التحديد والترتيب والحذف الجماعي لمعرض الصور والألبومات فقط.
+        const imageContentSelections = {
+            gallery: new Set(),
+            albums: new Set(),
+            albumImages: new Set()
+        };
+        let tabletGalleryCache = [];
+
+        function getContentItems(scope) {
+            if (scope === 'gallery') return tabletGalleryCache;
+            if (scope === 'albums') return photoAlbumsCache;
+            const album = photoAlbumsCache.find(item => String(item.id) === String(currentPhotoAlbumId));
+            return album ? (album.images || []) : [];
+        }
+
+        function contentItemId(item) {
+            return String(item && (item.id || item.fileId) || '');
+        }
+
+        function contentSelectionStatus(scope) {
+            const ids = imageContentSelections[scope];
+            const statusId = scope === 'gallery' ? 'gallerySelectionStatus'
+                : scope === 'albums' ? 'albumsSelectionStatus' : 'albumImagesSelectionStatus';
+            const status = document.getElementById(statusId);
+            if (status) status.textContent = 'تم تحديد ' + ids.size + ' من ' + getContentItems(scope).length;
+        }
+
+        function toggleContentSelection(scope, id, checked) {
+            const selected = imageContentSelections[scope];
+            if (checked) selected.add(String(id));
+            else selected.delete(String(id));
+            contentSelectionStatus(scope);
+        }
+
+        function selectAllContent(scope) {
+            if (!hasDualAdminAuthorization()) return;
+            imageContentSelections[scope] = new Set(getContentItems(scope).map(contentItemId).filter(Boolean));
+            renderContentScope(scope);
+            contentSelectionStatus(scope);
+        }
+
+        function clearContentSelection(scope) {
+            imageContentSelections[scope].clear();
+            renderContentScope(scope);
+            contentSelectionStatus(scope);
+        }
+
+        function renderContentScope(scope) {
+            if (scope === 'gallery') renderTabletGallery(tabletGalleryCache);
+            else if (scope === 'albums') renderPhotoAlbums();
+            else {
+                const album = photoAlbumsCache.find(item => String(item.id) === String(currentPhotoAlbumId));
+                if (album) renderPhotoAlbumImages(album);
+            }
+        }
+
+        async function moveContentItem(scope, itemId, direction) {
+            if (!hasDualAdminAuthorization()) return;
+            const items = getContentItems(scope);
+            const from = items.findIndex(item => contentItemId(item) === String(itemId));
+            const to = from + Number(direction);
+            if (from < 0 || to < 0 || to >= items.length) return;
+            const reordered = items.slice();
+            const moved = reordered.splice(from, 1)[0];
+            reordered.splice(to, 0, moved);
+            const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
+            const statusId = scope === 'gallery' ? 'googleSignInStatus'
+                : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
+            const status = document.getElementById(statusId);
+            try {
+                if (status) status.textContent = 'جارٍ حفظ الترتيب الجديد...';
+                await photoAlbumPost('savePhotoContentOrder', {
+                    scope: scope,
+                    albumId: albumId,
+                    ids: JSON.stringify(reordered.map(contentItemId))
+                });
+                if (scope === 'gallery') tabletGalleryCache = reordered;
+                else if (scope === 'albums') photoAlbumsCache = reordered;
+                else {
+                    const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+                    if (album) album.images = reordered;
+                }
+                renderContentScope(scope);
+                if (status) status.textContent = 'تم حفظ الترتيب الجديد.';
+            } catch (error) {
+                if (status) status.textContent = 'تعذر حفظ الترتيب: ' + error.message;
+                alert('لم يتم تغيير الترتيب على الموقع: ' + error.message);
+            }
+        }
+
+        async function bulkDeleteSelectedContent(scope) {
+            if (!hasDualAdminAuthorization()) {
+                alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+                return;
+            }
+            const ids = Array.from(imageContentSelections[scope]);
+            if (!ids.length) {
+                alert('حدد عنصرًا واحدًا على الأقل أولًا.');
+                return;
+            }
+            const noun = scope === 'albums' ? 'ألبومًا' : 'صورة';
+            if (!confirm('سيتم نقل ' + ids.length + ' ' + noun + ' محدد إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
+
+            const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
+            const statusId = scope === 'gallery' ? 'googleSignInStatus'
+                : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
+            const status = document.getElementById(statusId);
+            try {
+                if (status) status.textContent = 'جارٍ حذف العناصر المحددة...';
+                await photoAlbumPost('bulkDeletePhotoContent', {
+                    scope: scope,
+                    albumId: albumId,
+                    ids: JSON.stringify(ids)
+                });
+                imageContentSelections[scope].clear();
+                if (scope === 'gallery') {
+                    const images = await fetchTabletGalleryImages();
+                    tabletGalleryCache = images;
+                    await renderTabletGallery(images);
+                } else {
+                    await loadPhotoAlbums();
+                    if (scope === 'albumImages' && albumId) {
+                        const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+                        if (album) openPhotoAlbum(album.id);
+                    }
+                }
+                if (status) status.textContent = 'تم حذف العناصر المحددة ونقلها إلى سلة مهملات Google Drive.';
+                contentSelectionStatus(scope);
+            } catch (error) {
+                if (status) status.textContent = 'تعذر إكمال الحذف الجماعي: ' + error.message;
+                alert('تعذر حذف العناصر المحددة: ' + error.message);
+            }
         }
 
         function photoAlbumPlaceholder(title) {
@@ -2877,10 +3215,13 @@ async function refreshPhotoAlbums(button) {
 
         function renderPhotoAlbums() {
             const grid = document.getElementById('photoAlbumsGrid');
+            const management = document.getElementById('photoAlbumsManagement');
             if (!grid) return;
+            if (management) management.classList.toggle('hidden', !hasDualAdminAuthorization());
             grid.innerHTML = '';
-            photoAlbumsCache.forEach(album => {
+            photoAlbumsCache.forEach((album, index) => {
                 const card = document.createElement('article');
+                const id = String(album.id);
                 card.className = 'bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-lg transition group';
                 const cover = album.coverUrl || photoAlbumPlaceholder(album.title);
                 card.innerHTML = `
@@ -2894,8 +3235,36 @@ async function refreshPhotoAlbums(button) {
                             <p class="text-xs text-slate-500 mt-1 line-clamp-2">${photoAlbumEscape(album.description || 'اضغط لعرض صور الألبوم')}</p>
                         </div>
                     </button>`;
+                if (hasDualAdminAuthorization()) {
+                    const controls = document.createElement('div');
+                    controls.className = 'flex items-center justify-between gap-2 border-t bg-slate-50 p-3';
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'h-4 w-4 accent-blue-700';
+                    checkbox.checked = imageContentSelections.albums.has(id);
+                    checkbox.setAttribute('aria-label', 'تحديد الألبوم ' + (album.title || ''));
+                    checkbox.addEventListener('click', event => event.stopPropagation());
+                    checkbox.addEventListener('change', () => toggleContentSelection('albums', id, checkbox.checked));
+                    const label = document.createElement('span');
+                    label.className = 'text-xs text-slate-600 ml-auto';
+                    label.textContent = 'تحديد';
+                    controls.append(checkbox, label);
+                    const up = document.createElement('button');
+                    up.type = 'button'; up.textContent = '↑'; up.title = 'تقديم الألبوم';
+                    up.disabled = index === 0;
+                    up.className = 'rounded-md border bg-white px-3 py-1 text-sm disabled:opacity-30';
+                    up.addEventListener('click', () => moveContentItem('albums', id, -1));
+                    const down = document.createElement('button');
+                    down.type = 'button'; down.textContent = '↓'; down.title = 'تأخير الألبوم';
+                    down.disabled = index === photoAlbumsCache.length - 1;
+                    down.className = 'rounded-md border bg-white px-3 py-1 text-sm disabled:opacity-30';
+                    down.addEventListener('click', () => moveContentItem('albums', id, 1));
+                    controls.append(up, down);
+                    card.appendChild(controls);
+                }
                 grid.appendChild(card);
             });
+            contentSelectionStatus('albums');
         }
 
         function openPhotoAlbumCreate() {
@@ -2965,6 +3334,8 @@ async function refreshPhotoAlbums(button) {
             document.getElementById('photoAlbumsGrid').classList.add('hidden');
             document.getElementById('photoAlbumsStatus').classList.add('hidden');
             document.getElementById('photoAlbumActions').classList.toggle('hidden', !hasDualAdminAuthorization());
+            const imageManagement = document.getElementById('albumImagesManagement');
+            if (imageManagement) imageManagement.classList.toggle('hidden', !hasDualAdminAuthorization());
             renderPhotoAlbumImages(album);
             document.getElementById('photoAlbumViewer').scrollIntoView({behavior:'smooth',block:'start'});
         }
@@ -2978,8 +3349,10 @@ async function refreshPhotoAlbums(button) {
 
         function renderPhotoAlbumImages(album) {
             const grid = document.getElementById('photoAlbumImagesGrid');
+            if (!grid) return;
             grid.innerHTML = '';
             (album.images || []).forEach((image, index) => {
+                const id = String(image.id);
                 const card = document.createElement('div');
                 card.className = 'relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group';
                 card.innerHTML = `
@@ -2991,13 +3364,38 @@ async function refreshPhotoAlbums(button) {
                         <button type="button" onclick="replacePhotoAlbumImage('${photoAlbumEscape(image.id)}')" class="flex-1 rounded-md bg-amber-100 text-amber-900 py-1.5 text-[10px] font-bold">استبدال</button>
                         <button type="button" onclick="deletePhotoAlbumImage('${photoAlbumEscape(image.id)}')" class="flex-1 rounded-md bg-red-100 text-red-700 py-1.5 text-[10px] font-bold">حذف</button>
                     </div>` : ''}`;
+                if (hasDualAdminAuthorization()) {
+                    const controls = document.createElement('div');
+                    controls.className = 'flex items-center gap-2 border-t bg-white p-2';
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'h-4 w-4 accent-blue-700';
+                    checkbox.checked = imageContentSelections.albumImages.has(id);
+                    checkbox.setAttribute('aria-label', 'تحديد الصورة ' + (image.name || ''));
+                    checkbox.addEventListener('change', () => toggleContentSelection('albumImages', id, checkbox.checked));
+                    const label = document.createElement('span');
+                    label.className = 'text-[10px] text-slate-600 ml-auto';
+                    label.textContent = 'تحديد';
+                    controls.append(checkbox, label);
+                    const up = document.createElement('button');
+                    up.type = 'button'; up.textContent = '↑'; up.title = 'تقديم الصورة';
+                    up.disabled = index === 0;
+                    up.className = 'rounded-md border bg-slate-50 px-2 py-1 text-xs disabled:opacity-30';
+                    up.addEventListener('click', () => moveContentItem('albumImages', id, -1));
+                    const down = document.createElement('button');
+                    down.type = 'button'; down.textContent = '↓'; down.title = 'تأخير الصورة';
+                    down.disabled = index === album.images.length - 1;
+                    down.className = 'rounded-md border bg-slate-50 px-2 py-1 text-xs disabled:opacity-30';
+                    down.addEventListener('click', () => moveContentItem('albumImages', id, 1));
+                    controls.append(up, down);
+                    card.appendChild(controls);
+                }
                 grid.appendChild(card);
                 const previewButton = card.querySelector('.photo-album-image-preview');
-                if (previewButton) {
-                    previewButton.addEventListener('click', () => openSchoolImageViewer(image.url, image.name || ('صورة ' + (index + 1))));
-                }
+                if (previewButton) previewButton.addEventListener('click', () => openSchoolImageViewer(image.url, image.name || ('صورة ' + (index + 1))));
             });
             if (!grid.children.length) grid.innerHTML = '<p class="col-span-full text-center text-sm text-slate-400 py-8">لا توجد صور داخل هذا الألبوم حتى الآن.</p>';
+            contentSelectionStatus('albumImages');
         }
 
         async function uploadPhotoAlbumImages(input) {
