@@ -850,11 +850,13 @@
                         ));
                         viewer._zoom = nextZoom;
                         viewer._applyZoom();
+                        const stageRect = stage.getBoundingClientRect();
+                        const imageRect = image.getBoundingClientRect();
                         stage.scrollLeft = Math.max(0,
-                            image.offsetLeft + pinchState.anchorX * image.offsetWidth - midpoint.x + stage.getBoundingClientRect().left
+                            imageRect.left + stage.scrollLeft + pinchState.anchorX * image.offsetWidth - midpoint.x
                         );
                         stage.scrollTop = Math.max(0,
-                            image.offsetTop + pinchState.anchorY * image.offsetHeight - midpoint.y + stage.getBoundingClientRect().top
+                            imageRect.top + stage.scrollTop + pinchState.anchorY * image.offsetHeight - midpoint.y
                         );
                         event.preventDefault();
                         return;
