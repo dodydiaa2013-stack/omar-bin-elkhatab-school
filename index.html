@@ -1077,9 +1077,14 @@ window.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('adminBadge').classList.remove('hidden');
                 document.getElementById('loginBtnText').innerText = 'المعلم مفعّل';
                 document.getElementById('tabletTeacherUpload').classList.remove('hidden');
-                document.getElementById('scheduleTeacherControl').classList.remove('hidden');
                 document.getElementById('alertsTeacherControl').classList.remove('hidden');
             }
+
+            const scheduleControl = document.getElementById('scheduleTeacherControl');
+            const canManageSchedules = isAdminLoggedIn === true &&
+                isDeveloperLoggedIn === true && Boolean(googleUploadToken) &&
+                Boolean(window.adminSessionToken);
+            if (scheduleControl) scheduleControl.classList.toggle('hidden', !canManageSchedules);
         }
 
         function updateDeveloperUI() {
@@ -1600,6 +1605,7 @@ function handleGoogleCredentialResponse(response) {
         googleUploadToken = null;
         isDeveloperLoggedIn = false;
         updateDeveloperUI();
+        updateTeacherUI();
         if (status) status.textContent = 'تعذر تسجيل الدخول بحساب Google.';
         return;
     }
@@ -1607,6 +1613,7 @@ function handleGoogleCredentialResponse(response) {
     googleUploadToken = response.credential;
     isDeveloperLoggedIn = false;
     updateDeveloperUI();
+    updateTeacherUI();
 
     const uploadControls = document.getElementById('tabletImageUploadControls');
     if (uploadControls) { uploadControls.classList.remove('hidden'); uploadControls.classList.add('flex'); }
@@ -1646,6 +1653,7 @@ function handleGoogleCredentialResponse(response) {
                 (data.result && data.result.message) || 'هذا الحساب غير مصرح له باستخدام أدوات المطور.';
         }
 
+        updateTeacherUI();
         renderTabletGallery();
         renderSchedules();
     };
@@ -1657,6 +1665,7 @@ function handleGoogleCredentialResponse(response) {
         googleUploadToken = null;
         isDeveloperLoggedIn = false;
         updateDeveloperUI();
+        updateTeacherUI();
         if (status) status.textContent = 'لم يصل تأكيد التحقق من Google. حاول تسجيل الدخول مرة أخرى.';
     }, 20000);
 
@@ -1777,7 +1786,7 @@ function renderSchedules() {
                 <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
 
                 <div class="flex items-center gap-2">
-                    ${imgUrl && googleUploadToken
+                    ${imgUrl && isAdminLoggedIn && isDeveloperLoggedIn && googleUploadToken && window.adminSessionToken
                         ? `<button onclick="deleteScheduleImage('${cls}')"
                             class="text-red-600 hover:underline font-bold flex items-center gap-1">
                             <i class="fa-solid fa-trash"></i> مسح
@@ -1802,6 +1811,11 @@ function renderSchedules() {
 
 
         function toggleScheduleUploadModal() {
+            if (isAdminLoggedIn !== true || isDeveloperLoggedIn !== true ||
+                !googleUploadToken || !window.adminSessionToken) {
+                alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
+                return;
+            }
             const modal = document.getElementById('scheduleModal');
             const willOpen = modal.classList.contains('hidden');
             modal.classList.toggle('hidden');
@@ -1929,8 +1943,9 @@ async function saveScheduleImage() {
     const results = document.getElementById('scheduleUploadResults');
     const fileInputs = Array.from(document.querySelectorAll('#scheduleClassFiles input[type="file"]'));
 
-    if (!googleUploadToken) {
-        alert('سجّل الدخول بحساب Google المصرح له برفع قوائم الفصول أولاً.');
+    if (isAdminLoggedIn !== true || isDeveloperLoggedIn !== true ||
+        !googleUploadToken || !window.adminSessionToken) {
+        alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
         return;
     }
 
@@ -2022,8 +2037,9 @@ async function saveScheduleImage() {
 
         
 function deleteScheduleImage(cls) {
-    if (!googleUploadToken) {
-        alert('سجّل الدخول بحساب Google المسؤول أولاً.');
+    if (isAdminLoggedIn !== true || isDeveloperLoggedIn !== true ||
+        !googleUploadToken || !window.adminSessionToken) {
+        alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
         return;
     }
 
