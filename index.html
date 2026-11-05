@@ -740,6 +740,7 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     loadSavedPageChanges();
+    updateTeacherUI();
 });
 
 
@@ -1088,10 +1089,18 @@ window.addEventListener('DOMContentLoaded', () => {
 
             const canManage = hasDualAdminAuthorization();
             const albumControl = document.getElementById('alertsTeacherControl');
-            if (albumControl) albumControl.classList.toggle('hidden', !canManage);
+            if (albumControl) {
+                albumControl.classList.toggle('hidden', !canManage);
+                albumControl.hidden = !canManage;
+                albumControl.style.display = canManage ? '' : 'none';
+            }
 
             const scheduleControl = document.getElementById('scheduleTeacherControl');
-            if (scheduleControl) scheduleControl.classList.toggle('hidden', !canManage);
+            if (scheduleControl) {
+                scheduleControl.classList.toggle('hidden', !canManage);
+                scheduleControl.hidden = !canManage;
+                scheduleControl.style.display = canManage ? '' : 'none';
+            }
         }
 
         function updateDeveloperUI() {
