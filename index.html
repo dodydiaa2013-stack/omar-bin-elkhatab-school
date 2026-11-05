@@ -1686,7 +1686,87 @@ async function refreshSchedules(button) {
     finally { if (button) { button.disabled = false; button.innerHTML = oldHtml; } }
 }
 
-async function fetchTabletGalleryImages() {
+async const activeImageOperations = new Set();
+
+function beginImageOperation(key) {
+    if (activeImageOperations.has(key)) return false;
+    activeImageOperations.add(key);
+    return true;
+}
+
+function endImageOperation(key) {
+    activeImageOperations.delete(key);
+}
+
+async function waitForConfirmedImageState(fetchSnapshot, isConfirmed, description, timeoutMs = 45000, intervalMs = 1800) {
+    const startedAt = Date.now();
+    let lastReadError = null;
+    while (Date.now() - startedAt < timeoutMs) {
+        try {
+            const snapshot = await fetchSnapshot();
+            lastReadError = null;
+            if (isConfirmed(snapshot)) return snapshot;
+        } catch (error) {
+            lastReadError = error;
+        }
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+    const detail = lastReadError && lastReadError.message ? ' آخر خطأ أثناء التحقق: ' + lastReadError.message : '';
+    throw new Error('تم إرسال الطلب، لكن لم نتمكن من تأكيد ' + description +
+        ' خلال المهلة المحددة. حدّث القسم قبل إعادة المحاولة.' + detail);
+}
+
+function fetchSchedulesSnapshot() {
+    const callbackName = 'schoolSchedulesVerify_' + Date.now() + '_' +
+        Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let settled = false;
+        const cleanup = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            script.remove();
+            delete window[callbackName];
+        };
+        const timer = setTimeout(() => { cleanup(); reject(new Error('انتهت مهلة قراءة قوائم الفصول للتحقق.')); }, 15000);
+        window[callbackName] = result => {
+            cleanup();
+            if (result && result.success && result.schedules) resolve(result.schedules);
+            else reject(new Error((result && result.message) || 'تعذر قراءة قوائم الفصول للتحقق.'));
+        };
+        script.onerror = () => { cleanup(); reject(new Error('تعذر الاتصال بقوائم الفصول للتحقق.')); };
+        script.src = GOOGLE_SCRIPT_URL + '?action=schedules&callback=' + encodeURIComponent(callbackName) + '&_=' + Date.now();
+        document.body.appendChild(script);
+    });
+}
+
+function fetchPhotoAlbumsSnapshot() {
+    const callbackName = 'photoAlbumsVerify_' + Date.now() + '_' +
+        Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let settled = false;
+        const cleanup = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            script.remove();
+            delete window[callbackName];
+        };
+        const timer = setTimeout(() => { cleanup(); reject(new Error('انتهت مهلة قراءة ألبومات الصور للتحقق.')); }, 15000);
+        window[callbackName] = result => {
+            cleanup();
+            if (result && result.success && Array.isArray(result.albums)) resolve(result.albums);
+            else reject(new Error((result && result.message) || 'تعذر قراءة ألبومات الصور للتحقق.'));
+        };
+        script.onerror = () => { cleanup(); reject(new Error('تعذر الاتصال بألبومات الصور للتحقق.')); };
+        script.src = PHOTO_ALBUMS_SCRIPT_URL + '?action=photoAlbums&callback=' + encodeURIComponent(callbackName) + '&_=' + Date.now();
+        document.body.appendChild(script);
+    });
+}
+
+function fetchTabletGalleryImages() {
     const scriptUrl = GOOGLE_SCRIPT_URL;
     const callbackName = 'schoolGalleryFetch_' + Date.now() + '_' +
         Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
@@ -1838,51 +1918,15 @@ if (fileId && googleUploadToken) {
 }
 
 async function loadSchedulesFromDrive() {
-    const scriptUrl = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
-
     try {
-        const callbackName = 'schoolSchedulesCallback_' + Date.now();
-
-        const schedules = await new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-
-            const timeout = setTimeout(() => {
-                cleanup();
-                reject(new Error('انتهت مهلة تحميل قوائم الفصول.'));
-            }, 15000);
-
-            function cleanup() {
-                clearTimeout(timeout);
-                script.remove();
-                delete window[callbackName];
-            }
-
-            window[callbackName] = (result) => {
-                cleanup();
-
-                if (result && result.success && result.schedules) {
-                    resolve(result.schedules);
-                } else {
-                    reject(new Error('تعذر جلب قوائم الفصول.'));
-                }
-            };
-
-            script.src = scriptUrl + '?action=schedules&callback=' + callbackName + '&_=' + Date.now();
-
-            script.onerror = () => {
-                cleanup();
-                reject(new Error('تعذر الاتصال بقوائم الفصول.'));
-            };
-
-            document.body.appendChild(script);
-        });
-
+        const schedules = await fetchSchedulesSnapshot();
         driveSchedules = schedules;
         renderSchedules();
-
+        return schedules;
     } catch (error) {
         console.error('Schedules loading error:', error);
         console.error('تعذر تحميل قوائم الفصول من Google Drive.');
+        throw error;
     }
 }
 
@@ -2604,7 +2648,14 @@ async function saveScheduleImage() {
         results.appendChild(line);
 
         try {
-            await uploadOneScheduleFile(job.file, job.className, i, preparedImages[i]);
+            const uploadResult = await uploadOneScheduleFile(job.file, job.className, i, preparedImages[i]);
+            const savedFileId = String(uploadResult && uploadResult.fileId || '');
+            if (!savedFileId) throw new Error('لم يرجع الخادم معرّف الصورة المحفوظة.');
+            await waitForConfirmedImageState(
+                fetchSchedulesSnapshot,
+                schedules => schedules[job.className] && String(schedules[job.className].id || '') === savedFileId,
+                'ظهور قائمة فصل ' + job.className
+            );
             succeeded++;
             line.className = 'text-emerald-700 font-bold';
             line.textContent = '✓ تم حفظ قائمة فصل ' + job.className;
@@ -2630,67 +2681,68 @@ async function saveScheduleImage() {
 }
 
         
-function deleteScheduleImage(cls) {
+async function deleteScheduleImage(cls) {
     if (isAdminLoggedIn !== true || isDeveloperLoggedIn !== true ||
         !googleUploadToken || !window.adminSessionToken) {
         alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
         return;
     }
-
     const item = driveSchedules[cls];
+    if (!item || !item.id) { alert('لم يتم العثور على صورة هذا الفصل.'); return; }
+    if (!confirm('هل أنت متأكد من حذف قائمة فصل ' + cls + ' نهائياً؟')) return;
 
-    if (!item || !item.id) {
-        alert('لم يتم العثور على صورة هذا الفصل.');
-        return;
-    }
-
-    if (!confirm('هل أنت متأكد من حذف قائمة فصل ' + cls + ' نهائياً؟')) {
-        return;
-    }
-
-    let frame = document.getElementById('schoolPhotoUploadFrame');
-
-    if (!frame) {
+    const operationKey = 'schedule-delete-' + cls;
+    if (!beginImageOperation(operationKey)) return;
+    let frame = null;
+    let form = null;
+    try {
         frame = document.createElement('iframe');
-        frame.name = 'schoolPhotoUploadFrame';
-        frame.id = 'schoolPhotoUploadFrame';
+        const target = 'scheduleDeleteFrame_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        frame.name = target;
         frame.style.display = 'none';
+        form = document.createElement('form');
+        form.method = 'POST';
+        form.action = GOOGLE_SCRIPT_URL;
+        form.target = target;
+        form.style.display = 'none';
+
+        const fields = {
+            action: 'deleteSchedule',
+            token: googleUploadToken,
+            adminSessionToken: window.adminSessionToken,
+            fileId: item.id,
+            className: cls
+        };
+        Object.entries(fields).forEach(([name, value]) => {
+            const field = document.createElement('input');
+            field.type = 'hidden'; field.name = name; field.value = String(value == null ? '' : value);
+            form.appendChild(field);
+        });
         document.body.appendChild(frame);
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+        form = null;
+
+        const status = document.getElementById('googleSignInStatus');
+        if (status) status.textContent = 'جارٍ حذف قائمة الفصل والتحقق من اختفائها...';
+        await waitForConfirmedImageState(
+            fetchSchedulesSnapshot,
+            schedules => !schedules[cls] || String(schedules[cls].id || '') !== String(item.id),
+            'حذف قائمة فصل ' + cls
+        );
+        await loadSchedulesFromDrive();
+        if (status) status.textContent = 'تم حذف قائمة فصل ' + cls + ' والتأكد من اختفائها.';
+    } catch (error) {
+        const status = document.getElementById('googleSignInStatus');
+        if (status) status.textContent = error.message;
+        else alert(error.message);
+    } finally {
+        if (form) form.remove();
+        if (frame) frame.remove();
+        endImageOperation(operationKey);
     }
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
-    form.target = 'schoolPhotoUploadFrame';
-    form.style.display = 'none';
-
-    const fields = {
-        action: 'deleteSchedule',
-        token: googleUploadToken,
-        adminSessionToken: window.adminSessionToken,
-        fileId: item.id,
-        className: cls
-    };
-
-    Object.entries(fields).forEach(([name, value]) => {
-        const field = document.createElement('input');
-        field.type = 'hidden';
-        field.name = name;
-        field.value = value;
-        form.appendChild(field);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
-
-    alert('تم إرسال طلب حذف قائمة الفصل. جارٍ التحقق من الحذف.');
-
-    setTimeout(() => {
-        loadSchedulesFromDrive();
-    }, 3000);
 }
-
 
         // Photo albums module: deliberately isolated from the existing development/tablet gallery.
         const PHOTO_ALBUMS_SCRIPT_URL = GOOGLE_SCRIPT_URL;
