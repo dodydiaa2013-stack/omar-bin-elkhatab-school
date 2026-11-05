@@ -1817,6 +1817,7 @@ async function galleryUploadPost(fields) {
 
             script.src = GOOGLE_SCRIPT_URL +
                 '?action=galleryUploadStatus&nonce=' + encodeURIComponent(nonce) +
+                '&origin=' + encodeURIComponent(window.location.origin) +
                 '&callback=' + encodeURIComponent(callbackName) +
                 '&_=' + Date.now();
 
