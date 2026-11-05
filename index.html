@@ -978,7 +978,7 @@ window.addEventListener('DOMContentLoaded', () => {
             button.textContent = 'جارٍ إرسال الرمز...';
             setRecoveryMessage('', false);
             try {
-                const result = await recoveryPost('requestPasswordRecovery', { email: email }, 60000);
+                const result = await recoveryPost('requestPasswordRecovery', {}, 60000);
                 if (!result.success) throw new Error(result.message || 'تعذر إرسال رمز التحقق.');
                 document.getElementById('recoveryStepRequest').classList.add('hidden');
                 document.getElementById('recoveryStepVerify').classList.remove('hidden');
