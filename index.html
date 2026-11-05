@@ -850,7 +850,6 @@
                         ));
                         viewer._zoom = nextZoom;
                         viewer._applyZoom();
-                        const stageRect = stage.getBoundingClientRect();
                         const imageRect = image.getBoundingClientRect();
                         stage.scrollLeft = Math.max(0,
                             imageRect.left + stage.scrollLeft + pinchState.anchorX * image.offsetWidth - midpoint.x
