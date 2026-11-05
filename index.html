@@ -923,7 +923,7 @@ window.addEventListener('DOMContentLoaded', () => {
             element.className = 'text-xs text-center font-bold ' + (isError ? 'text-red-600' : 'text-emerald-700');
         }
 
-        function recoveryPost(action, fields) {
+        function recoveryPost(action, fields, timeoutMs = 20000) {
             return new Promise((resolve, reject) => {
                 let frame = document.getElementById('passwordRecoveryFrame');
                 if (!frame) {
@@ -951,7 +951,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 const timeout = setTimeout(() => {
                     window.removeEventListener('message', handleMessage);
                     reject(new Error('لم يصل رد من الخادم. حاول مرة أخرى.'));
-                }, 20000);
+                }, timeoutMs);
 
                 const form = document.createElement('form');
                 form.method = 'POST';
@@ -991,7 +991,7 @@ window.addEventListener('DOMContentLoaded', () => {
             button.textContent = 'جارٍ إرسال الرمز...';
             setRecoveryMessage('', false);
             try {
-                const result = await recoveryPost('requestPasswordRecovery', { email: email });
+                const result = await recoveryPost('requestPasswordRecovery', { email: email }, 60000);
                 if (!result.success) throw new Error(result.message || 'تعذر إرسال رمز التحقق.');
                 document.getElementById('recoveryStepRequest').classList.add('hidden');
                 document.getElementById('recoveryStepVerify').classList.remove('hidden');
