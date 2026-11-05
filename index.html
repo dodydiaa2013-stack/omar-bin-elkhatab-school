@@ -1705,7 +1705,7 @@ async function uploadTabletImage() {
     }
 
     if (button) button.disabled = true;
-    status.textContent = 'جارٍ تجهيز الصورة ورفعها إلى Google Drive...';
+    status.textContent = 'جاري رفع الصورة إلى Google Drive...';
     try {
         const data = await readScheduleFileAsBase64(file);
         const result = await galleryUploadPost({
@@ -1713,10 +1713,24 @@ async function uploadTabletImage() {
             mimeType: file.type,
             data: data
         });
-        status.textContent = result.message || 'تم رفع الصورة بنجاح. جارٍ تحديث المعرض...';
+
+        if (!result || result.success !== true) {
+            throw new Error((result && result.message) || 'لم يتم تأكيد حفظ الصورة على Google Drive.');
+        }
+
+        // اعرض نجاح الحفظ فور تأكيد الخادم، ولا تنتظر تحديث المعرض.
+        status.textContent = 'تم رفع الصورة وحفظها بنجاح.';
         input.value = '';
-        await renderTabletGallery();
-        status.textContent = 'تم رفع الصورة وتحديث المعرض بنجاح.';
+
+        // تحديث المعرض في الخلفية حتى لا تبقى رسالة الانتظار ظاهرة.
+        try {
+            const refreshResult = renderTabletGallery();
+            if (refreshResult && typeof refreshResult.catch === 'function') {
+                refreshResult.catch(() => {});
+            }
+        } catch (refreshError) {
+            // نجاح الحفظ لا يتأثر بأي تأخير في تحديث المعرض.
+        }
     } catch (error) {
         status.textContent = error.message || 'تعذر تأكيد رفع الصورة.';
     } finally {
