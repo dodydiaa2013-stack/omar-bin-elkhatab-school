@@ -443,6 +443,7 @@
                             <i class="fa-solid fa-calendar-days text-gold"></i> <span data-page-edit-id="schedules-title">قوائم الفصول</span> 
                         </h2>
                         <p class="text-xs text-slate-500 mt-1"><span data-page-edit-id="schedules-description">قوائم الفصول الرسمية (1/1 إلى 1/8)</span></p>
+                        <p id="scheduleOperationStatus" class="text-xs text-slate-600 mt-2" role="status" aria-live="polite">حالة عمليات قوائم الفصول ستظهر هنا.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         <button type="button" onclick="refreshSchedules(this)" class="bg-white border border-slate-300 text-navy font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-2 hover:bg-slate-50">
@@ -2588,7 +2589,7 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
 }
 
 async function saveScheduleImage() {
-    const status = document.getElementById('googleSignInStatus');
+    const status = document.getElementById('scheduleOperationStatus');
     const button = document.getElementById('scheduleUploadButton');
     const progress = document.getElementById('scheduleUploadProgress');
     const progressText = document.getElementById('scheduleProgressText');
@@ -2744,7 +2745,7 @@ async function deleteScheduleImage(cls) {
         form.remove();
         form = null;
 
-        const status = document.getElementById('googleSignInStatus');
+        const status = document.getElementById('scheduleOperationStatus');
         if (status) status.textContent = 'جارٍ حذف قائمة الفصل والتحقق من اختفائها...';
         await waitForConfirmedImageState(
             fetchSchedulesSnapshot,
@@ -2754,7 +2755,7 @@ async function deleteScheduleImage(cls) {
         await loadSchedulesFromDrive();
         if (status) status.textContent = 'تم حذف قائمة فصل ' + cls + ' والتأكد من اختفائها.';
     } catch (error) {
-        const status = document.getElementById('googleSignInStatus');
+        const status = document.getElementById('scheduleOperationStatus');
         if (status) status.textContent = error.message;
         else alert(error.message);
     } finally {
