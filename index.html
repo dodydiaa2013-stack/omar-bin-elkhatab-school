@@ -705,6 +705,55 @@
     <script>
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
 
+        // معاينة الصور داخل الموقع دون فتح عارض Google Drive أو إظهار تفاصيل الملف.
+        function openSchoolImageViewer(imageUrl, imageTitle) {
+            if (!imageUrl) return;
+            let viewer = document.getElementById('schoolImageViewer');
+            if (!viewer) {
+                viewer = document.createElement('div');
+                viewer.id = 'schoolImageViewer';
+                viewer.className = 'fixed inset-0 z-[100] hidden items-center justify-center bg-black/90 p-3 sm:p-6';
+                viewer.setAttribute('role', 'dialog');
+                viewer.setAttribute('aria-modal', 'true');
+                viewer.setAttribute('aria-label', 'معاينة الصورة');
+                viewer.innerHTML = `
+                    <div class="relative flex max-h-full w-full max-w-6xl flex-col items-center justify-center">
+                        <div class="mb-3 flex w-full items-center justify-between gap-3 text-white">
+                            <p id="schoolImageViewerTitle" class="min-w-0 truncate text-sm font-bold"></p>
+                            <button type="button" id="schoolImageViewerClose" class="shrink-0 rounded-full bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25" aria-label="إغلاق الصورة">
+                                <i class="fa-solid fa-xmark ml-1"></i> إغلاق
+                            </button>
+                        </div>
+                        <img id="schoolImageViewerImage" class="max-h-[82vh] max-w-full rounded-lg object-contain shadow-2xl" alt="">
+                    </div>`;
+                viewer.addEventListener('click', event => {
+                    if (event.target === viewer) closeSchoolImageViewer();
+                });
+                viewer.querySelector('#schoolImageViewerClose').addEventListener('click', closeSchoolImageViewer);
+                document.addEventListener('keydown', event => {
+                    if (event.key === 'Escape') closeSchoolImageViewer();
+                });
+                document.body.appendChild(viewer);
+            }
+            viewer.querySelector('#schoolImageViewerImage').src = imageUrl;
+            viewer.querySelector('#schoolImageViewerImage').alt = imageTitle || 'صورة من موقع المدرسة';
+            viewer.querySelector('#schoolImageViewerTitle').textContent = imageTitle || 'معاينة الصورة';
+            viewer.classList.remove('hidden');
+            viewer.classList.add('flex');
+            document.body.classList.add('overflow-hidden');
+        }
+
+        function closeSchoolImageViewer() {
+            const viewer = document.getElementById('schoolImageViewer');
+            if (!viewer) return;
+            viewer.classList.add('hidden');
+            viewer.classList.remove('flex');
+            const image = viewer.querySelector('#schoolImageViewerImage');
+            if (image) image.removeAttribute('src');
+            document.body.classList.remove('overflow-hidden');
+        }
+
+
         function isTrustedAppsScriptMessage(event, expectedSource) {
             if (!event || (expectedSource && event.source !== expectedSource)) {
                 return false;
@@ -1326,10 +1375,6 @@ async function renderTabletGallery() {
             if (!url) return;
 
             const fileId = image.id || '';
-            const openUrl = fileId
-                ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/view'
-                : url;
-
             const downloadUrl = fileId
                 ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId)
                 : '';
@@ -1337,12 +1382,12 @@ async function renderTabletGallery() {
             const div = document.createElement('div');
             div.className = 'relative group rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-slate-100';
 
-            const imageLink = document.createElement('a');
-            imageLink.href = openUrl;
-            imageLink.target = '_blank';
-            imageLink.rel = 'noopener noreferrer';
-            imageLink.title = 'اضغط لفتح الصورة بالحجم الكامل';
-            imageLink.className = 'block overflow-hidden cursor-pointer';
+            const imagePreview = document.createElement('button');
+            imagePreview.type = 'button';
+            imagePreview.title = 'عرض الصورة داخل الموقع';
+            imagePreview.setAttribute('aria-label', 'عرض ' + (image.name || 'النشرة الإرشادية') + ' داخل الموقع');
+            imagePreview.className = 'block w-full overflow-hidden cursor-zoom-in';
+            imagePreview.addEventListener('click', () => openSchoolImageViewer(url, image.name || 'نشرة إرشادية'));
 
             const img = document.createElement('img');
             img.src = url;
@@ -1350,8 +1395,8 @@ async function renderTabletGallery() {
             img.loading = 'lazy';
             img.className = 'w-full h-48 object-cover group-hover:scale-105 transition duration-300';
 
-            imageLink.appendChild(img);
-            div.appendChild(imageLink);
+            imagePreview.appendChild(img);
+            div.appendChild(imagePreview);
 
             const footer = document.createElement('div');
             footer.className = 'p-2 text-xs font-bold text-navy bg-white';
@@ -1364,12 +1409,11 @@ async function renderTabletGallery() {
             const actions = document.createElement('div');
             actions.className = 'flex justify-center gap-2 flex-wrap';
 
-            const openButton = document.createElement('a');
-            openButton.href = openUrl;
-            openButton.target = '_blank';
-            openButton.rel = 'noopener noreferrer';
-            openButton.textContent = 'فتح الصورة';
+            const openButton = document.createElement('button');
+            openButton.type = 'button';
+            openButton.textContent = 'عرض الصورة';
             openButton.className = 'inline-block rounded-lg bg-blue-600 text-white px-3 py-2 hover:bg-blue-700';
+            openButton.addEventListener('click', () => openSchoolImageViewer(url, image.name || 'نشرة إرشادية'));
             actions.appendChild(openButton);
 
             if (downloadUrl) {
@@ -1759,14 +1803,12 @@ function renderSchedules() {
 
         if (imgUrl) {
             imageContent = `
-                <a href="${fileId ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/view' : imgUrl}"
-                   target="_blank"
-                   rel="noopener noreferrer">
+                <button type="button" class="schedule-image-preview block w-full cursor-zoom-in" aria-label="عرض قائمة فصل ${cls} داخل الموقع">
                     <img src="${imgUrl}"
                          alt="قائمة فصل ${cls}"
                          loading="lazy"
                          class="w-full h-52 object-cover rounded-lg border border-slate-200">
-                </a>`;
+                </button>`;
         } else {
             imageContent = `
                 <div class="w-full h-52 bg-slate-200 flex flex-col items-center justify-center text-slate-400 rounded-lg border border-dashed border-slate-300">
@@ -1809,6 +1851,10 @@ function renderSchedules() {
         `;
 
         grid.appendChild(card);
+        const previewButton = card.querySelector('.schedule-image-preview');
+        if (previewButton && imgUrl) {
+            previewButton.addEventListener('click', () => openSchoolImageViewer(imgUrl, 'قائمة فصل ' + cls));
+        }
     });
 }
 
@@ -2300,15 +2346,19 @@ function deleteScheduleImage(cls) {
                 const card = document.createElement('div');
                 card.className = 'relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group';
                 card.innerHTML = `
-                    <a href="${photoAlbumEscape(image.openUrl || image.url)}" target="_blank" rel="noopener noreferrer">
+                    <button type="button" class="photo-album-image-preview block w-full cursor-zoom-in" aria-label="عرض الصورة داخل الموقع">
                         <img src="${photoAlbumEscape(image.url)}" alt="${photoAlbumEscape(image.name || 'صورة نشاط')}" loading="lazy" class="w-full h-36 sm:h-44 object-cover">
-                    </a>
+                    </button>
                     <div class="p-2 text-[11px] text-navy font-bold truncate">${photoAlbumEscape(image.name || ('صورة ' + (index+1)))}</div>
                     ${hasDualAdminAuthorization() ? `<div class="flex gap-1 p-2 pt-0">
                         <button type="button" onclick="replacePhotoAlbumImage('${photoAlbumEscape(image.id)}')" class="flex-1 rounded-md bg-amber-100 text-amber-900 py-1.5 text-[10px] font-bold">استبدال</button>
                         <button type="button" onclick="deletePhotoAlbumImage('${photoAlbumEscape(image.id)}')" class="flex-1 rounded-md bg-red-100 text-red-700 py-1.5 text-[10px] font-bold">حذف</button>
                     </div>` : ''}`;
                 grid.appendChild(card);
+                const previewButton = card.querySelector('.photo-album-image-preview');
+                if (previewButton) {
+                    previewButton.addEventListener('click', () => openSchoolImageViewer(image.url, image.name || ('صورة ' + (index + 1))));
+                }
             });
             if (!grid.children.length) grid.innerHTML = '<p class="col-span-full text-center text-sm text-slate-400 py-8">لا توجد صور داخل هذا الألبوم حتى الآن.</p>';
         }
