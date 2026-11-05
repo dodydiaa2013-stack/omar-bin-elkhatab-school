@@ -705,9 +705,22 @@
     <script>
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
 
-        function isTrustedAppsScriptMessage(event) {
-            return event.origin === "https://script.google.com" ||
-                event.origin.endsWith(".googleusercontent.com");
+        function isTrustedAppsScriptMessage(event, expectedSource) {
+            if (!event || (expectedSource && event.source !== expectedSource)) {
+                return false;
+            }
+
+            if (event.origin === "https://script.google.com") {
+                return true;
+            }
+
+            try {
+                const originUrl = new URL(event.origin);
+                return originUrl.protocol === "https:" &&
+                    originUrl.hostname.endsWith(".googleusercontent.com");
+            } catch (error) {
+                return false;
+            }
         }
 
 
@@ -1858,6 +1871,7 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
             nonce: nonce,
             token: googleUploadToken,
             adminSessionToken: window.adminSessionToken || '',
+            origin: window.location.origin,
             className: className,
             fileName: file.name,
             mimeType: file.type,
@@ -1886,8 +1900,8 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
             callback(value);
         };
         const onMessage = event => {
+            if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
             const message = event.data;
-            // الاعتماد على nonce الفريد بدل مقارنة event.source؛ رد Apps Script قد يمر عبر إطار Google الوسيط.
             if (!message || message.type !== 'scheduleUploadResult' || message.nonce !== nonce) return;
             if (message.result && message.result.success) {
                 finish(resolve, message.result);
@@ -2101,7 +2115,8 @@ function deleteScheduleImage(cls) {
                     action: action,
                     nonce: nonce,
                     token: googleUploadToken || '',
-                    adminSessionToken: window.adminSessionToken || ''
+                    adminSessionToken: window.adminSessionToken || '',
+                    origin: window.location.origin
                 }, fields || {});
                 Object.entries(payload).forEach(([name, value]) => {
                     const input = document.createElement('input');
@@ -2116,6 +2131,7 @@ function deleteScheduleImage(cls) {
                 };
                 const finish = (fn, value) => { if (settled) return; settled = true; cleanup(); fn(value); };
                 const onMessage = event => {
+                    if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
                     const msg = event.data;
                     if (!msg || msg.type !== 'photoAlbumResult' || msg.nonce !== nonce) return;
                     if (msg.result && msg.result.success) finish(resolve, msg.result);
