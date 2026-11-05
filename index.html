@@ -705,7 +705,7 @@
     <script>
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
 
-        // معاينة الصور داخل الموقع دون فتح عارض Google Drive أو إظهار تفاصيل الملف.
+        // معاينة الصور داخل الموقع مع تكبير مستقل للصورة دون تكبير صفحة الموقع.
         function openSchoolImageViewer(imageUrl, imageTitle) {
             if (!imageUrl) return;
             let viewer = document.getElementById('schoolImageViewer');
@@ -717,15 +717,59 @@
                 viewer.setAttribute('aria-modal', 'true');
                 viewer.setAttribute('aria-label', 'معاينة الصورة');
                 viewer.innerHTML = `
-                    <div class="relative flex max-h-full w-full max-w-6xl flex-col items-center justify-center">
-                        <div class="mb-3 flex w-full items-center justify-between gap-3 text-white">
+                    <div class="relative flex h-full max-h-full w-full max-w-6xl flex-col items-center">
+                        <div class="mb-3 flex w-full shrink-0 items-center justify-between gap-3 text-white">
                             <p id="schoolImageViewerTitle" class="min-w-0 truncate text-sm font-bold"></p>
-                            <button type="button" id="schoolImageViewerClose" class="shrink-0 rounded-full bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25" aria-label="إغلاق الصورة">
-                                <i class="fa-solid fa-xmark ml-1"></i> إغلاق
-                            </button>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <button type="button" id="schoolImageZoomOut" class="rounded-lg bg-white/15 px-3 py-2 text-lg font-bold hover:bg-white/25" aria-label="تصغير الصورة">−</button>
+                                <span id="schoolImageZoomLevel" class="min-w-12 text-center text-xs font-bold" aria-live="polite">100%</span>
+                                <button type="button" id="schoolImageZoomIn" class="rounded-lg bg-white/15 px-3 py-2 text-lg font-bold hover:bg-white/25" aria-label="تكبير الصورة">+</button>
+                                <button type="button" id="schoolImageZoomReset" class="rounded-lg bg-white/15 px-3 py-2 text-xs font-bold hover:bg-white/25">الحجم الطبيعي</button>
+                                <button type="button" id="schoolImageViewerClose" class="rounded-full bg-white/15 px-4 py-2 text-sm font-bold hover:bg-white/25" aria-label="إغلاق الصورة">
+                                    <i class="fa-solid fa-xmark ml-1"></i> إغلاق
+                                </button>
+                            </div>
                         </div>
-                        <img id="schoolImageViewerImage" class="max-h-[82vh] max-w-full rounded-lg object-contain shadow-2xl" alt="">
+                        <div id="schoolImageViewerStage" class="min-h-0 w-full flex-1 overflow-auto rounded-lg text-center" style="overscroll-behavior:contain;">
+                            <img id="schoolImageViewerImage" class="inline-block max-w-none rounded-lg shadow-2xl" style="object-fit:contain;" alt="">
+                        </div>
+                        <p class="mt-2 shrink-0 text-center text-xs text-white/70">استخدم + و− أو عجلة الماوس للتكبير والتصغير، واسحب أشرطة التمرير لرؤية أجزاء الصورة المكبرة.</p>
                     </div>`;
+                const image = viewer.querySelector('#schoolImageViewerImage');
+                const stage = viewer.querySelector('#schoolImageViewerStage');
+                const level = viewer.querySelector('#schoolImageZoomLevel');
+                viewer._zoom = 1;
+                viewer._fitScale = 1;
+                viewer._applyZoom = function () {
+                    if (!image.naturalWidth || !stage.clientWidth || !stage.clientHeight) return;
+                    const fit = Math.min(stage.clientWidth / image.naturalWidth, stage.clientHeight / image.naturalHeight, 1);
+                    viewer._fitScale = fit || 1;
+                    const width = Math.round(image.naturalWidth * viewer._fitScale * viewer._zoom);
+                    const height = Math.round(image.naturalHeight * viewer._fitScale * viewer._zoom);
+                    image.style.width = width + 'px';
+                    image.style.height = height + 'px';
+                    level.textContent = Math.round(viewer._zoom * 100) + '%';
+                };
+                viewer._changeZoom = function (factor) {
+                    viewer._zoom = Math.max(0.5, Math.min(5, viewer._zoom * factor));
+                    viewer._applyZoom();
+                };
+                viewer.querySelector('#schoolImageZoomIn').addEventListener('click', () => viewer._changeZoom(1.25));
+                viewer.querySelector('#schoolImageZoomOut').addEventListener('click', () => viewer._changeZoom(0.8));
+                viewer.querySelector('#schoolImageZoomReset').addEventListener('click', () => {
+                    viewer._zoom = 1;
+                    viewer._applyZoom();
+                    stage.scrollTo({ top: 0, left: 0 });
+                });
+                stage.addEventListener('wheel', event => {
+                    event.preventDefault();
+                    viewer._changeZoom(event.deltaY < 0 ? 1.15 : 0.87);
+                }, { passive: false });
+                image.addEventListener('load', () => {
+                    viewer._zoom = 1;
+                    viewer._applyZoom();
+                    stage.scrollTo({ top: 0, left: 0 });
+                });
                 viewer.addEventListener('click', event => {
                     if (event.target === viewer) closeSchoolImageViewer();
                 });
@@ -733,14 +777,20 @@
                 document.addEventListener('keydown', event => {
                     if (event.key === 'Escape') closeSchoolImageViewer();
                 });
+                window.addEventListener('resize', () => {
+                    if (!viewer.classList.contains('hidden')) viewer._applyZoom();
+                });
                 document.body.appendChild(viewer);
             }
-            viewer.querySelector('#schoolImageViewerImage').src = imageUrl;
-            viewer.querySelector('#schoolImageViewerImage').alt = imageTitle || 'صورة من موقع المدرسة';
+            const image = viewer.querySelector('#schoolImageViewerImage');
+            image.alt = imageTitle || 'صورة من موقع المدرسة';
             viewer.querySelector('#schoolImageViewerTitle').textContent = imageTitle || 'معاينة الصورة';
+            viewer._zoom = 1;
+            image.src = imageUrl;
             viewer.classList.remove('hidden');
             viewer.classList.add('flex');
             document.body.classList.add('overflow-hidden');
+            if (image.complete && image.naturalWidth) viewer._applyZoom();
         }
 
         function closeSchoolImageViewer() {
