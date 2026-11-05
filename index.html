@@ -730,10 +730,10 @@
                                 </button>
                             </div>
                         </div>
-                        <div id="schoolImageViewerStage" class="min-h-0 w-full flex-1 overflow-auto rounded-lg text-center" style="overscroll-behavior:contain;">
+                        <div id="schoolImageViewerStage" class="min-h-0 w-full flex-1 overflow-auto rounded-lg text-center cursor-grab select-none" style="overscroll-behavior:contain; touch-action:pan-x pan-y;">
                             <img id="schoolImageViewerImage" class="inline-block max-w-none rounded-lg shadow-2xl" style="object-fit:contain;" alt="">
                         </div>
-                        <p class="mt-2 shrink-0 text-center text-xs text-white/70">استخدم + و− أو عجلة الماوس للتكبير والتصغير، واسحب أشرطة التمرير لرؤية أجزاء الصورة المكبرة.</p>
+                        <p class="mt-2 shrink-0 text-center text-xs text-white/70">استخدم + و− أو عجلة الماوس للتكبير، وبعد التكبير اضغط واسحب باليد لتحريك الصورة، أو استخدم أشرطة التمرير.</p>
                     </div>`;
                 const image = viewer.querySelector('#schoolImageViewerImage');
                 const stage = viewer.querySelector('#schoolImageViewerStage');
@@ -765,6 +765,45 @@
                     event.preventDefault();
                     viewer._changeZoom(event.deltaY < 0 ? 1.15 : 0.87);
                 }, { passive: false });
+                // السحب بالماوس لتحريك الصورة عند تكبيرها.
+                let panPointerId = null;
+                let panStartX = 0;
+                let panStartY = 0;
+                let panStartScrollLeft = 0;
+                let panStartScrollTop = 0;
+                stage.addEventListener('pointerdown', event => {
+                    if (viewer._zoom <= 1 || event.button !== 0) return;
+                    panPointerId = event.pointerId;
+                    panStartX = event.clientX;
+                    panStartY = event.clientY;
+                    panStartScrollLeft = stage.scrollLeft;
+                    panStartScrollTop = stage.scrollTop;
+                    stage.setPointerCapture(event.pointerId);
+                    stage.classList.remove('cursor-grab');
+                    stage.classList.add('cursor-grabbing');
+                    event.preventDefault();
+                });
+                stage.addEventListener('pointermove', event => {
+                    if (panPointerId !== event.pointerId) return;
+                    stage.scrollLeft = panStartScrollLeft - (event.clientX - panStartX);
+                    stage.scrollTop = panStartScrollTop - (event.clientY - panStartY);
+                });
+                const finishPan = event => {
+                    if (panPointerId !== event.pointerId) return;
+                    panPointerId = null;
+                    stage.classList.remove('cursor-grabbing');
+                    stage.classList.add('cursor-grab');
+                    if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+                };
+                stage.addEventListener('pointerup', finishPan);
+                stage.addEventListener('pointercancel', finishPan);
+                stage.addEventListener('lostpointercapture', event => {
+                    if (panPointerId === event.pointerId) {
+                        panPointerId = null;
+                        stage.classList.remove('cursor-grabbing');
+                        stage.classList.add('cursor-grab');
+                    }
+                });
                 image.addEventListener('load', () => {
                     viewer._zoom = 1;
                     viewer._applyZoom();
