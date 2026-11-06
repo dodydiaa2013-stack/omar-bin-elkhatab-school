@@ -3111,6 +3111,7 @@ async function deleteScheduleImage(cls) {
                 if (event.pointerType !== 'touch') return;
                 touchStart = { x: event.clientX, y: event.clientY };
                 touchDragging = false;
+                try { handle.setPointerCapture(event.pointerId); } catch (_) {}
                 holdTimer = setTimeout(() => {
                     touchDragging = true;
                     activeContentDrag = { scope, itemId: String(itemId) };
