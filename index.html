@@ -1696,7 +1696,7 @@ window.addEventListener('DOMContentLoaded', () => {
         function updateTeacherUI() {
             if (isAdminLoggedIn) {
                 document.getElementById('adminBadge').classList.remove('hidden');
-                document.getElementById('loginBtnText').innerText = 'المعلم مفعّل';
+                // يظل نص الزر «تسجيل الدخول» ثابتًا؛ حالة التفعيل تظهر في شارة وضع المعلم.
                 document.getElementById('tabletTeacherUpload').classList.remove('hidden');
             }
 
