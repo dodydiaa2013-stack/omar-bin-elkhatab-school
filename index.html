@@ -1833,7 +1833,7 @@ function assignPageEditIds() {
         '[data-page-no-auto-edit="true"]'
     ].join(',');
 
-    function makeStableId(element) {
+    function makeStableId(element, textNodeIndex) {
         const path = [];
         let current = element;
         while (current && current !== document.body) {
@@ -1847,7 +1847,8 @@ function assignPageEditIds() {
             current = current.parentElement;
         }
 
-        const value = path.join('/');
+        const value = path.join('/') +
+            (textNodeIndex === undefined ? '' : '/text-' + textNodeIndex);
         let hashA = 2166136261;
         let hashB = 2246822519;
         for (let i = 0; i < value.length; i++) {
@@ -1868,22 +1869,36 @@ function assignPageEditIds() {
     const candidates = Array.from(document.body.querySelectorAll('*'));
     candidates.forEach(element => {
         if (element.hasAttribute('data-page-edit-id')) return;
-        if (element.children.length !== 0) return;
         if (element.closest(excludedRoots)) return;
 
         const tag = element.tagName;
         if ([
             'SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'PATH', 'CANVAS',
-            'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'BUTTON', 'IFRAME'
+            'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'IFRAME'
         ].includes(tag)) return;
 
-        if (!element.textContent || !element.textContent.trim()) return;
+        if (element.children.length === 0) {
+            if (!element.textContent || !element.textContent.trim()) return;
 
-        const id = makeStableId(element);
-        if (usedIds.has(id)) return;
+            const id = makeStableId(element);
+            if (usedIds.has(id)) return;
 
-        element.setAttribute('data-page-edit-id', id);
-        usedIds.add(id);
+            element.setAttribute('data-page-edit-id', id);
+            usedIds.add(id);
+            return;
+        }
+
+        Array.from(element.childNodes).forEach((node, index) => {
+            if (node.nodeType !== Node.TEXT_NODE || !node.nodeValue.trim()) return;
+            const id = makeStableId(element, index);
+            if (usedIds.has(id)) return;
+
+            const span = document.createElement('span');
+            span.setAttribute('data-page-edit-id', id);
+            span.textContent = node.nodeValue;
+            element.replaceChild(span, node);
+            usedIds.add(id);
+        });
     });
 }
 
