@@ -175,6 +175,28 @@
         }
     </style>
 
+<style>
+    /* امنع ظهور الرئيسية مؤقتًا إذا كان رابط التحديث يشير إلى قسم آخر. */
+    html[data-initial-tab]:not([data-initial-tab="home"]) #content-home { display: none !important; }
+    html[data-initial-tab="home"] #content-home,
+    html[data-initial-tab="results"] #content-results,
+    html[data-initial-tab="leaders"] #content-leaders,
+    html[data-initial-tab="tablet"] #content-tablet,
+    html[data-initial-tab="schedules"] #content-schedules,
+    html[data-initial-tab="alerts"] #content-alerts,
+    html[data-initial-tab="student-queries"] #content-student-queries { display: block !important; }
+</style>
+<script>
+    (() => {
+        const validTabs = ['home', 'results', 'leaders', 'tablet', 'schedules', 'alerts', 'student-queries'];
+        let tabId = 'home';
+        try {
+            const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+            if (validTabs.includes(requested)) tabId = requested;
+        } catch (_) {}
+        document.documentElement.setAttribute('data-initial-tab', tabId);
+    })();
+</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
@@ -1395,6 +1417,7 @@ window.addEventListener('DOMContentLoaded', () => {
         function initializeTabNavigation() {
             const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
             switchTab(VALID_TAB_IDS.includes(requested) ? requested : 'home', { updateHistory: false, focus: false });
+            document.documentElement.removeAttribute('data-initial-tab');
             window.addEventListener('popstate', () => {
                 const tabId = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
                 switchTab(VALID_TAB_IDS.includes(tabId) ? tabId : 'home', { updateHistory: false, focus: false });
