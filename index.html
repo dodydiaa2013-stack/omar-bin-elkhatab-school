@@ -35,6 +35,69 @@
         .content-dragging { opacity: .48; outline: 2px dashed #2563eb; }
         .content-drop-target { outline: 3px solid #2563eb !important; outline-offset: 2px; transform: scale(.985); }
 
+        @media (max-width: 640px) {
+            #devControlBar:not(.hidden) {
+                display: flex !important;
+                flex-direction: column;
+                align-items: stretch;
+                justify-content: center;
+                gap: .5rem;
+                box-sizing: border-box;
+                width: 100%;
+                padding: .5rem .625rem;
+            }
+            #devControlBar > div {
+                min-width: 0;
+                width: 100%;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: .375rem;
+            }
+            #devControlBar > div:first-child {
+                text-align: center;
+                line-height: 1.4;
+            }
+            #devControlBar button {
+                max-width: 100%;
+                white-space: normal;
+                line-height: 1.35;
+                padding: .45rem .55rem;
+                font-size: 11px;
+            }
+            #devControlBar #manualBackupControls {
+                width: 100%;
+                flex-wrap: wrap;
+                justify-content: center;
+                border-right: 0;
+                padding-right: 0;
+            }
+            #schoolImageViewer > div {
+                min-height: 0;
+                max-height: 100%;
+            }
+            #schoolImageViewer .school-image-viewer-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: .4rem;
+                margin-bottom: .4rem;
+            }
+            #schoolImageViewer .school-image-viewer-controls {
+                width: 100%;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: .3rem;
+            }
+            #schoolImageViewer .school-image-viewer-controls button {
+                padding: .35rem .55rem;
+                font-size: 12px;
+                line-height: 1.35;
+            }
+            #schoolImageViewer .school-image-viewer-stage {
+                min-height: 0;
+                flex: 1 1 0%;
+            }
+        }
+
         body {
             font-family: 'Cairo', sans-serif;
             background-color: #f8fafc;
@@ -788,15 +851,15 @@
             if (!viewer) {
                 viewer = document.createElement('div');
                 viewer.id = 'schoolImageViewer';
-                viewer.className = 'fixed inset-0 z-[100] hidden items-center justify-center bg-black/90 p-3 sm:p-6';
+                viewer.className = 'fixed inset-0 z-[100] hidden items-center justify-center overflow-hidden bg-black/95 p-2 sm:p-6';
                 viewer.setAttribute('role', 'dialog');
                 viewer.setAttribute('aria-modal', 'true');
                 viewer.setAttribute('aria-label', 'معاينة الصورة');
                 viewer.innerHTML = `
-                    <div class="relative flex h-full max-h-full w-full max-w-6xl flex-col items-center">
-                        <div class="mb-3 flex w-full shrink-0 items-center justify-between gap-3 text-white">
-                            <p id="schoolImageViewerTitle" class="min-w-0 truncate text-sm font-bold"></p>
-                            <div class="flex shrink-0 items-center gap-2">
+                    <div class="relative flex h-full min-h-0 max-h-full w-full max-w-6xl flex-col items-center" style="max-height:100dvh;">
+                        <div class="school-image-viewer-header mb-2 flex w-full shrink-0 items-center justify-between gap-3 text-white">
+                            <p id="schoolImageViewerTitle" class="min-w-0 max-w-full truncate text-center text-sm font-bold sm:text-right"></p>
+                            <div class="school-image-viewer-controls flex shrink-0 items-center gap-2">
                                 <button type="button" id="schoolImageZoomOut" class="rounded-lg bg-white/15 px-3 py-2 text-lg font-bold hover:bg-white/25" aria-label="تصغير الصورة">−</button>
                                 <span id="schoolImageZoomLevel" class="min-w-12 text-center text-xs font-bold" aria-live="polite">100%</span>
                                 <button type="button" id="schoolImageZoomIn" class="rounded-lg bg-white/15 px-3 py-2 text-lg font-bold hover:bg-white/25" aria-label="تكبير الصورة">+</button>
@@ -806,10 +869,10 @@
                                 </button>
                             </div>
                         </div>
-                        <div id="schoolImageViewerStage" class="min-h-0 w-full flex-1 overflow-auto rounded-lg text-center cursor-grab select-none" style="overscroll-behavior:contain; touch-action:none;">
+                        <div id="schoolImageViewerStage" class="school-image-viewer-stage min-h-0 w-full flex-1 overflow-auto rounded-lg text-center cursor-grab select-none" style="overscroll-behavior:contain; touch-action:none;">
                             <img decoding="async" id="schoolImageViewerImage" class="inline-block max-w-none rounded-lg shadow-2xl" style="object-fit:contain;" alt="">
                         </div>
-                        <p class="mt-2 shrink-0 text-center text-xs text-white/70">على الموبايل كبّر أو صغّر بإصبعين، واسحب بإصبع واحد لتحريك الصورة بعد التكبير. ويمكنك استخدام + و− أو عجلة الماوس أيضًا.</p>
+                        <p class="mt-2 hidden shrink-0 text-center text-xs text-white/70 sm:block">على الموبايل كبّر أو صغّر بإصبعين، واسحب بإصبع واحد لتحريك الصورة بعد التكبير. ويمكنك استخدام + و− أو عجلة الماوس أيضًا.</p>
                     </div>`;
                 const image = viewer.querySelector('#schoolImageViewerImage');
                 const stage = viewer.querySelector('#schoolImageViewerStage');
@@ -3070,7 +3133,8 @@ async function deleteScheduleImage(cls) {
             handle.textContent = '⠿ اسحب للترتيب';
             handle.title = 'اسحب بالماوس، أو اضغط مطولًا واسحب بإصبعك';
             handle.setAttribute('aria-label', 'اسحب لتغيير الترتيب');
-            handle.draggable = true;
+            // Native HTML drag is reserved for mouse/trackpad; touch uses the pointer flow below.
+            handle.draggable = !window.matchMedia('(pointer: coarse)').matches;
             handle.style.touchAction = 'none';
             controls.appendChild(handle);
 
@@ -3110,20 +3174,31 @@ async function deleteScheduleImage(cls) {
             let touchDragging = false;
             handle.addEventListener('pointerdown', event => {
                 if (event.pointerType !== 'touch') return;
-                touchStart = { x: event.clientX, y: event.clientY };
+                event.preventDefault();
+                if (holdTimer) clearTimeout(holdTimer);
+                touchStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
                 touchDragging = false;
                 try { handle.setPointerCapture(event.pointerId); } catch (_) {}
                 holdTimer = setTimeout(() => {
+                    if (!touchStart) return;
                     touchDragging = true;
                     activeContentDrag = { scope, itemId: String(itemId) };
                     card.classList.add('content-dragging');
                     if (navigator.vibrate) navigator.vibrate(25);
-                }, 280);
+                }, 320);
             });
             handle.addEventListener('pointermove', event => {
-                if (!touchStart || !activeContentDrag || activeContentDrag.scope !== scope ||
+                if (!touchStart || touchStart.pointerId !== event.pointerId) return;
+                const moved = Math.hypot(event.clientX - touchStart.x, event.clientY - touchStart.y);
+                if (!touchDragging && moved > 10) {
+                    if (holdTimer) clearTimeout(holdTimer);
+                    holdTimer = null;
+                    touchStart = null;
+                    return;
+                }
+                if (!touchDragging || !activeContentDrag || activeContentDrag.scope !== scope ||
                     activeContentDrag.itemId !== String(itemId)) return;
-                if (Math.hypot(event.clientX - touchStart.x, event.clientY - touchStart.y) > 7) {
+                if (moved > 7) {
                     event.preventDefault();
                     const under = document.elementFromPoint(event.clientX, event.clientY);
                     const target = under && under.closest('[data-content-drag-scope]');
@@ -3133,12 +3208,15 @@ async function deleteScheduleImage(cls) {
                 }
             });
             const finishTouchDrag = event => {
+                if (touchStart && touchStart.pointerId !== event.pointerId) return;
                 if (holdTimer) clearTimeout(holdTimer);
                 holdTimer = null;
-                if (touchDragging && activeContentDrag && activeContentDrag.itemId === String(itemId)) {
+                if (touchDragging && activeContentDrag && activeContentDrag.scope === scope &&
+                    activeContentDrag.itemId === String(itemId)) {
                     const under = document.elementFromPoint(event.clientX, event.clientY);
                     const target = under && under.closest('[data-content-drag-scope]');
-                    if (target && target.dataset.contentDragScope === scope) {
+                    if (target && target.dataset.contentDragScope === scope &&
+                        target.dataset.contentDragId !== String(itemId)) {
                         reorderContentItemTo(scope, String(itemId), target.dataset.contentDragId);
                     }
                     activeContentDrag = null;
