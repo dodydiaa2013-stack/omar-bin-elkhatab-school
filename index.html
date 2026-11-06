@@ -1018,7 +1018,19 @@
                     stage.scrollTo({ top: 0, left: 0 });
                 });
                 viewer.addEventListener('click', event => {
-                    if (event.target === viewer) closeSchoolImageViewer();
+                    const content = viewer.firstElementChild;
+                    const header = viewer.querySelector('.school-image-viewer-header');
+
+                    // إغلاق المعاينة عند الضغط على المساحات الفارغة حول الصورة،
+                    // مع إبقاء الضغط على الصورة وأزرار التحكم دون تغيير.
+                    if (
+                        event.target === viewer ||
+                        event.target === content ||
+                        event.target === header ||
+                        event.target === stage
+                    ) {
+                        closeSchoolImageViewer();
+                    }
                 });
                 viewer.querySelector('#schoolImageViewerClose').addEventListener('click', closeSchoolImageViewer);
                 document.addEventListener('keydown', event => {
