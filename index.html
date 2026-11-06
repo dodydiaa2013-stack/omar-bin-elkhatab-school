@@ -724,7 +724,7 @@
                     <i class="fa-solid fa-school"></i> مدرسة عمر بن الخطاب الثانوية بنين
                 </h4>
                 <p data-page-edit-id="footer-leadership" class="text-xs text-slate-300 leading-relaxed">
-                    تحت قيادة مدير المدرسة أ. محمد السويسي - إدارة المستقبل التعليمية - مديرية التربية والتعليم بمحافظة القاهرة.
+                    تحت قيادة مدير المدرسة أ. محمد السويسي - إدارة المستقبل التعليمية - وزارة التربية والتعليم بمحافظة القاهرة.
                 </p>
             </div>
             <div class="space-y-3">
@@ -1824,7 +1824,13 @@ function receivePageChanges(data) {
     data.changes.forEach(item => {
         if(!item || typeof item.id!=="string" || typeof item.text!=="string") return;
         const element=document.querySelector('[data-page-edit-id="'+CSS.escape(item.id)+'"]');
-        if(element) element.textContent=item.text;
+        if(element) {
+            // تصحيح النص القديم المحفوظ للتذييل عند استرجاعه من Google Drive.
+            const savedText = item.id === "footer-leadership"
+                ? item.text.replace("مديرية التربية والتعليم بمحافظة القاهرة", "وزارة التربية والتعليم بمحافظة القاهرة")
+                : item.text;
+            element.textContent=savedText;
+        }
     });
     const messages = document.querySelectorAll('#tickerText .ticker-message');
     messages.forEach((message, index) => message.classList.toggle('active', index === currentNewsIndex));
