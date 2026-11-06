@@ -2046,9 +2046,26 @@ function loadSavedPageChanges() {
 function receivePageChanges(data) {
     if (!data || !data.success || !Array.isArray(data.changes)) return;
 
+    // قد يعيد Apps Script قائمة فارغة عند تعذر قراءة ملف التعديلات.
+    // لا تستبدل نسخة محلية محفوظة بتلك القائمة المشكوك فيها.
+    // عند حفظ تفريغ حقيقي للتعديلات، تكون النسخة المحلية قد حُدثت بالفعل إلى [].
+    try {
+        const cachedRaw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
+        if (cachedRaw && data.changes.length === 0) {
+            const cached = JSON.parse(cachedRaw);
+            if (cached && Array.isArray(cached.changes) && cached.changes.length > 0) {
+                console.warn("وصلت قائمة تعديلات فارغة من الخادم مع وجود نسخة محلية محفوظة؛ تم الاحتفاظ بالنسخة المحلية.");
+                applyPageChangesList(cached.changes);
+                return;
+            }
+        }
+    } catch (error) {
+        console.warn("تعذر التحقق من النسخة المحلية قبل استبدالها.", error);
+    }
+
     applyPageChangesList(data.changes);
 
-    // تحديث النسخة المحلية من المصدر المعتمد بعد وصول بيانات السيرفر بنجاح.
+    // لا تُحدّث النسخة المحلية إلا بعد قبول استجابة الخادم وتطبيقها.
     try {
         localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
             changes: data.changes
