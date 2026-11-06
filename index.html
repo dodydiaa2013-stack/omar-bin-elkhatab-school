@@ -4,10 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        /* امنع وميض النص الافتراضي قبل استرجاع النصوص المحفوظة لقسم التطوير والتابلت. */
-        html[data-page-edits-pending="true"] [data-page-edit-id="tablet-title"],
-        html[data-page-edits-pending="true"] [data-page-edit-id="tablet-description"] {
+        /* لا تعرض أي نص من HTML أو من الكاش قبل وصول نسخة مؤكدة من الخادم. */
+        html[data-page-edits-pending="true"] body {
             visibility: hidden !important;
+        }
+        html[data-page-edits-pending="true"]::before {
+            content: "جارٍ تحميل محتوى الموقع...";
+            position: fixed;
+            inset: 0;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: #0B132B;
+            color: #F4C95D;
+            font: 700 18px/1.8 system-ui, sans-serif;
+            text-align: center;
+            visibility: visible;
+        }
+        html[data-page-edits-error="true"]::before {
+            content: "تعذر تحميل محتوى الموقع من الخادم. يرجى تحديث الصفحة والمحاولة مرة أخرى.";
+            color: #fff;
         }
     </style>
     <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
@@ -1239,10 +1257,7 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
-    const hasCachedPageChanges = applyCachedPageChanges();
-    if (hasCachedPageChanges) {
-        document.documentElement.removeAttribute("data-page-edits-pending");
-    }
+    // لا نعرض نسخة localStorage؛ مصدر النصوص المعتمد هو الخادم فقط.
     loadSavedPageChanges();
     updateTeacherUI();
 });
@@ -2120,14 +2135,13 @@ function loadSavedPageChanges() {
         Date.now();
 
     script.onerror = () => {
-        console.error("تعذر تحميل تعديلات نصوص الموقع؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
-        document.documentElement.removeAttribute("data-page-edits-pending");
+        console.error("تعذر تحميل محتوى الموقع من الخادم؛ تم منع عرض أي نص قديم.");
+        document.documentElement.setAttribute("data-page-edits-error", "true");
         script.remove();
     };
 
     script.onload = () => {
-        // إذا لم يرسل الخادم بيانات صالحة، أظهر النص الافتراضي بدل ترك العنوان مخفيًا.
-        document.documentElement.removeAttribute("data-page-edits-pending");
+        // لا تكشف الصفحة هنا؛ لا نرفع الحجب إلا داخل receivePageChanges بعد تحقق الاستجابة.
         script.remove();
     };
 
@@ -2135,25 +2149,13 @@ function loadSavedPageChanges() {
 }
 
 function receivePageChanges(data) {
-    if (!data || !data.success || !Array.isArray(data.changes)) return;
-
-    // قد يعيد Apps Script قائمة فارغة عند تعذر قراءة ملف التعديلات.
-    // لا تستبدل نسخة محلية محفوظة بتلك القائمة المشكوك فيها.
-    // عند حفظ تفريغ حقيقي للتعديلات، تكون النسخة المحلية قد حُدثت بالفعل إلى [].
-    try {
-        const cachedRaw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (cachedRaw && data.changes.length === 0) {
-            const cached = JSON.parse(cachedRaw);
-            if (cached && Array.isArray(cached.changes) && cached.changes.length > 0) {
-                console.warn("وصلت قائمة تعديلات فارغة من الخادم مع وجود نسخة محلية محفوظة؛ تم الاحتفاظ بالنسخة المحلية.");
-                applyPageChangesList(cached.changes);
-                return;
-            }
-        }
-    } catch (error) {
-        console.warn("تعذر التحقق من النسخة المحلية قبل استبدالها.", error);
+    if (!data || data.success !== true || !Array.isArray(data.changes)) {
+        document.documentElement.setAttribute("data-page-edits-error", "true");
+        console.error("استجابة الخادم غير صالحة؛ تم إبقاء محتوى الموقع محجوبًا لمنع ظهور نص قديم.");
+        return;
     }
 
+    // اعتمد استجابة الخادم فقط، ولا تستخدم أي نسخة نصية مخزنة محليًا.
     applyPageChangesList(data.changes);
 
     // لا تُحدّث النسخة المحلية إلا بعد قبول استجابة الخادم وتطبيقها.
@@ -2169,6 +2171,10 @@ function receivePageChanges(data) {
     messages.forEach((message, index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
+
+    // لا يظهر الموقع إلا بعد تطبيق استجابة صحيحة من الخادم.
+    document.documentElement.removeAttribute("data-page-edits-error");
+    document.documentElement.removeAttribute("data-page-edits-pending");
 }
         function exportUpdatedHTML() {
     if (!isDeveloperLoggedIn) {
