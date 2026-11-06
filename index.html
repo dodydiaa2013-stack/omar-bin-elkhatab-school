@@ -2040,6 +2040,30 @@ function assignPageEditIds() {
 
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
 
+// الاسمان ثابتان في الموقع، ولا تسمح أي نسخة محلية أو قديمة باستبدالهما.
+const FIXED_STUDENT_QUERY_TITLES = {
+    "student-query-one-title": "منصة البرمجة",
+    "student-query-two-title": "كود الطالب"
+};
+
+function enforceStudentQueryTitles() {
+    Object.entries(FIXED_STUDENT_QUERY_TITLES).forEach(([id, title]) => {
+        const element = document.querySelector('[data-page-edit-id="' + CSS.escape(id) + '"]');
+        if (element && element.textContent.trim() !== title) {
+            element.textContent = title;
+        }
+    });
+}
+
+function normalizeStudentQueryChanges(changes) {
+    if (!Array.isArray(changes)) return [];
+    return changes.map(item => {
+        if (!item || typeof item !== "object") return item;
+        const fixedTitle = FIXED_STUDENT_QUERY_TITLES[item.id];
+        return fixedTitle ? { ...item, text: fixedTitle } : item;
+    });
+}
+
 function applyPageChangesList(changes) {
     if (!Array.isArray(changes)) return;
     changes.forEach(item => {
@@ -2078,17 +2102,32 @@ function applyPageChangesList(changes) {
 
         element.textContent = savedText;
     });
+
+    // طبّق الاسمين المعتمدين حتى لو كانت النسخة القديمة لا تحتوي معرّفاتهما.
+    enforceStudentQueryTitles();
 }
 
 function applyCachedPageChanges() {
     try {
         const cached = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (!cached) return false;
+        if (!cached) {
+            enforceStudentQueryTitles();
+            return false;
+        }
         const parsed = JSON.parse(cached);
-        if (!parsed || !Array.isArray(parsed.changes)) return false;
+        if (!parsed || !Array.isArray(parsed.changes)) {
+            enforceStudentQueryTitles();
+            return false;
+        }
+
+        // نظّف القيم القديمة من الكاش نفسه، وليس من العرض فقط.
+        parsed.changes = normalizeStudentQueryChanges(parsed.changes);
+        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify(parsed));
         applyPageChangesList(parsed.changes);
+        enforceStudentQueryTitles();
         return true;
     } catch (error) {
+        enforceStudentQueryTitles();
         console.warn("تعذر تطبيق النسخة المحلية من تعديلات النصوص.", error);
         return false;
     }
@@ -2096,10 +2135,12 @@ function applyCachedPageChanges() {
 
 function cacheCurrentPageChanges() {
     try {
+        enforceStudentQueryTitles();
         const changes = Array.from(document.querySelectorAll("[data-page-edit-id]"))
             .map(element => ({
                 id: element.getAttribute("data-page-edit-id"),
-                text: element.textContent.trim()
+                text: FIXED_STUDENT_QUERY_TITLES[element.getAttribute("data-page-edit-id")]
+                    || element.textContent.trim()
             }))
             .filter(item => item.id && item.text.length <= 10000);
 
@@ -2156,11 +2197,13 @@ function receivePageChanges(data) {
         console.warn("تعذر فحص النسخة المحلية من تعديلات النصوص.", error);
     }
 
-    applyPageChangesList(data.changes);
+    const normalizedChanges = normalizeStudentQueryChanges(data.changes);
+    applyPageChangesList(normalizedChanges);
+    enforceStudentQueryTitles();
 
     try {
         localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
-            changes: data.changes
+            changes: normalizedChanges
         }));
     } catch (error) {
         console.warn("تعذر حفظ نسخة محلية من تعديلات النصوص.", error);
