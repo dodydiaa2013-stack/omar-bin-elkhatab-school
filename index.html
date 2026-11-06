@@ -1857,7 +1857,7 @@ window.addEventListener('message',function(event) {
     if(result.success) {
         // تحديث النسخة المحلية فقط بعد تأكيد نجاح الحفظ من الخادم.
         cacheCurrentPageChanges();
-        if(status) status.textContent='تم حفظ تعديلات نصوص الموقع بنجاح.';
+        if(status) status.textContent=''; // إخفاء رسالة الحالة؛ يظل تنبيه النجاح الظاهر للمستخدم.
         if(isLiveEditing) toggleLiveEditing();
         alert('تم حفظ التعديلات بنجاح.');
     } else {
