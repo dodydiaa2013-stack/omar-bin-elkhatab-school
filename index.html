@@ -176,15 +176,15 @@
     </style>
 
 <style>
-    /* امنع ظهور الرئيسية مؤقتًا إذا كان رابط التحديث يشير إلى قسم آخر. */
-    html[data-initial-tab]:not([data-initial-tab="home"]) #content-home { display: none !important; }
-    html[data-initial-tab="home"] #content-home,
-    html[data-initial-tab="results"] #content-results,
-    html[data-initial-tab="leaders"] #content-leaders,
-    html[data-initial-tab="tablet"] #content-tablet,
-    html[data-initial-tab="schedules"] #content-schedules,
-    html[data-initial-tab="alerts"] #content-alerts,
-    html[data-initial-tab="student-queries"] #content-student-queries { display: block !important; }
+    /* ثبّت القسم الحالي قبل تحميل Tailwind حتى لا تظهر الرئيسية أو أقسام أخرى أثناء التحديث. */
+    html[data-current-tab] .tab-content { display: none !important; }
+    html[data-current-tab="home"] #content-home,
+    html[data-current-tab="results"] #content-results,
+    html[data-current-tab="leaders"] #content-leaders,
+    html[data-current-tab="tablet"] #content-tablet,
+    html[data-current-tab="schedules"] #content-schedules,
+    html[data-current-tab="alerts"] #content-alerts,
+    html[data-current-tab="student-queries"] #content-student-queries { display: block !important; }
 </style>
 <script>
     (() => {
@@ -194,7 +194,7 @@
             const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
             if (validTabs.includes(requested)) tabId = requested;
         } catch (_) {}
-        document.documentElement.setAttribute('data-initial-tab', tabId);
+        document.documentElement.setAttribute('data-current-tab', tabId);
     })();
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -1417,7 +1417,6 @@ window.addEventListener('DOMContentLoaded', () => {
         function initializeTabNavigation() {
             const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
             switchTab(VALID_TAB_IDS.includes(requested) ? requested : 'home', { updateHistory: false, focus: false });
-            document.documentElement.removeAttribute('data-initial-tab');
             window.addEventListener('popstate', () => {
                 const tabId = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
                 switchTab(VALID_TAB_IDS.includes(tabId) ? tabId : 'home', { updateHistory: false, focus: false });
@@ -1426,6 +1425,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
         function switchTab(tabId, options = {}) {
             if (!VALID_TAB_IDS.includes(tabId)) return;
+            document.documentElement.setAttribute('data-current-tab', tabId);
             document.querySelectorAll('.tab-content').forEach(el => {
                 const active = el.id === 'content-' + tabId;
                 el.classList.toggle('hidden', !active);
