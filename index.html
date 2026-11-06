@@ -185,6 +185,9 @@
     html[data-current-tab="schedules"] #content-schedules,
     html[data-current-tab="alerts"] #content-alerts,
     html[data-current-tab="student-queries"] #content-student-queries { display: block !important; }
+
+    /* اخفِ التذييل والشريط السفلي حتى يثبت القسم المطلوب بعد التحديث. */
+    html:not([data-tab-ready="true"]) footer { visibility: hidden !important; }
 </style>
 <script>
     (() => {
@@ -1444,6 +1447,10 @@ window.addEventListener('DOMContentLoaded', () => {
                 window.history.pushState({ tabId }, '', '#' + tabId);
             }
             if (tabId === 'alerts') loadPhotoAlbums(false);
+
+            // أظهر التذييل بعد تطبيق القسم الصحيح، وليس أثناء تحميل الصفحة الأولي.
+            document.documentElement.setAttribute('data-tab-ready', 'true');
+
             window.scrollTo({ top: 0, behavior: 'smooth' });
             if (options.focus !== false) {
                 const target = document.getElementById('content-' + tabId);
