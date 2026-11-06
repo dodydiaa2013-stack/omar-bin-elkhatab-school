@@ -1941,11 +1941,26 @@ function assignPageEditIds() {
 }
 
 function loadSavedPageChanges() {
-    const scriptURL="https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
-    const script=document.createElement("script");
-    script.src=scriptURL+"?action=pageChanges&callback=receivePageChanges";
-    script.onerror=()=>{ document.documentElement.classList.remove("page-changes-loading"); console.error('تعذر تحميل تعديلات نصوص الموقع.'); };
-    script.onload=()=>document.documentElement.classList.remove("page-changes-loading");
+    const scriptURL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+
+    const script = document.createElement("script");
+
+    script.src =
+        scriptURL +
+        "?action=pageChanges&callback=receivePageChanges&_=" +
+        Date.now();
+
+    script.onerror = () => {
+        document.documentElement.classList.remove("page-changes-loading");
+        console.error("تعذر تحميل تعديلات نصوص الموقع.");
+        script.remove();
+    };
+
+    script.onload = () => {
+        document.documentElement.classList.remove("page-changes-loading");
+        script.remove();
+    };
+
     document.body.appendChild(script);
 }
 
