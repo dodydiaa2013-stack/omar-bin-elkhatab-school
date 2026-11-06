@@ -4147,6 +4147,11 @@ async function refreshPhotoAlbums(button) {
     const results = document.getElementById('photoAlbumUploadResults');
     const addButton = document.querySelector('#photoAlbumActions button[onclick*="photoAlbumImagesInput"]');
 
+    // ألغِ أي مؤقت إخفاء سابق إذا بدأ رفع جديد.
+    if (progress && progress._hideTimer) {
+        clearTimeout(progress._hideTimer);
+        progress._hideTimer = null;
+    }
     progress?.classList.remove('hidden');
     if (results) results.innerHTML = '';
     if (progressText) progressText.textContent = '0 / ' + files.length;
@@ -4168,6 +4173,12 @@ async function refreshPhotoAlbums(button) {
         }
         input.value = '';
         endImageOperation(operationKey);
+        if (progress) {
+            progress._hideTimer = setTimeout(() => {
+                progress.classList.add('hidden');
+                progress._hideTimer = null;
+            }, 8000);
+        }
         return;
     }
 
@@ -4238,6 +4249,15 @@ async function refreshPhotoAlbums(button) {
         input.disabled = false;
         if (addButton) addButton.disabled = false;
         endImageOperation(operationKey);
+
+        // اترك نتيجة الرفع ظاهرة قليلًا، ثم أخفِ شريط التقدم تلقائيًا.
+        if (progress) {
+            if (progress._hideTimer) clearTimeout(progress._hideTimer);
+            progress._hideTimer = setTimeout(() => {
+                progress.classList.add('hidden');
+                progress._hideTimer = null;
+            }, 8000);
+        }
     }
 }
 
