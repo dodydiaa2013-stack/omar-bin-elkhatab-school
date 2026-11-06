@@ -4246,7 +4246,7 @@ async function deletePhotoAlbumImage(imageId) {
         alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
         return;
     }
-    if (!confirm('هل تريد حذف هذه الصورة نهائيًا من الألبوم؟')) return;
+    if (!confirm('هل تريد نقل هذه الصورة إلى سلة مهملات Google Drive؟ ويمكنك استعادتها من درايف.')) return;
 
     const albumId = String(currentPhotoAlbumId || '');
     const operationKey = 'album-delete-image-' + albumId + '-' + imageId;
