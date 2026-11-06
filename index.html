@@ -3,6 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
+    <meta name="theme-color" content="#0B132B">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="ar_EG">
+    <meta property="og:title" content="مدرسة عمر بن الخطاب الثانوية بنين">
+    <meta property="og:description" content="الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين - إدارة المستقبل التعليمية بمحافظة القاهرة.">
+    <meta property="og:url" content="https://dodydiaa2013-stack.github.io/omar-bin-elkhatab-school/">
+    <link rel="canonical" href="https://dodydiaa2013-stack.github.io/omar-bin-elkhatab-school/">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,6 +37,10 @@
     </style>
     <style>
         /* Keep the published text visible while saved edits are fetched. */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+        }
+        :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
 
         .content-sortable-card { transition: transform .16s ease, opacity .16s ease, outline-color .16s ease; }
         .content-drag-handle { touch-action: none; }
@@ -244,7 +256,7 @@
         </div>
 
         <!-- Executive Navigation Tabs -->
-        <nav class="max-w-7xl mx-auto px-4">
+        <nav class="max-w-7xl mx-auto px-4" aria-label="التنقل الرئيسي بين أقسام الموقع">
             <div class="flex overflow-x-auto space-x-reverse space-x-1 border-b border-slate-700 no-scrollbar">
                 <button onclick="switchTab('home')" id="tab-home" class="tab-btn active-tab px-5 py-3 font-bold text-sm border-b-4 border-gold text-gold flex items-center gap-2 whitespace-nowrap transition">
                     <i class="fa-solid fa-house"></i> الرئيسية
@@ -272,7 +284,7 @@
     </header>
 
     <!-- Main Dynamic Content Container -->
-    <main class="flex-grow max-w-7xl w-full mx-auto p-4 md:p-6">
+    <main id="main-content" class="flex-grow max-w-7xl w-full mx-auto p-4 md:p-6" tabindex="-1">
 
         <!-- TAB 1: HOME PAGE -->
         <section id="content-home" class="tab-content block space-y-6">
@@ -1063,6 +1075,14 @@
         }
 
 
+        function getSafeHttpsUrl(value) {
+            try {
+                const url = new URL(String(value || ''), window.location.href);
+                if (url.protocol !== 'https:' || url.username || url.password) return '';
+                return url.href;
+            } catch (error) { return ''; }
+        }
+
         function isTrustedAppsScriptMessage(event, expectedSource) {
             if (!event || (expectedSource && event.source !== expectedSource)) {
                 return false;
@@ -1093,6 +1113,7 @@
         
 window.addEventListener('DOMContentLoaded', () => {
     initLocalStorage();
+    initializeTabNavigation();
     // Photo albums are loaded independently after page initialization.
     renderSchedules();
     loadSchedulesFromDrive();
@@ -1278,25 +1299,42 @@ window.addEventListener('DOMContentLoaded', () => {
             reader.readAsText(file);
         }
 
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('border-gold', 'text-gold');
-                btn.classList.add('border-transparent', 'text-slate-300');
-            });
+        const VALID_TAB_IDS = ['home', 'results', 'leaders', 'tablet', 'schedules', 'alerts', 'student-queries'];
 
-            const targetContent = document.getElementById(`content-${tabId}`);
-            const targetTab = document.getElementById(`tab-${tabId}`);
-            if (targetContent) targetContent.classList.remove('hidden');
-            if (targetTab) {
-                targetTab.classList.add('border-gold', 'text-gold');
-                targetTab.classList.remove('border-transparent', 'text-slate-300');
+        function initializeTabNavigation() {
+            const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+            switchTab(VALID_TAB_IDS.includes(requested) ? requested : 'home', { updateHistory: false, focus: false });
+            window.addEventListener('popstate', () => {
+                const tabId = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+                switchTab(VALID_TAB_IDS.includes(tabId) ? tabId : 'home', { updateHistory: false, focus: false });
+            });
+        }
+
+        function switchTab(tabId, options = {}) {
+            if (!VALID_TAB_IDS.includes(tabId)) return;
+            document.querySelectorAll('.tab-content').forEach(el => {
+                const active = el.id === 'content-' + tabId;
+                el.classList.toggle('hidden', !active);
+                el.setAttribute('aria-hidden', active ? 'false' : 'true');
+            });
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                const active = btn.id === 'tab-' + tabId;
+                btn.classList.toggle('border-gold', active);
+                btn.classList.toggle('text-gold', active);
+                btn.classList.toggle('border-transparent', !active);
+                btn.classList.toggle('text-slate-300', !active);
+                if (active) btn.setAttribute('aria-current', 'page');
+                else btn.removeAttribute('aria-current');
+            });
+            if (options.updateHistory !== false && window.location.hash !== '#' + tabId) {
+                window.history.pushState({ tabId }, '', '#' + tabId);
             }
-            // تحميل ألبومات الصور عند فتح القسم لأول مرة فقط.
-            if (tabId === 'alerts') {
-                loadPhotoAlbums(false);
-            }
+            if (tabId === 'alerts') loadPhotoAlbums(false);
             window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (options.focus !== false) {
+                const target = document.getElementById('content-' + tabId);
+                if (target) { target.setAttribute('tabindex', '-1'); target.focus({ preventScroll: true }); }
+            }
         }
 
         function toggleTicker() {
@@ -1956,7 +1994,7 @@ async function renderTabletGallery(imagesOverride) {
 
         images.forEach((item, idx) => {
             const image = typeof item === 'string' ? { url: item } : item;
-            const url = image.url || image.imageUrl || image.thumbnailUrl || '';
+            const url = getSafeHttpsUrl(image.url || image.imageUrl || image.thumbnailUrl || '');
 
             if (!url) return;
 
@@ -2562,7 +2600,7 @@ function renderSchedules() {
 
     CLASSES.forEach(cls => {
         const item = schedules[cls];
-        const imgUrl = item && item.url ? item.url : '';
+        const imgUrl = item && item.url ? getSafeHttpsUrl(item.url) : '';
         const fileId = item && item.id ? item.id : '';
 
         const card = document.createElement('div');
@@ -3742,11 +3780,13 @@ async function refreshPhotoAlbums(button) {
             grid.innerHTML = '';
             (album.images || []).forEach((image, index) => {
                 const id = String(image.id);
+                const safeImageUrl = getSafeHttpsUrl(image.url);
+                if (!safeImageUrl) return;
                 const card = document.createElement('div');
                 card.className = 'relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group';
                 card.innerHTML = `
                     <button type="button" class="photo-album-image-preview block w-full cursor-zoom-in" aria-label="عرض الصورة داخل الموقع">
-                        <img decoding="async" src="${photoAlbumEscape(image.url)}" alt="${photoAlbumEscape(image.name || 'صورة نشاط')}" loading="lazy" class="w-full h-36 sm:h-44 object-cover">
+                        <img decoding="async" src="${photoAlbumEscape(safeImageUrl)}" alt="${photoAlbumEscape(image.name || 'صورة نشاط')}" loading="lazy" class="w-full h-36 sm:h-44 object-cover">
                     </button>
                     <div class="p-2 text-[11px] text-navy font-bold truncate">${photoAlbumEscape(image.name || ('صورة ' + (index+1)))}</div>
                     ${hasDualAdminAuthorization() ? `<div class="flex gap-1 p-2 pt-0">
