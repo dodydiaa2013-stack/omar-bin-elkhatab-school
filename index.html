@@ -52,6 +52,17 @@
     <style>
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+
+            /* يظل شريط التنبيهات متحركًا حتى مع تفعيل تقليل الحركة في النظام أو المتصفح. */
+            #tickerText {
+                animation-name: ticker !important;
+                animation-duration: 30s !important;
+                animation-timing-function: linear !important;
+                animation-iteration-count: infinite !important;
+            }
+            #tickerText.ticker-paused {
+                animation-play-state: paused !important;
+            }
         }
         :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
 
