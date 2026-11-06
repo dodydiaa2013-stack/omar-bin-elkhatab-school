@@ -50,7 +50,9 @@
         }
     </style>
     <style>
-        /* Keep the published text visible while saved edits are fetched. */
+        /* إخفاء النصوص القابلة للتحرير مؤقتًا حتى تُطبّق التعديلات المحفوظة، مع الحفاظ على مساحة العناصر. */
+        html.page-changes-loading [data-page-edit-id] { visibility: hidden; }
+
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
         }
