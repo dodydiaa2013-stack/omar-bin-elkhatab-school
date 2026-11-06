@@ -684,10 +684,10 @@
                 <p class="text-xs text-slate-500">أدخل الرقم السري لتفعيل لوحة التعديل ورفع النتائج</p>
             </div>
             <div class="space-y-3">
-                <input type="password" id="adminPasswordInput" placeholder="أدخل الرقم السري هنا..." 
+                <input type="password" id="adminPasswordInput" onkeydown="if (event.key === 'Enter') { event.preventDefault(); verifyAdminPassword(); }" placeholder="أدخل الرقم السري هنا..." 
                        class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800 focus:ring-2 focus:ring-gold outline-none">
                 <div id="adminErrorMsg" class="text-xs text-red-600 text-center hidden font-bold">الرقم السري غير صحيح! حاول مرة أخرى.</div>
-                <button onclick="verifyAdminPassword()" class="w-full bg-navy hover:bg-navy-light text-gold font-bold py-3 rounded-xl transition shadow">
+                <button type="button" onclick="verifyAdminPassword()" class="w-full bg-navy hover:bg-navy-light text-gold font-bold py-3 rounded-xl transition shadow">
                     تأكيد الدخول
                 </button>
             </div>
