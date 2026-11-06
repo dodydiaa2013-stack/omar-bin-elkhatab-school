@@ -821,7 +821,7 @@
             </div>
             <div class="space-y-3">
                 <h4 data-page-edit-id="support-section-title" class="text-lg font-bold text-gold">الإدارة والدعم الفني</h4>
-                <p data-page-edit-id="footer-manager" class="text-xs text-slate-300">مدير المدرسة: <span class="text-amber-300 font-bold">أ. محمد السويسي</span></p>
+                <p data-page-edit-id="footer-manager" class="text-xs text-slate-300">مدير المدرسة: <span class="text-white font-bold">أ. محمد السويسي</span></p>
                 <p data-page-edit-id="support-responsibles-title" class="text-xs text-slate-300 mt-1">مسؤولي التطوير:</p>
                 <div class="text-xs font-bold text-amber-300 space-y-1">
                     <div data-page-edit-id="support-diaa-name">• أ. ضياء يسري</div>
@@ -2040,6 +2040,26 @@ function applyPageChangesList(changes) {
         const savedText = item.id === "footer-leadership"
             ? item.text.replace("مديرية التربية والتعليم بمحافظة القاهرة", "وزارة التربية والتعليم بمحافظة القاهرة")
             : item.text;
+
+        // لا تعِد كتابة النص إذا كان مطابقًا؛ فهذا يمنع إعادة إنشاء عناصر التذييل
+        // دون داعٍ عند وصول نسخة الخادم المطابقة للكاش المحلي.
+        if (element.textContent.trim() === savedText.trim()) return;
+
+        // حافظ على تنسيق اسم مدير المدرسة داخل التذييل عند تحديث النص المحفوظ.
+        if (item.id === "footer-manager") {
+            const managerName = element.querySelector("span");
+            const separator = savedText.indexOf(":");
+            if (managerName && separator !== -1) {
+                const prefix = savedText.slice(0, separator + 1) + " ";
+                const firstTextNode = Array.from(element.childNodes)
+                    .find(node => node.nodeType === Node.TEXT_NODE);
+                if (firstTextNode) firstTextNode.nodeValue = prefix;
+                else element.insertBefore(document.createTextNode(prefix), managerName);
+                managerName.textContent = savedText.slice(separator + 1).trim();
+                return;
+            }
+        }
+
         element.textContent = savedText;
     });
 }
