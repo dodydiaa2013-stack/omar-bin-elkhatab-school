@@ -1554,7 +1554,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     : String(Date.now()) + Math.random().toString(36).slice(2);
 
                 const handleMessage = function(event) {
-                    if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+                    if (!isTrustedAppsScriptMessage(event)) return;
                     const data = event.data;
                     if (!data || data.type !== 'passwordRecoveryResult' || data.nonce !== nonce) return;
                     window.removeEventListener('message', handleMessage);
@@ -1810,7 +1810,7 @@ async function saveAllPageChanges() {
 
 window.addEventListener('message',function(event) {
     const responseFrame = document.getElementById('pageChangesUploadFrame');
-    if (!responseFrame || !isTrustedAppsScriptMessage(event, responseFrame.contentWindow)) return;
+    if (!responseFrame || !isTrustedAppsScriptMessage(event)) return;
     const data=event.data;
     if(!data || data.type!=='savePageChangesResult' || !pendingPageChangesNonce || data.nonce!==pendingPageChangesNonce) return;
     clearTimeout(pageChangesTimeout); pendingPageChangesNonce=null;
@@ -2553,7 +2553,7 @@ async function galleryUploadPost(fields, baselineImages) {
         };
 
         const onMessage = event => {
-            if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+            if (!isTrustedAppsScriptMessage(event)) return;
             const message = event.data;
             if (!message || message.type !== 'galleryUploadResult' || message.nonce !== nonce) return;
             acceptResult(message.result);
@@ -3015,7 +3015,7 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
             callback(value);
         };
         const onMessage = event => {
-            if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+            if (!isTrustedAppsScriptMessage(event)) return;
             const message = event.data;
             if (!message || message.type !== 'scheduleUploadResult' || message.nonce !== nonce) return;
             if (message.result && message.result.success) {
@@ -3656,7 +3656,7 @@ async function deleteScheduleImage(cls) {
                 };
                 const finish = (fn, value) => { if (settled) return; settled = true; cleanup(); fn(value); };
                 const onMessage = event => {
-                    if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+                    if (!isTrustedAppsScriptMessage(event)) return;
                     const msg = event.data;
                     if (!msg || msg.type !== 'photoAlbumResult' || msg.nonce !== nonce) return;
                     if (msg.result && msg.result.success) finish(resolve, msg.result);
