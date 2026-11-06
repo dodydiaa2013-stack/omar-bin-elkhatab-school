@@ -3182,10 +3182,50 @@ async function saveScheduleImage() {
 
     button.disabled = true;
     fileInputs.forEach(input => input.disabled = true);
-    progress.classList.remove('hidden');
+
+    // نقل لوحة التقدم خارج نافذة الرفع حتى لا تعطل استخدام قسم قوائم الفصول.
+    if (!progress.dataset.floatingReady) {
+        const header = progress.firstElementChild;
+        const controls = document.createElement('div');
+        controls.className = 'flex items-center gap-2';
+
+        const collapseButton = document.createElement('button');
+        collapseButton.type = 'button';
+        collapseButton.className = 'rounded-md border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100';
+        collapseButton.textContent = 'تصغير';
+        collapseButton.setAttribute('aria-label', 'تصغير تفاصيل تقدم الرفع');
+        collapseButton.addEventListener('click', () => {
+            const collapsed = progress.dataset.collapsed !== 'true';
+            progress.dataset.collapsed = collapsed ? 'true' : 'false';
+            progress.children[1].classList.toggle('hidden', collapsed);
+            results.classList.toggle('hidden', collapsed);
+            collapseButton.textContent = collapsed ? 'عرض التفاصيل' : 'تصغير';
+        });
+
+        const hideButton = document.createElement('button');
+        hideButton.type = 'button';
+        hideButton.className = 'rounded-md border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100';
+        hideButton.textContent = 'إخفاء';
+        hideButton.setAttribute('aria-label', 'إخفاء لوحة تقدم الرفع دون إيقاف العملية');
+        hideButton.addEventListener('click', () => progress.classList.add('hidden'));
+
+        controls.append(collapseButton, hideButton);
+        header.appendChild(controls);
+        progress.dataset.floatingReady = 'true';
+    }
+
+    progress.className = 'fixed bottom-4 right-4 z-[80] w-[min(92vw,24rem)] max-h-[45vh] overflow-y-auto rounded-xl bg-white border border-slate-300 p-3 text-xs space-y-2 shadow-2xl';
+    progress.dataset.collapsed = 'false';
+    progress.children[1].classList.remove('hidden');
+    results.classList.remove('hidden');
     results.innerHTML = '';
     progressText.textContent = '0 / ' + jobs.length;
     progressBar.style.width = '0%';
+    document.body.appendChild(progress);
+    progress.classList.remove('hidden');
+
+    // إغلاق نافذة اختيار الملفات بعد بدء الرفع؛ تستمر العملية في الخلفية.
+    document.getElementById('scheduleModal').classList.add('hidden');
 
     let succeeded = 0;
     const failures = [];
@@ -3241,7 +3281,6 @@ async function saveScheduleImage() {
 
     if (!failures.length) {
         fileInputs.forEach(input => { input.value = ''; });
-        setTimeout(() => document.getElementById('scheduleModal').classList.add('hidden'), 1200);
     }
 }
 
