@@ -2657,7 +2657,7 @@ function handleGoogleCredentialResponse(response) {
     }
 
     const onMessage = function(event) {
-        if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+        if (!isTrustedAppsScriptMessage(event)) return;
         const data = event.data;
         if (!data || data.type !== 'developerGoogleVerification' || data.nonce !== nonce) return;
 
