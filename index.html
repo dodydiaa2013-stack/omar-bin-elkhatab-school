@@ -1160,6 +1160,7 @@ window.addEventListener('DOMContentLoaded', () => {
     renderSchedules();
     loadSchedulesFromDrive();
     renderTabletGallery();
+    assignPageEditIds();
     loadSavedPageChanges();
     updateTeacherUI();
 });
@@ -1708,6 +1709,7 @@ window.addEventListener('DOMContentLoaded', () => {
 let pageChangesTimeout = null;
 
 function toggleLiveEditing() {
+    assignPageEditIds();
     if (!isDeveloperLoggedIn || !googleUploadToken) {
         alert("يجب تسجيل الدخول بحساب Google المصرح به لاستخدام أدوات المطور.");
         return;
@@ -1742,13 +1744,16 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-    const allowedIds = ["school-title","school-administration","home-title","results-card-title","results-card-description","support-card-title","support-card-description","schedules-card-title","schedules-card-description","tablet-title","tablet-description","server-title","tablet-support-title","schedules-title","schedules-description","alerts-title","alerts-description","republic-header","academic-year","header-manager","home-intro","footer-leadership","quick-links-title","quick-results-link","quick-tablet-link","quick-schedules-link","quick-gallery-link","quick-student-queries-link","quick-leaders-link","support-section-title","footer-manager","support-responsibles-title","support-diaa-name","support-mona-name","motto-tablet-title","motto-tablet-description","motto-dev-title","motto-dev-description","student-queries-title","student-queries-description","student-query-one-title","student-query-two-title","server-tip-1","server-tip-2","server-tip-3","server-tip-4","tablet-support-tip-1","tablet-support-tip-2","tablet-support-tip-3","tablet-support-tip-4","ticker-message-1","ticker-message-2","ticker-message-3","ticker-message-4"];
-    const changes = allowedIds.map(id => {
-        const el = document.querySelector('[data-page-edit-id="' + id + '"]');
-        return el ? { id: id, text: el.textContent.trim() } : null;
-    });
-    if (changes.some(item => !item)) {
-        alert('تعذر الحفظ: بعض عناصر النص المحددة غير موجودة في الصفحة.');
+    assignPageEditIds();
+    const editableElements = Array.from(
+        document.querySelectorAll('[data-page-edit-id]')
+    );
+    const changes = editableElements.map(el => ({
+        id: el.getAttribute('data-page-edit-id'),
+        text: el.textContent.trim()
+    })).filter(item => item.id && item.text.length <= 10000);
+    if (!changes.length) {
+        alert('لا توجد نصوص قابلة للحفظ.');
         return;
     }
     const payload = JSON.stringify({ changes });
@@ -1807,7 +1812,94 @@ window.addEventListener('message',function(event) {
 });
 
 function assignPageEditIds() {
-    // IDs ثابتة ومطابقة للقائمة المسموح بها في Code.gs.
+    // نُبقي المعرّفات اليدوية الحالية كما هي، وننشئ معرّفات ثابتة
+    // لباقي عناصر النص الثابتة القابلة للتحرير.
+    const excludedRoots = [
+        '#devControlBar',
+        '#adminModal',
+        '#scheduleModal',
+        '#content-results',
+        '#content-leaders',
+        '#content-tablet',
+        '#content-schedules',
+        '#content-alerts',
+        '#content-student-queries',
+        '#tabletGallery',
+        '#schedulesGrid',
+        '#photoAlbumsGrid',
+        '#photoAlbumViewer',
+        '#photoAlbumImagesGrid',
+        '#photoAlbumEditor',
+        '[data-page-no-auto-edit="true"]'
+    ].join(',');
+
+    function makeStableId(element, textNodeIndex) {
+        const path = [];
+        let current = element;
+        while (current && current !== document.body) {
+            let position = 1;
+            let previous = current.previousElementSibling;
+            while (previous) {
+                if (previous.tagName === current.tagName) position++;
+                previous = previous.previousElementSibling;
+            }
+            path.unshift(current.tagName.toLowerCase() + position);
+            current = current.parentElement;
+        }
+
+        const value = path.join('/') +
+            (textNodeIndex === undefined ? '' : '/text-' + textNodeIndex);
+        let hashA = 2166136261;
+        let hashB = 2246822519;
+        for (let i = 0; i < value.length; i++) {
+            const code = value.charCodeAt(i);
+            hashA = Math.imul(hashA ^ code, 16777619);
+            hashB = Math.imul(hashB ^ code, 3266489917);
+        }
+        const hex = (number) => (number >>> 0).toString(16).padStart(8, '0');
+        return 'auto-' + hex(hashA) + hex(hashB);
+    }
+
+    const usedIds = new Set(
+        Array.from(document.querySelectorAll('[data-page-edit-id]'))
+            .map(element => element.getAttribute('data-page-edit-id'))
+            .filter(Boolean)
+    );
+
+    const candidates = Array.from(document.body.querySelectorAll('*'));
+    candidates.forEach(element => {
+        if (element.hasAttribute('data-page-edit-id')) return;
+        if (element.closest(excludedRoots)) return;
+
+        const tag = element.tagName;
+        if ([
+            'SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'PATH', 'CANVAS',
+            'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'IFRAME'
+        ].includes(tag)) return;
+
+        if (element.children.length === 0) {
+            if (!element.textContent || !element.textContent.trim()) return;
+
+            const id = makeStableId(element);
+            if (usedIds.has(id)) return;
+
+            element.setAttribute('data-page-edit-id', id);
+            usedIds.add(id);
+            return;
+        }
+
+        Array.from(element.childNodes).forEach((node, index) => {
+            if (node.nodeType !== Node.TEXT_NODE || !node.nodeValue.trim()) return;
+            const id = makeStableId(element, index);
+            if (usedIds.has(id)) return;
+
+            const span = document.createElement('span');
+            span.setAttribute('data-page-edit-id', id);
+            span.textContent = node.nodeValue;
+            element.replaceChild(span, node);
+            usedIds.add(id);
+        });
+    });
 }
 
 function loadSavedPageChanges() {
