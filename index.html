@@ -192,16 +192,9 @@
         const validTabs = ['home', 'results', 'leaders', 'tablet', 'schedules', 'alerts', 'student-queries'];
         let tabId = 'home';
         try {
-            const navigationEntry = performance.getEntriesByType('navigation')[0];
-            const isRefresh = navigationEntry && navigationEntry.type === 'reload';
-
-            // عند تحديث الصفحة ابدأ من الرئيسية وأزل الهاش القديم حتى لا يعيد فتح القسم السابق.
-            if (isRefresh && window.location.hash) {
-                window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            } else {
-                const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
-                if (validTabs.includes(requested)) tabId = requested;
-            }
+            // احتفظ بالقسم الموجود في رابط الصفحة، حتى عند تحديث الصفحة (Refresh).
+            const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+            if (validTabs.includes(requested)) tabId = requested;
         } catch (_) {}
         document.documentElement.setAttribute('data-current-tab', tabId);
     })();
