@@ -1694,10 +1694,37 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         function updateTeacherUI() {
-            if (isAdminLoggedIn) {
-                document.getElementById('adminBadge').classList.remove('hidden');
-                // يظل نص الزر «تسجيل الدخول» ثابتًا؛ حالة التفعيل تظهر في شارة وضع المعلم.
-                document.getElementById('tabletTeacherUpload').classList.remove('hidden');
+            const loginButton = document.getElementById('loginBtn');
+            const loginButtonText = document.getElementById('loginBtnText');
+            const loginButtonIcon = loginButton ? loginButton.querySelector('i') : null;
+
+            if (loginButton && loginButtonText) {
+                loginButtonText.textContent = isAdminLoggedIn
+                    ? 'تم تسجيل الدخول'
+                    : 'تسجيل الدخول';
+                loginButton.setAttribute(
+                    'aria-label',
+                    isAdminLoggedIn ? 'المسؤول مسجل الدخول' : 'تسجيل الدخول'
+                );
+                loginButton.title = isAdminLoggedIn
+                    ? 'المسؤول مسجل الدخول'
+                    : 'تسجيل الدخول';
+            }
+
+            if (loginButtonIcon) {
+                loginButtonIcon.className = isAdminLoggedIn
+                    ? 'fa-solid fa-user-check'
+                    : 'fa-solid fa-key';
+            }
+
+            const adminBadge = document.getElementById('adminBadge');
+            if (adminBadge) {
+                adminBadge.classList.toggle('hidden', !isAdminLoggedIn);
+            }
+
+            const teacherUpload = document.getElementById('tabletTeacherUpload');
+            if (teacherUpload) {
+                teacherUpload.classList.toggle('hidden', !isAdminLoggedIn);
             }
 
             const canManage = hasDualAdminAuthorization();
