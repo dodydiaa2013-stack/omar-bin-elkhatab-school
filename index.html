@@ -1,8 +1,15 @@
 ﻿<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-page-edits-pending="true">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* امنع وميض النص الافتراضي قبل استرجاع النصوص المحفوظة لقسم التطوير والتابلت. */
+        html[data-page-edits-pending="true"] [data-page-edit-id="tablet-title"],
+        html[data-page-edits-pending="true"] [data-page-edit-id="tablet-description"] {
+            visibility: hidden !important;
+        }
+    </style>
     <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
     <meta name="theme-color" content="#0B132B">
     <meta name="robots" content="index, follow, max-image-preview:large">
@@ -1232,7 +1239,10 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
-    applyCachedPageChanges();
+    const hasCachedPageChanges = applyCachedPageChanges();
+    if (hasCachedPageChanges) {
+        document.documentElement.removeAttribute("data-page-edits-pending");
+    }
     loadSavedPageChanges();
     updateTeacherUI();
 });
@@ -2071,13 +2081,14 @@ function applyPageChangesList(changes) {
 function applyCachedPageChanges() {
     try {
         const cached = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (!cached) return;
+        if (!cached) return false;
         const parsed = JSON.parse(cached);
-        if (parsed && Array.isArray(parsed.changes)) {
-            applyPageChangesList(parsed.changes);
-        }
+        if (!parsed || !Array.isArray(parsed.changes)) return false;
+        applyPageChangesList(parsed.changes);
+        return true;
     } catch (error) {
         console.warn("تعذر تطبيق النسخة المحلية من تعديلات النصوص.", error);
+        return false;
     }
 }
 
@@ -2110,10 +2121,13 @@ function loadSavedPageChanges() {
 
     script.onerror = () => {
         console.error("تعذر تحميل تعديلات نصوص الموقع؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
+        document.documentElement.removeAttribute("data-page-edits-pending");
         script.remove();
     };
 
     script.onload = () => {
+        // إذا لم يرسل الخادم بيانات صالحة، أظهر النص الافتراضي بدل ترك العنوان مخفيًا.
+        document.documentElement.removeAttribute("data-page-edits-pending");
         script.remove();
     };
 
