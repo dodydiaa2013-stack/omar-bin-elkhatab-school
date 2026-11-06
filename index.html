@@ -28,7 +28,7 @@
         }
     </style>
     <style>
-        html.page-changes-loading [data-page-edit-id] { visibility: hidden; }
+        /* Keep the published text visible while saved edits are fetched. */
 
         .content-sortable-card { transition: transform .16s ease, opacity .16s ease, outline-color .16s ease; }
         .content-drag-handle { touch-action: none; }
@@ -3099,7 +3099,9 @@ async function deleteScheduleImage(cls) {
         const PHOTO_ALBUMS_SCRIPT_URL = GOOGLE_SCRIPT_URL;
         let photoAlbumsCache = [];
         let photoAlbumsLoadedOnce = false;
+        let photoAlbumsFreshFetched = false;
         let photoAlbumsLoadPromise = null;
+        const PHOTO_ALBUMS_CACHE_KEY = 'obk_photo_albums_cache_v1';
         let currentPhotoAlbumId = null;
         let photoAlbumEditId = null;
 
@@ -3447,40 +3449,96 @@ async function deleteScheduleImage(cls) {
             });
         }
 
-        async function loadPhotoAlbums(force = true) {
-    const status = document.getElementById('photoAlbumsStatus');
-    const grid = document.getElementById('photoAlbumsGrid');
-    if (!status || !grid) return;
-
-    if (!force && photoAlbumsLoadedOnce) return photoAlbumsCache;
-    if (photoAlbumsLoadPromise) return photoAlbumsLoadPromise;
-
-    status.textContent = 'جارٍ تحميل ألبومات الصور...';
-    photoAlbumsLoadPromise = (async () => {
-        try {
-            const albums = await fetchPhotoAlbumsSnapshot();
-            photoAlbumsCache = albums;
-            photoAlbumsLoadedOnce = true;
-            renderPhotoAlbums();
-            status.textContent = albums.length
-                ? 'اختر ألبومًا لعرض الصور بداخله.'
-                : 'لا توجد ألبومات حتى الآن. يمكن للمعلم إضافة أول ألبوم.';
-            return albums;
-        } catch (error) {
-            // يظل القسم قابلاً لإعادة المحاولة عند فتحه مرة أخرى.
-            photoAlbumsLoadedOnce = false;
-            status.textContent = error.message + ' بعد تفعيل وظائف الألبومات في Apps Script سيظهر المعرض هنا.';
-            grid.innerHTML = '';
-            return null;
+        function readPhotoAlbumsLocalCache() {
+            try {
+                const raw = localStorage.getItem(PHOTO_ALBUMS_CACHE_KEY);
+                if (!raw) return null;
+                const albums = JSON.parse(raw);
+                if (!Array.isArray(albums)) return null;
+                return albums.filter(album => album && album.id != null);
+            } catch (error) {
+                console.warn('تعذر قراءة النسخة المحلية من الألبومات:', error);
+                return null;
+            }
         }
-    })();
 
-    try {
-        return await photoAlbumsLoadPromise;
-    } finally {
-        photoAlbumsLoadPromise = null;
-    }
-}
+        function savePhotoAlbumsLocalCache(albums) {
+            try {
+                // Cache only the album cards' metadata; image lists are fetched when an album opens.
+                const compact = (Array.isArray(albums) ? albums : []).map(album => ({
+                    id: album.id,
+                    title: String(album.title || ''),
+                    description: String(album.description || ''),
+                    coverUrl: String(album.coverUrl || ''),
+                    imageCount: Array.isArray(album.images)
+                        ? album.images.length
+                        : Math.max(0, Number(album.imageCount) || 0)
+                }));
+                localStorage.setItem(PHOTO_ALBUMS_CACHE_KEY, JSON.stringify(compact));
+                return true;
+            } catch (error) {
+                // A full browser storage quota must not block the live album request.
+                console.warn('تعذر حفظ النسخة المحلية من الألبومات:', error);
+                return false;
+            }
+        }
+
+        async function loadPhotoAlbums(force = true) {
+            const status = document.getElementById('photoAlbumsStatus');
+            const grid = document.getElementById('photoAlbumsGrid');
+            if (!status || !grid) return;
+
+            if (photoAlbumsLoadPromise) return photoAlbumsLoadPromise;
+
+            // Show the last saved album cards immediately, then refresh them from Drive.
+            if (!force && !photoAlbumsLoadedOnce) {
+                const cachedAlbums = readPhotoAlbumsLocalCache();
+                if (cachedAlbums) {
+                    photoAlbumsCache = cachedAlbums;
+                    photoAlbumsLoadedOnce = true;
+                    renderPhotoAlbums();
+                    status.textContent = 'تم عرض آخر نسخة محفوظة من الألبومات؛ جارٍ التحقق من التحديثات...';
+                }
+            }
+
+            if (!force && photoAlbumsFreshFetched) return photoAlbumsCache;
+
+            if (!photoAlbumsLoadedOnce || !photoAlbumsCache.length) {
+                status.textContent = 'جارٍ تحميل ألبومات الصور...';
+            } else {
+                status.textContent = 'جارٍ تحديث الألبومات...';
+            }
+
+            photoAlbumsLoadPromise = (async () => {
+                try {
+                    const albums = await fetchPhotoAlbumsSnapshot();
+                    photoAlbumsCache = albums;
+                    photoAlbumsLoadedOnce = true;
+                    photoAlbumsFreshFetched = true;
+                    savePhotoAlbumsLocalCache(albums);
+                    renderPhotoAlbums();
+                    status.textContent = albums.length
+                        ? 'اختر ألبومًا لعرض الصور بداخله.'
+                        : 'لا توجد ألبومات حتى الآن. يمكن للمعلم إضافة أول ألبوم.';
+                    return albums;
+                } catch (error) {
+                    photoAlbumsFreshFetched = false;
+                    if (photoAlbumsLoadedOnce) {
+                        status.textContent = 'تعذر تحديث الألبومات الآن؛ يتم عرض آخر نسخة محفوظة. ' + error.message;
+                    } else {
+                        status.textContent = error.message + ' بعد تفعيل وظائف الألبومات في Apps Script سيظهر المعرض هنا.';
+                        grid.innerHTML = '';
+                    }
+                    return null;
+                }
+            })();
+
+            try {
+                return await photoAlbumsLoadPromise;
+            } finally {
+                photoAlbumsLoadPromise = null;
+            }
+        }
 
 async function refreshPhotoAlbums(button) {
             const oldHtml = button ? button.innerHTML : '';
@@ -3518,7 +3576,7 @@ async function refreshPhotoAlbums(button) {
                     <button type="button" class="block w-full text-right" onclick="openPhotoAlbum('${photoAlbumEscape(album.id)}')">
                         <div class="relative overflow-hidden bg-slate-100">
                             <img decoding="async" src="${photoAlbumEscape(cover)}" alt="${photoAlbumEscape(album.title)}" loading="lazy" class="w-full h-48 object-cover group-hover:scale-105 transition duration-300">
-                            <span class="absolute bottom-3 right-3 bg-navy/90 text-white text-[11px] px-3 py-1 rounded-full">${Number((album.images || []).length)} صورة</span>
+                            <span class="absolute bottom-3 right-3 bg-navy/90 text-white text-[11px] px-3 py-1 rounded-full">${Number(Array.isArray(album.images) ? album.images.length : (album.imageCount || 0))} صورة</span>
                         </div>
                         <div class="p-4">
                             <h3 class="font-extrabold text-navy text-base">${photoAlbumEscape(album.title)}</h3>
@@ -3618,20 +3676,45 @@ async function refreshPhotoAlbums(button) {
             finally { button.disabled = false; }
         }
 
-        function openPhotoAlbum(albumId) {
-            const album = photoAlbumsCache.find(item => String(item.id) === String(albumId));
+        async function openPhotoAlbum(albumId) {
+            let album = photoAlbumsCache.find(item => String(item.id) === String(albumId));
             if (!album) return;
+
             currentPhotoAlbumId = album.id;
+            const viewer = document.getElementById('photoAlbumViewer');
+            const grid = document.getElementById('photoAlbumImagesGrid');
             document.getElementById('photoAlbumViewerTitle').textContent = album.title || 'ألبوم الصور';
             document.getElementById('photoAlbumViewerMeta').textContent = album.description || '';
-            document.getElementById('photoAlbumViewer').classList.remove('hidden');
+            viewer.classList.remove('hidden');
             document.getElementById('photoAlbumsGrid').classList.add('hidden');
             document.getElementById('photoAlbumsStatus').classList.add('hidden');
             document.getElementById('photoAlbumActions').classList.toggle('hidden', !hasDualAdminAuthorization());
             const imageManagement = document.getElementById('albumImagesManagement');
             if (imageManagement) imageManagement.classList.toggle('hidden', !hasDualAdminAuthorization());
+
+            if (!Array.isArray(album.images)) {
+                grid.innerHTML = '<p class="col-span-full py-8 text-center text-slate-500">جارٍ تحميل صور الألبوم...</p>';
+                try {
+                    const albums = await fetchPhotoAlbumsSnapshot();
+                    photoAlbumsCache = albums;
+                    photoAlbumsLoadedOnce = true;
+                    photoAlbumsFreshFetched = true;
+                    savePhotoAlbumsLocalCache(albums);
+                    renderPhotoAlbums();
+                    album = photoAlbumsCache.find(item => String(item.id) === String(albumId));
+                    if (!album) throw new Error('الألبوم لم يعد موجودًا.');
+                    document.getElementById('photoAlbumViewerTitle').textContent = album.title || 'ألبوم الصور';
+                    document.getElementById('photoAlbumViewerMeta').textContent = album.description || '';
+                } catch (error) {
+                    grid.innerHTML = '<p class="col-span-full py-8 text-center text-red-600">' +
+                        photoAlbumEscape(error.message || 'تعذر تحميل صور الألبوم.') + '</p>';
+                    viewer.scrollIntoView({behavior:'smooth',block:'start'});
+                    return;
+                }
+            }
+
             renderPhotoAlbumImages(album);
-            document.getElementById('photoAlbumViewer').scrollIntoView({behavior:'smooth',block:'start'});
+            viewer.scrollIntoView({behavior:'smooth',block:'start'});
         }
 
         function closePhotoAlbumViewer() {
