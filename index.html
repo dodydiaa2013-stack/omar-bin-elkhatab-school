@@ -186,16 +186,22 @@
     html[data-current-tab="alerts"] #content-alerts,
     html[data-current-tab="student-queries"] #content-student-queries { display: block !important; }
 
-    /* اخفِ التذييل والشريط السفلي حتى يثبت القسم المطلوب بعد التحديث. */
-    html:not([data-tab-ready="true"]) footer { visibility: hidden !important; }
 </style>
 <script>
     (() => {
         const validTabs = ['home', 'results', 'leaders', 'tablet', 'schedules', 'alerts', 'student-queries'];
         let tabId = 'home';
         try {
-            const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
-            if (validTabs.includes(requested)) tabId = requested;
+            const navigationEntry = performance.getEntriesByType('navigation')[0];
+            const isRefresh = navigationEntry && navigationEntry.type === 'reload';
+
+            // عند تحديث الصفحة ابدأ من الرئيسية وأزل الهاش القديم حتى لا يعيد فتح القسم السابق.
+            if (isRefresh && window.location.hash) {
+                window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            } else {
+                const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+                if (validTabs.includes(requested)) tabId = requested;
+            }
         } catch (_) {}
         document.documentElement.setAttribute('data-current-tab', tabId);
     })();
@@ -1448,8 +1454,6 @@ window.addEventListener('DOMContentLoaded', () => {
             }
             if (tabId === 'alerts') loadPhotoAlbums(false);
 
-            // أظهر التذييل بعد تطبيق القسم الصحيح، وليس أثناء تحميل الصفحة الأولي.
-            document.documentElement.setAttribute('data-tab-ready', 'true');
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
             if (options.focus !== false) {
