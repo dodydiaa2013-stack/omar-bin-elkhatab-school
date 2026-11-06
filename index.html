@@ -3697,6 +3697,8 @@ async function deleteScheduleImage(cls) {
             const statusId = scope === 'gallery' ? 'googleSignInStatus'
                 : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
             const status = document.getElementById(statusId);
+
+            // Keep the server deletion result separate from the subsequent UI refresh.
             try {
                 if (status) status.textContent = 'جارٍ حذف العناصر المحددة...';
                 await photoAlbumPost('bulkDeletePhotoContent', {
@@ -3704,7 +3706,19 @@ async function deleteScheduleImage(cls) {
                     albumId: albumId,
                     ids: JSON.stringify(ids)
                 });
-                imageContentSelections[scope].clear();
+            } catch (error) {
+                if (status) status.textContent = 'تعذر حذف العناصر المحددة: ' + error.message;
+                alert('تعذر حذف العناصر المحددة: ' + error.message);
+                return;
+            }
+
+            // The server has confirmed deletion. Never report deletion failure
+            // merely because refreshing the visible list fails afterward.
+            imageContentSelections[scope].clear();
+            if (status) status.textContent = 'تم حذف العناصر المحددة ونقلها إلى سلة مهملات Google Drive.';
+            contentSelectionStatus(scope);
+
+            try {
                 if (scope === 'gallery') {
                     const images = await fetchTabletGalleryImages();
                     tabletGalleryCache = images;
@@ -3716,11 +3730,11 @@ async function deleteScheduleImage(cls) {
                         if (album) openPhotoAlbum(album.id);
                     }
                 }
-                if (status) status.textContent = 'تم حذف العناصر المحددة ونقلها إلى سلة مهملات Google Drive.';
-                contentSelectionStatus(scope);
-            } catch (error) {
-                if (status) status.textContent = 'تعذر إكمال الحذف الجماعي: ' + error.message;
-                alert('تعذر حذف العناصر المحددة: ' + error.message);
+            } catch (refreshError) {
+                console.error('تم الحذف بنجاح، لكن تعذر تحديث عرض المحتوى:', refreshError);
+                if (status) {
+                    status.textContent = 'تم الحذف بنجاح، لكن تعذر تحديث العرض الآن. أعد تحميل القسم لرؤية التغييرات.';
+                }
             }
         }
 
