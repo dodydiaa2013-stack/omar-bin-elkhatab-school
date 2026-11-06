@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
     <meta name="theme-color" content="#0B132B">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="مدرسة عمر بن الخطاب الثانوية بنين">
+    <meta name="twitter:description" content="الموقع الرسمي للمدرسة وأخبارها ونتائج الطلاب وقوائم الفصول والأنشطة.">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "School",
+      "name": "مدرسة عمر بن الخطاب الثانوية بنين",
+      "url": "https://dodydiaa2013-stack.github.io/omar-bin-elkhatab-school/",
+      "description": "الموقع الرسمي لمدرسة عمر بن الخطاب الثانوية بنين بإدارة المستقبل التعليمية بمحافظة القاهرة.",
+      "address": {"@type": "PostalAddress", "addressLocality": "القاهرة", "addressCountry": "EG"}
+    }
+    </script>
     <meta property="og:type" content="website">
     <meta property="og:locale" content="ar_EG">
     <meta property="og:title" content="مدرسة عمر بن الخطاب الثانوية بنين">
@@ -154,6 +168,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:right-3 focus:z-[200] focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:font-bold focus:text-navy focus:shadow-xl">تخطي إلى المحتوى</a>
 
     <!-- Developer Live Control Bar (يظهر فقط عند تفعيل وضع المعلم) -->
     <div id="devControlBar" class="hidden bg-amber-500 text-navy px-4 py-2 flex flex-wrap justify-between items-center text-xs font-bold shadow-md sticky top-0 z-50" style="display: none;">
@@ -715,19 +730,19 @@
             <div class="space-y-3">
                 <h4 data-page-edit-id="quick-links-title" class="text-lg font-bold text-gold">روابط سريعة</h4>
                 <ul class="text-xs text-slate-300 space-y-2">
-                    <li><a data-page-edit-id="quick-results-link" href="#" onclick="switchTab('results')" class="hover:text-gold">استعلام نتائج الطلاب</a></li>
+                    <li><a data-page-edit-id="quick-results-link" href="#results" onclick="event.preventDefault(); switchTab('results') " class="hover:text-gold">استعلام نتائج الطلاب</a></li>
                     <li>
   <a data-page-edit-id="quick-leaders-link"
-     href="#"
-     onclick="switchTab('leaders')"
+     href="#leaders"
+     onclick="event.preventDefault(); switchTab('leaders') "
      class="hover:text-gold">
      🏆 أوائل المدرسة
   </a>
 </li>
-                    <li><a data-page-edit-id="quick-tablet-link" href="#" onclick="switchTab('tablet')" class="hover:text-gold">قسم التطوير والتابلت</a></li>
-                    <li><a data-page-edit-id="quick-schedules-link" href="#" onclick="switchTab('schedules')" class="hover:text-gold">قوائم الفصول الدراسية</a></li>
-                    <li><a data-page-edit-id="quick-gallery-link" href="#" onclick="switchTab('alerts')" class="hover:text-gold">معرض الصور والأنشطة</a></li>
-                    <li><a data-page-edit-id="quick-student-queries-link" href="#" onclick="switchTab('student-queries')" class="hover:text-gold">استعلامات طلابية</a></li>
+                    <li><a data-page-edit-id="quick-tablet-link" href="#tablet" onclick="event.preventDefault(); switchTab('tablet') " class="hover:text-gold">قسم التطوير والتابلت</a></li>
+                    <li><a data-page-edit-id="quick-schedules-link" href="#schedules" onclick="event.preventDefault(); switchTab('schedules') " class="hover:text-gold">قوائم الفصول الدراسية</a></li>
+                    <li><a data-page-edit-id="quick-gallery-link" href="#alerts" onclick="event.preventDefault(); switchTab('alerts') " class="hover:text-gold">معرض الصور والأنشطة</a></li>
+                    <li><a data-page-edit-id="quick-student-queries-link" href="#student-queries" onclick="event.preventDefault(); switchTab('student-queries') " class="hover:text-gold">استعلامات طلابية</a></li>
                 </ul>
             </div>
             <div class="space-y-3">
@@ -748,7 +763,7 @@
     <!-- TEACHER LOGIN MODAL -->
     <div id="adminModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-2 border-gold space-y-5 relative">
-            <button onclick="toggleAdminModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
+            <button type="button" aria-label="إغلاق نافذة تسجيل الدخول" onclick="toggleAdminModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
                 <i class="fa-solid fa-xmark text-xl"></i>
             </button>
             <div class="text-center space-y-2">
@@ -759,7 +774,7 @@
                 <p class="text-xs text-slate-500">أدخل الرقم السري لتفعيل لوحة التعديل ورفع النتائج</p>
             </div>
             <div class="space-y-3">
-                <input type="password" id="adminPasswordInput" placeholder="أدخل الرقم السري هنا..." 
+                <input type="password" id="adminPasswordInput" aria-label="كلمة مرور المسؤول" autocomplete="current-password" placeholder="أدخل الرقم السري هنا..." 
                        onkeydown="if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); verifyAdminPassword(); }"
                        class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800 focus:ring-2 focus:ring-gold outline-none">
                 <div id="adminErrorMsg" class="text-xs text-red-600 text-center hidden font-bold">الرقم السري غير صحيح! حاول مرة أخرى.</div>
@@ -782,12 +797,12 @@
                     <button type="button" id="recoverySendButton" onclick="requestPasswordRecovery()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">إرسال رمز التحقق</button>
                 </div>
                 <div id="recoveryStepVerify" class="hidden space-y-3">
-                    <input id="recoveryCodeInput" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="أدخل رمز التحقق المكوّن من 6 أرقام" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
+                    <input id="recoveryCodeInput" type="text" aria-label="رمز التحقق المكوّن من ستة أرقام" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="أدخل رمز التحقق المكوّن من 6 أرقام" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
                     <button type="button" id="recoveryVerifyButton" onclick="verifyPasswordRecoveryCode()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">التحقق من الرمز</button>
                 </div>
                 <div id="recoveryStepReset" class="hidden space-y-3">
-                    <input id="recoveryNewPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="كلمة المرور الجديدة (12 حرفًا على الأقل)" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
-                    <input id="recoveryConfirmPassword" type="password" autocomplete="new-password" minlength="12" maxlength="128" placeholder="أعد كتابة كلمة المرور الجديدة" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
+                    <input id="recoveryNewPassword" type="password" aria-label="كلمة المرور الجديدة" autocomplete="new-password" minlength="12" maxlength="128" placeholder="كلمة المرور الجديدة (12 حرفًا على الأقل)" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
+                    <input id="recoveryConfirmPassword" type="password" aria-label="تأكيد كلمة المرور الجديدة" autocomplete="new-password" minlength="12" maxlength="128" placeholder="أعد كتابة كلمة المرور الجديدة" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
                     <button type="button" id="recoveryResetButton" onclick="resetAdminPassword()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl transition">حفظ كلمة المرور الجديدة</button>
                 </div>
                 <div id="recoveryMessage" role="status" aria-live="polite" class="text-xs text-center font-bold"></div>
@@ -857,8 +872,11 @@
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
 
         // معاينة الصور داخل الموقع مع تكبير مستقل للصورة دون تكبير صفحة الموقع.
+        let schoolImageViewerReturnFocus = null;
+
         function openSchoolImageViewer(imageUrl, imageTitle) {
-            if (!imageUrl) return;
+            const safeImageUrl = getSafeHttpsUrl(imageUrl);
+            if (!safeImageUrl) return;
             let viewer = document.getElementById('schoolImageViewer');
             if (!viewer) {
                 viewer = document.createElement('div');
@@ -1046,7 +1064,22 @@
                 });
                 viewer.querySelector('#schoolImageViewerClose').addEventListener('click', closeSchoolImageViewer);
                 document.addEventListener('keydown', event => {
-                    if (event.key === 'Escape') closeSchoolImageViewer();
+                    if (viewer.classList.contains('hidden')) return;
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        closeSchoolImageViewer();
+                        return;
+                    }
+                    if (event.key !== 'Tab') return;
+                    const focusable = Array.from(viewer.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+                        .filter(element => element.getClientRects().length > 0);
+                    if (!focusable.length) { event.preventDefault(); return; }
+                    const first = focusable[0], last = focusable[focusable.length - 1];
+                    if (event.shiftKey && (document.activeElement === first || !viewer.contains(document.activeElement))) {
+                        event.preventDefault(); last.focus();
+                    } else if (!event.shiftKey && (document.activeElement === last || !viewer.contains(document.activeElement))) {
+                        event.preventDefault(); first.focus();
+                    }
                 });
                 window.addEventListener('resize', () => {
                     if (!viewer.classList.contains('hidden')) viewer._applyZoom();
@@ -1054,13 +1087,17 @@
                 document.body.appendChild(viewer);
             }
             const image = viewer.querySelector('#schoolImageViewerImage');
+            if (viewer.classList.contains('hidden')) {
+                schoolImageViewerReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            }
             image.alt = imageTitle || 'صورة من موقع المدرسة';
             viewer.querySelector('#schoolImageViewerTitle').textContent = imageTitle || 'معاينة الصورة';
             viewer._zoom = 1;
-            image.src = imageUrl;
+            image.src = safeImageUrl;
             viewer.classList.remove('hidden');
             viewer.classList.add('flex');
             document.body.classList.add('overflow-hidden');
+            viewer.querySelector('#schoolImageViewerClose').focus();
             if (image.complete && image.naturalWidth) viewer._applyZoom();
         }
 
@@ -1072,6 +1109,11 @@
             const image = viewer.querySelector('#schoolImageViewerImage');
             if (image) image.removeAttribute('src');
             document.body.classList.remove('overflow-hidden');
+            const returnFocus = schoolImageViewerReturnFocus;
+            schoolImageViewerReturnFocus = null;
+            if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') {
+                returnFocus.focus({ preventScroll: true });
+            }
         }
 
 
@@ -1390,7 +1432,7 @@ window.addEventListener('DOMContentLoaded', () => {
         : String(Date.now()) + Math.random().toString(36).slice(2);
 
     const handleMessage = function(event) {
-
+        if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
         const data = event.data;
 
         if (!data || data.type !== 'adminLoginResult' || data.nonce !== nonce) {
@@ -1495,8 +1537,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     : String(Date.now()) + Math.random().toString(36).slice(2);
 
                 const handleMessage = function(event) {
-                    if (event.origin !== 'https://script.google.com' &&
-                        !event.origin.endsWith('.googleusercontent.com')) return;
+                    if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
                     const data = event.data;
                     if (!data || data.type !== 'passwordRecoveryResult' || data.nonce !== nonce) return;
                     window.removeEventListener('message', handleMessage);
@@ -1747,7 +1788,8 @@ async function saveAllPageChanges() {
 }
 
 window.addEventListener('message',function(event) {
-    if (!isTrustedAppsScriptMessage(event)) return;
+    const responseFrame = document.getElementById('pageChangesUploadFrame');
+    if (!responseFrame || !isTrustedAppsScriptMessage(event, responseFrame.contentWindow)) return;
     const data=event.data;
     if(!data || data.type!=='savePageChangesResult' || !pendingPageChangesNonce || data.nonce!==pendingPageChangesNonce) return;
     clearTimeout(pageChangesTimeout); pendingPageChangesNonce=null;
@@ -2375,7 +2417,7 @@ async function galleryUploadPost(fields, baselineImages) {
         };
 
         const onMessage = event => {
-            if (!isTrustedAppsScriptMessage(event)) return;
+            if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
             const message = event.data;
             if (!message || message.type !== 'galleryUploadResult' || message.nonce !== nonce) return;
             acceptResult(message.result);
@@ -2837,7 +2879,7 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
             callback(value);
         };
         const onMessage = event => {
-            if (!isTrustedAppsScriptMessage(event)) return;
+            if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
             const message = event.data;
             if (!message || message.type !== 'scheduleUploadResult' || message.nonce !== nonce) return;
             if (message.result && message.result.success) {
@@ -3478,7 +3520,7 @@ async function deleteScheduleImage(cls) {
                 };
                 const finish = (fn, value) => { if (settled) return; settled = true; cleanup(); fn(value); };
                 const onMessage = event => {
-                    if (!isTrustedAppsScriptMessage(event)) return;
+                    if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
                     const msg = event.data;
                     if (!msg || msg.type !== 'photoAlbumResult' || msg.nonce !== nonce) return;
                     if (msg.result && msg.result.success) finish(resolve, msg.result);
@@ -3621,7 +3663,7 @@ async function refreshPhotoAlbums(button) {
                 const card = document.createElement('article');
                 const id = String(album.id);
                 card.className = 'bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-lg transition group';
-                const cover = album.coverUrl || photoAlbumPlaceholder(album.title);
+                const cover = getSafeHttpsUrl(album.coverUrl) || photoAlbumPlaceholder(album.title);
                 card.innerHTML = `
                     <button type="button" class="block w-full text-right" onclick="openPhotoAlbum('${photoAlbumEscape(album.id)}')">
                         <div class="relative overflow-hidden bg-slate-100">
@@ -3822,7 +3864,7 @@ async function refreshPhotoAlbums(button) {
                 }
                 grid.appendChild(card);
                 const previewButton = card.querySelector('.photo-album-image-preview');
-                if (previewButton) previewButton.addEventListener('click', () => openSchoolImageViewer(image.url, image.name || ('صورة ' + (index + 1))));
+                if (previewButton) previewButton.addEventListener('click', () => openSchoolImageViewer(safeImageUrl, image.name || ('صورة ' + (index + 1))));
             });
             if (!grid.children.length) grid.innerHTML = '<p class="col-span-full text-center text-sm text-slate-400 py-8">لا توجد صور داخل هذا الألبوم حتى الآن.</p>';
             contentSelectionStatus('albumImages');
