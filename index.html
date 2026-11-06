@@ -1445,7 +1445,11 @@ window.addEventListener('DOMContentLoaded', () => {
         : String(Date.now()) + Math.random().toString(36).slice(2);
 
     const handleMessage = function(event) {
-        if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+        // Apps Script HtmlService wraps the returned HTML in its own sandboxFrame.
+        // The postMessage source is therefore the nested Google iframe, not the outer
+        // adminLoginFrame. Validate the trusted Google origin here and bind the reply
+        // to this request with the unpredictable nonce below.
+        if (!isTrustedAppsScriptMessage(event)) return;
         const data = event.data;
 
         if (!data || data.type !== 'adminLoginResult' || data.nonce !== nonce) {
