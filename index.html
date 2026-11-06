@@ -730,19 +730,19 @@
             <div class="space-y-3">
                 <h4 data-page-edit-id="quick-links-title" class="text-lg font-bold text-gold">روابط سريعة</h4>
                 <ul class="text-xs text-slate-300 space-y-2">
-                    <li><a data-page-edit-id="quick-results-link" href="#results" onclick="event.preventDefault(); switchTab('results') " class="hover:text-gold">استعلام نتائج الطلاب</a></li>
+                    <li><a data-page-edit-id="quick-results-link" href="#results" onclick="event.preventDefault(); switchTab('results')" class="hover:text-gold">استعلام نتائج الطلاب</a></li>
                     <li>
   <a data-page-edit-id="quick-leaders-link"
      href="#leaders"
-     onclick="event.preventDefault(); switchTab('leaders') "
+     onclick="event.preventDefault(); switchTab('leaders')"
      class="hover:text-gold">
      🏆 أوائل المدرسة
   </a>
 </li>
-                    <li><a data-page-edit-id="quick-tablet-link" href="#tablet" onclick="event.preventDefault(); switchTab('tablet') " class="hover:text-gold">قسم التطوير والتابلت</a></li>
-                    <li><a data-page-edit-id="quick-schedules-link" href="#schedules" onclick="event.preventDefault(); switchTab('schedules') " class="hover:text-gold">قوائم الفصول الدراسية</a></li>
-                    <li><a data-page-edit-id="quick-gallery-link" href="#alerts" onclick="event.preventDefault(); switchTab('alerts') " class="hover:text-gold">معرض الصور والأنشطة</a></li>
-                    <li><a data-page-edit-id="quick-student-queries-link" href="#student-queries" onclick="event.preventDefault(); switchTab('student-queries') " class="hover:text-gold">استعلامات طلابية</a></li>
+                    <li><a data-page-edit-id="quick-tablet-link" href="#tablet" onclick="event.preventDefault(); switchTab('tablet')" class="hover:text-gold">قسم التطوير والتابلت</a></li>
+                    <li><a data-page-edit-id="quick-schedules-link" href="#schedules" onclick="event.preventDefault(); switchTab('schedules')" class="hover:text-gold">قوائم الفصول الدراسية</a></li>
+                    <li><a data-page-edit-id="quick-gallery-link" href="#alerts" onclick="event.preventDefault(); switchTab('alerts')" class="hover:text-gold">معرض الصور والأنشطة</a></li>
+                    <li><a data-page-edit-id="quick-student-queries-link" href="#student-queries" onclick="event.preventDefault(); switchTab('student-queries')" class="hover:text-gold">استعلامات طلابية</a></li>
                 </ul>
             </div>
             <div class="space-y-3">
@@ -2521,7 +2521,7 @@ function handleGoogleCredentialResponse(response) {
     }
 
     const onMessage = function(event) {
-        if (!isTrustedAppsScriptMessage(event)) return;
+        if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
         const data = event.data;
         if (!data || data.type !== 'developerGoogleVerification' || data.nonce !== nonce) return;
 
