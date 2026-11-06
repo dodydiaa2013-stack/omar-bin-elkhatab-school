@@ -2188,7 +2188,7 @@ async function uploadTabletImage() {
             console.warn('تعذر جلب المعرض قبل الرفع؛ سيعتمد التأكيد على رد الخادم:', snapshotError);
         }
 
-        const data = await readScheduleFileAsBase64(file);
+        const data = await prepareImageUploadData(file, readScheduleFileAsBase64);
         await galleryUploadPost({
             fileName: file.name,
             mimeType: file.type,
@@ -2681,6 +2681,56 @@ function readScheduleFileAsBase64(file) {
     });
 }
 
+// ضغط JPEG محليًا قبل الإرسال لتقليل حجم البيانات؛ الأنواع الأخرى تُرسل كما هي.
+async function prepareImageUploadData(file, readAsBase64) {
+    if (!file || file.type !== 'image/jpeg' || file.size < 200 * 1024) {
+        return readAsBase64(file);
+    }
+
+    let bitmap = null;
+    let objectUrl = '';
+    try {
+        let source;
+        if (typeof createImageBitmap === 'function') {
+            bitmap = await createImageBitmap(file);
+            source = bitmap;
+        } else {
+            objectUrl = URL.createObjectURL(file);
+            source = await new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error('تعذر تجهيز صورة JPEG للضغط.'));
+                image.src = objectUrl;
+            });
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = source.width || source.naturalWidth;
+        canvas.height = source.height || source.naturalHeight;
+        const context = canvas.getContext('2d');
+        if (!context || !canvas.width || !canvas.height) {
+            throw new Error('تعذر إنشاء مساحة ضغط الصورة.');
+        }
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+
+        const compressedBlob = await new Promise(resolve => {
+            canvas.toBlob(resolve, 'image/jpeg', 0.90);
+        });
+
+        // لا نستبدل الأصل إذا لم ينتج الضغط ملفًا أصغر بوضوح.
+        if (compressedBlob && compressedBlob.size < file.size * 0.98) {
+            return await readAsBase64(compressedBlob);
+        }
+    } catch (error) {
+        console.warn('تعذر ضغط JPEG؛ سيتم إرسال الصورة الأصلية:', error);
+    } finally {
+        if (bitmap && typeof bitmap.close === 'function') bitmap.close();
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+
+    return readAsBase64(file);
+}
+
 function uploadOneScheduleFile(file, className, index, preparedData) {
     const dataPromise = preparedData ? Promise.resolve(preparedData) : readScheduleFileAsBase64(file);
     return dataPromise.then(data => new Promise((resolve, reject) => {
@@ -2809,7 +2859,7 @@ async function saveScheduleImage() {
     let preparedImages;
     try {
         preparedImages = await Promise.all(
-            jobs.map(job => readScheduleFileAsBase64(job.file))
+            jobs.map(job => prepareImageUploadData(job.file, readScheduleFileAsBase64))
         );
     } catch (error) {
         status.textContent = 'تعذر تجهيز الصور للإرسال.';
@@ -3535,7 +3585,7 @@ async function refreshPhotoAlbums(button) {
             button.disabled = true; status.textContent = 'جارٍ حفظ بيانات الألبوم...';
             try {
                 const fields = { albumId: photoAlbumEditId || '', title, description };
-                if (cover) { fields.coverName = cover.name; fields.coverMimeType = cover.type; fields.coverData = await photoAlbumReadFile(cover); }
+                if (cover) { fields.coverName = cover.name; fields.coverMimeType = cover.type; fields.coverData = await prepareImageUploadData(cover, photoAlbumReadFile); }
                 await photoAlbumPost(photoAlbumEditId ? 'updatePhotoAlbum' : 'createPhotoAlbum', fields);
                 const operationLabel = photoAlbumEditId ? 'تم حفظ تعديلات الألبوم بنجاح.' : 'تم إنشاء الألبوم وحفظه بنجاح.';
                 const albumsStatus = document.getElementById('photoAlbumsStatus');
@@ -3691,7 +3741,7 @@ async function refreshPhotoAlbums(button) {
             if (status) status.textContent = 'جارٍ رفع الصورة ' + (index + 1) + ' من ' + files.length + ': ' + file.name;
 
             try {
-                const data = await photoAlbumReadFile(file);
+                const data = await prepareImageUploadData(file, photoAlbumReadFile);
                 const uploadResult = await photoAlbumPost('uploadPhotoAlbumImage', {
                     albumId: albumId,
                     fileName: file.name,
@@ -3765,7 +3815,7 @@ async function replacePhotoAlbumImage(imageId) {
         }
         if (!beginImageOperation(operationKey)) return;
         try {
-            const data = await photoAlbumReadFile(file);
+            const data = await prepareImageUploadData(file, photoAlbumReadFile);
             const result = await photoAlbumPost('replacePhotoAlbumImage', {
                 albumId: albumId,
                 imageId: imageId,
