@@ -1889,6 +1889,8 @@ function assignPageEditIds() {
     const candidates = Array.from(document.body.querySelectorAll('*'));
     candidates.forEach(element => {
         if (element.hasAttribute('data-page-edit-id')) return;
+        if (element.parentElement &&
+            element.parentElement.closest('[data-page-edit-id]')) return;
         if (element.closest(excludedRoots)) return;
 
         const tag = element.tagName;
