@@ -1280,6 +1280,10 @@ window.addEventListener('DOMContentLoaded', () => {
                 targetTab.classList.add('border-gold', 'text-gold');
                 targetTab.classList.remove('border-transparent', 'text-slate-300');
             }
+            // تحميل ألبومات الصور عند فتح القسم لأول مرة فقط.
+            if (tabId === 'alerts') {
+                loadPhotoAlbums(false);
+            }
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -2853,22 +2857,7 @@ async function saveScheduleImage() {
     let succeeded = 0;
     const failures = [];
 
-    // تجهيز بيانات الصور بالتوازي قبل الإرسال، مع إبقاء الرفع إلى Drive بالتتابع
-    // لتجنب تعارض عمليات الاستبدال والحذف داخل Apps Script.
-    status.textContent = 'جارٍ تجهيز الصور الأصلية للإرسال...';
-    let preparedImages;
-    try {
-        preparedImages = await Promise.all(
-            jobs.map(job => prepareImageUploadData(job.file, readScheduleFileAsBase64))
-        );
-    } catch (error) {
-        status.textContent = 'تعذر تجهيز الصور للإرسال.';
-        fileInputs.forEach(input => input.disabled = false);
-        button.disabled = false;
-        alert(error.message || 'تعذرت قراءة إحدى الصور.');
-        return;
-    }
-
+    // تجهيز كل صورة عند دورها فقط لتقليل استهلاك الذاكرة على الهاتف.
     for (let i = 0; i < jobs.length; i++) {
         const job = jobs[i];
         status.textContent = 'جارٍ حفظ قائمة فصل ' + job.className + ' (' + (i + 1) + ' من ' + jobs.length + ')';
@@ -2878,10 +2867,14 @@ async function saveScheduleImage() {
         line.textContent = 'جارٍ رفع قائمة فصل ' + job.className + '...';
         results.appendChild(line);
 
+        let preparedImage = null;
         try {
-            // uploadOneScheduleFile لا يحل الوعد إلا بعد استلام تأكيد success موثوق من Apps Script.
-            // لا نشترط تغيّر Drive fileId؛ الاستبدال قد يحتفظ بنفس المعرّف.
-            await uploadOneScheduleFile(job.file, job.className, i, preparedImages[i]);
+            status.textContent = 'جارٍ تجهيز صورة فصل ' + job.className + '...';
+            preparedImage = await prepareImageUploadData(job.file, readScheduleFileAsBase64);
+
+            // لا يبدأ الفصل التالي إلا بعد تأكيد نجاح الرفع الحالي.
+            // تظل بيانات الصورة الحالية وحدها في الذاكرة أثناء هذه الدورة.
+            await uploadOneScheduleFile(job.file, job.className, i, preparedImage);
             succeeded++;
             line.className = 'text-emerald-700 font-bold';
             line.textContent = '✓ تم رفع وحفظ قائمة فصل ' + job.className;
@@ -2899,6 +2892,9 @@ async function saveScheduleImage() {
             failures.push(job.className);
             line.className = 'text-red-600 font-bold';
             line.textContent = '✕ تعذر حفظ قائمة فصل ' + job.className + ': ' + error.message;
+        } finally {
+            // تحرير مرجع بيانات Base64 قبل الانتقال للصورة التالية.
+            preparedImage = null;
         }
 
         progressText.textContent = (i + 1) + ' / ' + jobs.length;
@@ -3102,6 +3098,8 @@ async function deleteScheduleImage(cls) {
         // Photo albums module: deliberately isolated from the existing development/tablet gallery.
         const PHOTO_ALBUMS_SCRIPT_URL = GOOGLE_SCRIPT_URL;
         let photoAlbumsCache = [];
+        let photoAlbumsLoadedOnce = false;
+        let photoAlbumsLoadPromise = null;
         let currentPhotoAlbumId = null;
         let photoAlbumEditId = null;
 
@@ -3449,22 +3447,38 @@ async function deleteScheduleImage(cls) {
             });
         }
 
-        async function loadPhotoAlbums() {
+        async function loadPhotoAlbums(force = true) {
     const status = document.getElementById('photoAlbumsStatus');
     const grid = document.getElementById('photoAlbumsGrid');
     if (!status || !grid) return;
+
+    if (!force && photoAlbumsLoadedOnce) return photoAlbumsCache;
+    if (photoAlbumsLoadPromise) return photoAlbumsLoadPromise;
+
     status.textContent = 'جارٍ تحميل ألبومات الصور...';
+    photoAlbumsLoadPromise = (async () => {
+        try {
+            const albums = await fetchPhotoAlbumsSnapshot();
+            photoAlbumsCache = albums;
+            photoAlbumsLoadedOnce = true;
+            renderPhotoAlbums();
+            status.textContent = albums.length
+                ? 'اختر ألبومًا لعرض الصور بداخله.'
+                : 'لا توجد ألبومات حتى الآن. يمكن للمعلم إضافة أول ألبوم.';
+            return albums;
+        } catch (error) {
+            // يظل القسم قابلاً لإعادة المحاولة عند فتحه مرة أخرى.
+            photoAlbumsLoadedOnce = false;
+            status.textContent = error.message + ' بعد تفعيل وظائف الألبومات في Apps Script سيظهر المعرض هنا.';
+            grid.innerHTML = '';
+            return null;
+        }
+    })();
+
     try {
-        const albums = await fetchPhotoAlbumsSnapshot();
-        photoAlbumsCache = albums;
-        renderPhotoAlbums();
-        status.textContent = albums.length
-            ? 'اختر ألبومًا لعرض الصور بداخله.'
-            : 'لا توجد ألبومات حتى الآن. يمكن للمعلم إضافة أول ألبوم.';
-        return albums;
-    } catch (error) {
-        status.textContent = error.message + ' بعد تفعيل وظائف الألبومات في Apps Script سيظهر المعرض هنا.';
-        grid.innerHTML = '';
+        return await photoAlbumsLoadPromise;
+    } finally {
+        photoAlbumsLoadPromise = null;
     }
 }
 
@@ -3881,9 +3895,6 @@ async function deleteCurrentPhotoAlbum() {
     }
 }
 
-        window.addEventListener('load', () => {
-            setTimeout(loadPhotoAlbums, 1800);
-        });
     </script>
 </body>
 </html>
