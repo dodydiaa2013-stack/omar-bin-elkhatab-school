@@ -29,6 +29,12 @@
     </style>
     <style>
         html.page-changes-loading [data-page-edit-id] { visibility: hidden; }
+
+        .content-sortable-card { transition: transform .16s ease, opacity .16s ease, outline-color .16s ease; }
+        .content-drag-handle { touch-action: none; }
+        .content-dragging { opacity: .48; outline: 2px dashed #2563eb; }
+        .content-drop-target { outline: 3px solid #2563eb !important; outline-offset: 2px; transform: scale(.985); }
+
         body {
             font-family: 'Cairo', sans-serif;
             background-color: #f8fafc;
@@ -1958,6 +1964,7 @@ if (fileId && googleUploadToken) {
                 label.className = 'text-xs text-slate-600 ml-auto';
                 label.textContent = 'تحديد';
                 controls.append(checkbox, label);
+                attachContentDragSort(div, 'gallery', fileId, controls);
                 const up = document.createElement('button');
                 up.type = 'button'; up.textContent = '↑'; up.title = 'تقديم الصورة';
                 up.disabled = idx === 0;
@@ -3047,6 +3054,135 @@ async function deleteScheduleImage(cls) {
             }
         }
 
+
+        // سحب وإفلات ترتيب العناصر: الماوس على الكمبيوتر، والضغط المطوّل ثم السحب باللمس على الهاتف.
+        let activeContentDrag = null;
+        function attachContentDragSort(card, scope, itemId, controls) {
+            if (!card || !controls || !hasDualAdminAuthorization()) return;
+            card.dataset.contentDragScope = scope;
+            card.dataset.contentDragId = String(itemId);
+            card.classList.add('content-sortable-card');
+
+            const handle = document.createElement('button');
+            handle.type = 'button';
+            handle.className = 'content-drag-handle rounded-md border border-dashed border-blue-300 bg-blue-50 px-2 py-1 text-xs font-bold text-blue-800 cursor-grab select-none';
+            handle.textContent = '⠿ اسحب للترتيب';
+            handle.title = 'اسحب بالماوس، أو اضغط مطولًا واسحب بإصبعك';
+            handle.setAttribute('aria-label', 'اسحب لتغيير الترتيب');
+            handle.draggable = true;
+            handle.style.touchAction = 'none';
+            controls.appendChild(handle);
+
+            handle.addEventListener('dragstart', event => {
+                activeContentDrag = { scope, itemId: String(itemId) };
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', String(itemId));
+                card.classList.add('content-dragging');
+            });
+            handle.addEventListener('dragend', () => {
+                activeContentDrag = null;
+                document.querySelectorAll('.content-drop-target,.content-dragging').forEach(el =>
+                    el.classList.remove('content-drop-target','content-dragging'));
+            });
+            card.addEventListener('dragover', event => {
+                if (!activeContentDrag || activeContentDrag.scope !== scope ||
+                    activeContentDrag.itemId === String(itemId)) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                card.classList.add('content-drop-target');
+            });
+            card.addEventListener('dragleave', event => {
+                if (!card.contains(event.relatedTarget)) card.classList.remove('content-drop-target');
+            });
+            card.addEventListener('drop', event => {
+                if (!activeContentDrag || activeContentDrag.scope !== scope) return;
+                event.preventDefault();
+                const dragged = activeContentDrag.itemId;
+                activeContentDrag = null;
+                document.querySelectorAll('.content-drop-target,.content-dragging').forEach(el =>
+                    el.classList.remove('content-drop-target','content-dragging'));
+                reorderContentItemTo(scope, dragged, String(itemId));
+            });
+
+            let holdTimer = null;
+            let touchStart = null;
+            let touchDragging = false;
+            handle.addEventListener('pointerdown', event => {
+                if (event.pointerType !== 'touch') return;
+                touchStart = { x: event.clientX, y: event.clientY };
+                touchDragging = false;
+                holdTimer = setTimeout(() => {
+                    touchDragging = true;
+                    activeContentDrag = { scope, itemId: String(itemId) };
+                    card.classList.add('content-dragging');
+                    if (navigator.vibrate) navigator.vibrate(25);
+                }, 280);
+            });
+            handle.addEventListener('pointermove', event => {
+                if (!touchStart || !activeContentDrag || activeContentDrag.scope !== scope ||
+                    activeContentDrag.itemId !== String(itemId)) return;
+                if (Math.hypot(event.clientX - touchStart.x, event.clientY - touchStart.y) > 7) {
+                    event.preventDefault();
+                    const under = document.elementFromPoint(event.clientX, event.clientY);
+                    const target = under && under.closest('[data-content-drag-scope]');
+                    document.querySelectorAll('.content-drop-target').forEach(el => el.classList.remove('content-drop-target'));
+                    if (target && target.dataset.contentDragScope === scope &&
+                        target.dataset.contentDragId !== String(itemId)) target.classList.add('content-drop-target');
+                }
+            });
+            const finishTouchDrag = event => {
+                if (holdTimer) clearTimeout(holdTimer);
+                holdTimer = null;
+                if (touchDragging && activeContentDrag && activeContentDrag.itemId === String(itemId)) {
+                    const under = document.elementFromPoint(event.clientX, event.clientY);
+                    const target = under && under.closest('[data-content-drag-scope]');
+                    if (target && target.dataset.contentDragScope === scope) {
+                        reorderContentItemTo(scope, String(itemId), target.dataset.contentDragId);
+                    }
+                    activeContentDrag = null;
+                    document.querySelectorAll('.content-drop-target,.content-dragging').forEach(el =>
+                        el.classList.remove('content-drop-target','content-dragging'));
+                }
+                touchStart = null;
+                touchDragging = false;
+            };
+            handle.addEventListener('pointerup', finishTouchDrag);
+            handle.addEventListener('pointercancel', finishTouchDrag);
+        }
+
+        async function reorderContentItemTo(scope, sourceId, targetId) {
+            if (!hasDualAdminAuthorization() || !sourceId || !targetId || sourceId === targetId) return;
+            const items = getContentItems(scope);
+            const from = items.findIndex(item => contentItemId(item) === String(sourceId));
+            const to = items.findIndex(item => contentItemId(item) === String(targetId));
+            if (from < 0 || to < 0 || from === to) return;
+            const reordered = items.slice();
+            const moved = reordered.splice(from, 1)[0];
+            reordered.splice(to, 0, moved);
+            const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
+            const statusId = scope === 'gallery' ? 'googleSignInStatus'
+                : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
+            const status = document.getElementById(statusId);
+            try {
+                if (status) status.textContent = 'جارٍ حفظ الترتيب الجديد...';
+                await photoAlbumPost('savePhotoContentOrder', {
+                    scope: scope, albumId: albumId,
+                    ids: JSON.stringify(reordered.map(contentItemId))
+                });
+                if (scope === 'gallery') tabletGalleryCache = reordered;
+                else if (scope === 'albums') photoAlbumsCache = reordered;
+                else {
+                    const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+                    if (album) album.images = reordered;
+                }
+                renderContentScope(scope);
+                if (status) status.textContent = 'تم حفظ الترتيب الجديد بنجاح.';
+            } catch (error) {
+                if (status) status.textContent = 'تعذر حفظ الترتيب: ' + error.message;
+                alert('لم يتم تغيير الترتيب على الموقع: ' + error.message);
+            }
+        }
+
         async function moveContentItem(scope, itemId, direction) {
             if (!hasDualAdminAuthorization()) return;
             const items = getContentItems(scope);
@@ -3259,6 +3395,7 @@ async function refreshPhotoAlbums(button) {
                     label.className = 'text-xs text-slate-600 ml-auto';
                     label.textContent = 'تحديد';
                     controls.append(checkbox, label);
+                    attachContentDragSort(card, 'albums', id, controls);
                     const up = document.createElement('button');
                     up.type = 'button'; up.textContent = '↑'; up.title = 'تقديم الألبوم';
                     up.disabled = index === 0;
@@ -3390,6 +3527,7 @@ async function refreshPhotoAlbums(button) {
                     label.className = 'text-[10px] text-slate-600 ml-auto';
                     label.textContent = 'تحديد';
                     controls.append(checkbox, label);
+                    attachContentDragSort(card, 'albumImages', id, controls);
                     const up = document.createElement('button');
                     up.type = 'button'; up.textContent = '↑'; up.title = 'تقديم الصورة';
                     up.disabled = index === 0;
