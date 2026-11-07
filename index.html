@@ -32,8 +32,8 @@
     <link rel="preconnect" href="https://accounts.google.com" crossorigin>
     <title>مدرسة عمر بن الخطاب الثانوية بنين - إدارة المستقبل التعليمية</title>
     <style>
-        /* امنع ظهور النصوص الافتراضية قبل تطبيق آخر نسخة محفوظة محليًا. */
-        html[data-page-edits-cache-pending="true"] body {
+        /* أخفِ النصوص القابلة للتعديل فقط حتى تُطبّق النسخة المحلية؛ لا تُخفِ الصفحة كلها عند التحديث. */
+        html[data-page-edits-cache-pending="true"] [data-page-edit-id] {
             visibility: hidden;
         }
     </style>
