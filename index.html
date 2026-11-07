@@ -2048,30 +2048,9 @@ function assignPageEditIds() {
 
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
 
-// النصوص المعتمدة ثابتة في الموقع، ولا تسمح أي نسخة محلية أو قديمة باستبدالها.
-const FIXED_PAGE_TEXTS = {
-    "student-query-one-title": "منصة البرمجة",
-    "student-query-two-title": "كود الطالب",
-    "tablet-title": "قسم التطوير التكنولوجي والتابلت",
-    "tablet-description": "المتابعة الفنية والتكنولوجية وإرشادات السيرفر والمنظومة الإلكترونية"
-};
-
-function enforceFixedPageTexts() {
-    Object.entries(FIXED_PAGE_TEXTS).forEach(([id, title]) => {
-        const element = document.querySelector('[data-page-edit-id="' + CSS.escape(id) + '"]');
-        if (element && element.textContent.trim() !== title) {
-            element.textContent = title;
-        }
-    });
-}
-
+// اقبل التعديلات المحفوظة كما هي، بما فيها عناوين الاستعلامات ووصف قسم التابلت.
 function normalizeFixedPageChanges(changes) {
-    if (!Array.isArray(changes)) return [];
-    return changes.map(item => {
-        if (!item || typeof item !== "object") return item;
-        const fixedTitle = FIXED_PAGE_TEXTS[item.id];
-        return fixedTitle ? { ...item, text: fixedTitle } : item;
-    });
+    return Array.isArray(changes) ? changes : [];
 }
 
 function applyPageChangesList(changes) {
@@ -2081,12 +2060,10 @@ function applyPageChangesList(changes) {
         const element = document.querySelector('[data-page-edit-id="' + CSS.escape(item.id) + '"]');
         if (!element) return;
 
-        // تثبيت النصوص المعتمدة للاستعلامات الطلابية وقسم التطوير والتابلت،
-        // وتجاهل أي قيم قديمة أو فارغة محفوظة في النسخة المحلية أو الخادم.
-        const savedText = FIXED_PAGE_TEXTS[item.id]
-            || (item.id === "footer-leadership"
-                ? item.text.replace("مديرية التربية والتعليم بمحافظة القاهرة", "وزارة التربية والتعليم بمحافظة القاهرة")
-                : item.text);
+        // حافظ على المعالجة الخاصة بنص التذييل فقط، واترك بقية النصوص قابلة للتعديل.
+        const savedText = item.id === "footer-leadership"
+            ? item.text.replace("مديرية التربية والتعليم بمحافظة القاهرة", "وزارة التربية والتعليم بمحافظة القاهرة")
+            : item.text;
 
         // لا تعِد كتابة النص إذا كان مطابقًا؛ فهذا يمنع إعادة إنشاء عناصر التذييل
         // دون داعٍ عند وصول نسخة الخادم المطابقة للكاش المحلي.
@@ -2111,19 +2088,19 @@ function applyPageChangesList(changes) {
     });
 
     // أعد تثبيت النصوص المعتمدة حتى لو وصلت قيم قديمة أو فارغة من التخزين.
-    enforceFixedPageTexts();
+
 }
 
 function applyCachedPageChanges() {
     try {
         const cached = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
         if (!cached) {
-            enforceFixedPageTexts();
+
             return false;
         }
         const parsed = JSON.parse(cached);
         if (!parsed || !Array.isArray(parsed.changes)) {
-            enforceFixedPageTexts();
+
             return false;
         }
 
@@ -2131,10 +2108,10 @@ function applyCachedPageChanges() {
         parsed.changes = normalizeFixedPageChanges(parsed.changes);
         localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify(parsed));
         applyPageChangesList(parsed.changes);
-        enforceFixedPageTexts();
+
         return true;
     } catch (error) {
-        enforceFixedPageTexts();
+
         console.warn("تعذر تطبيق النسخة المحلية من تعديلات النصوص.", error);
         return false;
     }
@@ -2142,12 +2119,11 @@ function applyCachedPageChanges() {
 
 function cacheCurrentPageChanges() {
     try {
-        enforceFixedPageTexts();
+
         const changes = Array.from(document.querySelectorAll("[data-page-edit-id]"))
             .map(element => ({
                 id: element.getAttribute("data-page-edit-id"),
-                text: FIXED_PAGE_TEXTS[element.getAttribute("data-page-edit-id")]
-                    || element.textContent.trim()
+                text: element.textContent.trim()
             }))
             .filter(item => item.id && item.text.length <= 10000);
 
@@ -2206,7 +2182,6 @@ function receivePageChanges(data) {
 
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
     applyPageChangesList(normalizedChanges);
-    enforceFixedPageTexts();
 
     try {
         localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
