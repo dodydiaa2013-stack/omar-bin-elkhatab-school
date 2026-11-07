@@ -449,6 +449,23 @@
                     .home-feature-card,.home-feature-icon,.home-feature-action,.home-feature-action i { transition:none; }
                     .home-feature-card:hover,.home-feature-card:hover .home-feature-icon,.home-feature-action:hover { transform:none; }
                 }
+                .home-values {
+                    margin-top:1.15rem; padding:1.15rem; border-radius:1.25rem;
+                    background:linear-gradient(135deg,#f8fbff 0%,#edf4ff 100%);
+                    border:1px solid #d8e5f7; box-shadow:0 8px 22px rgba(5,20,50,.07);
+                }
+                .home-values-heading { display:flex; align-items:center; justify-content:center; gap:.6rem; margin:0 0 .9rem; color:#0b2d66; font-size:1.12rem; font-weight:900; }
+                .home-values-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.85rem; }
+                .home-value-card { display:flex; align-items:flex-start; gap:.8rem; padding:.9rem 1rem; border-radius:1rem; background:#fff; border:1px solid #e0e9f5; }
+                .home-value-icon { width:2.65rem; height:2.65rem; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border-radius:.85rem; color:#092654; background:linear-gradient(145deg,#ffe58a,#f5ad16); font-size:1.15rem; }
+                .home-value-title { margin:0 0 .25rem; color:#0b2d66; font-weight:900; font-size:.98rem; }
+                .home-value-text { margin:0; color:#40516b; font-size:.84rem; line-height:1.8; }
+                @media(max-width:700px) {
+                    .home-values { margin-top:.9rem; padding:.9rem; }
+                    .home-values-grid { grid-template-columns:1fr; gap:.65rem; }
+                    .home-value-card { padding:.8rem; }
+                }
+
                 @media(max-width:700px) {
                     .home-hero { grid-template-columns:1fr; }
                     .home-hero-copy { padding:1.35rem; }
@@ -506,6 +523,29 @@
                     </button>
                 </article>
             </div>
+
+            <section class="home-values" aria-labelledby="home-values-heading">
+                <h3 id="home-values-heading" class="home-values-heading">
+                    <i class="fa-solid fa-star text-amber-500" aria-hidden="true"></i>
+                    <span>رؤيتنا ورسالتنا</span>
+                </h3>
+                <div class="home-values-grid">
+                    <article class="home-value-card">
+                        <div class="home-value-icon" aria-hidden="true"><i class="fa-solid fa-eye"></i></div>
+                        <div>
+                            <h4 class="home-value-title">رؤيتنا</h4>
+                            <p data-page-edit-id="home-vision-text" class="home-value-text">مدرسة رائدة في التعليم والابتكار، تُعدّ جيلًا واعيًا ومبدعًا قادرًا على مواكبة التطور وبناء المستقبل.</p>
+                        </div>
+                    </article>
+                    <article class="home-value-card">
+                        <div class="home-value-icon" aria-hidden="true"><i class="fa-solid fa-flag"></i></div>
+                        <div>
+                            <h4 class="home-value-title">رسالتنا</h4>
+                            <p data-page-edit-id="home-mission-text" class="home-value-text">توفير بيئة تعليمية آمنة ومحفزة، وتنمية مهارات الطلاب، وتوظيف التكنولوجيا لتحقيق تعليم متميز.</p>
+                        </div>
+                    </article>
+                </div>
+            </section>
         </section>
 
         <!-- TAB 2: STUDENT RESULTS -->
