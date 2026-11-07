@@ -585,6 +585,7 @@
                 </div>
                 <div id="tabletImageManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <span class="text-xs font-bold text-navy">إدارة الصور:</span>
+                    <button type="button" onclick="openPhotoTrashBin()" class="rounded-lg bg-amber-100 text-amber-900 border border-amber-200 px-3 py-2 text-xs font-bold"><i class="fa-solid fa-trash-arrow-up ml-1"></i> سلة مهملات الصور والألبومات</button>
                     <button type="button" onclick="selectAllContent('gallery')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
                     <button type="button" onclick="clearContentSelection('gallery')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
                     <button type="button" onclick="bulkDeleteSelectedContent('gallery')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
@@ -593,6 +594,18 @@
                 <div id="tabletGallery" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"></div>
             </div>
         </section>
+
+        <div id="photoTrashModal" class="hidden fixed inset-0 z-[95] bg-slate-950/70 p-3 sm:p-5 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="photoTrashTitle">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="flex items-center justify-between gap-3 p-4 border-b border-slate-200">
+                    <div><h3 id="photoTrashTitle" class="font-extrabold text-lg text-navy"><i class="fa-solid fa-trash-arrow-up text-amber-600 ml-1"></i> سلة مهملات الصور والألبومات</h3><p class="text-xs text-slate-500 mt-1">استعادة العناصر إلى أماكنها الأصلية أو حذفها نهائيًا.</p></div>
+                    <button type="button" onclick="closePhotoTrashBin()" class="text-slate-500 hover:text-red-600 text-xl" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <p id="photoTrashStatus" class="px-4 py-3 text-xs text-slate-600" role="status" aria-live="polite">جارٍ تحميل سلة المهملات...</p>
+                <div id="photoTrashItems" class="overflow-y-auto p-4 pt-0 space-y-2"></div>
+                <div class="border-t border-slate-200 p-3 flex justify-end"><button type="button" onclick="loadPhotoTrashBin()" class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-navy"><i class="fa-solid fa-rotate ml-1"></i> تحديث السلة</button></div>
+            </div>
+        </div>
 
         <!-- TAB 4: CLASS SCHEDULES -->
         <section id="content-schedules" class="tab-content hidden space-y-6">
@@ -727,6 +740,7 @@
                 <p id="photoAlbumsStatus" class="text-xs text-slate-500 text-center py-2" role="status" aria-live="polite">جارٍ تحميل ألبومات الصور...</p>
                 <div id="photoAlbumsManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <span class="text-xs font-bold text-navy">ترتيب وإدارة الألبومات:</span>
+                    <button type="button" onclick="openPhotoTrashBin()" class="rounded-lg bg-amber-100 text-amber-900 border border-amber-200 px-3 py-2 text-xs font-bold"><i class="fa-solid fa-trash-arrow-up ml-1"></i> سلة المهملات</button>
                     <button type="button" onclick="selectAllContent('albums')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
                     <button type="button" onclick="clearContentSelection('albums')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
                     <button type="button" onclick="bulkDeleteSelectedContent('albums')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
@@ -760,6 +774,7 @@
                     </div>
                     <div id="albumImagesManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                         <span class="text-xs font-bold text-navy">ترتيب وإدارة الصور:</span>
+                        <button type="button" onclick="openPhotoTrashBin()" class="rounded-lg bg-amber-100 text-amber-900 border border-amber-200 px-3 py-2 text-xs font-bold"><i class="fa-solid fa-trash-arrow-up ml-1"></i> سلة المهملات</button>
                         <button type="button" onclick="selectAllContent('albumImages')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
                         <button type="button" onclick="clearContentSelection('albumImages')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
                         <button type="button" onclick="bulkDeleteSelectedContent('albumImages')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
@@ -4514,6 +4529,123 @@ async function deleteCurrentPhotoAlbum() {
         endImageOperation(operationKey);
     }
 }
+
+
+        async function openPhotoTrashBin() {
+            if (!hasDualAdminAuthorization()) {
+                alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+                return;
+            }
+            const modal = document.getElementById('photoTrashModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            await loadPhotoTrashBin();
+        }
+
+        function closePhotoTrashBin() {
+            document.getElementById('photoTrashModal')?.classList.add('hidden');
+        }
+
+        async function loadPhotoTrashBin() {
+            const status = document.getElementById('photoTrashStatus');
+            const list = document.getElementById('photoTrashItems');
+            if (!status || !list) return;
+            if (!hasDualAdminAuthorization()) {
+                status.textContent = 'انتهت صلاحية جلسة المسؤول. سجّل الدخول مرة أخرى.';
+                list.innerHTML = '';
+                return;
+            }
+            status.textContent = 'جارٍ تحميل العناصر المحذوفة...';
+            list.innerHTML = '';
+            try {
+                const result = await photoAlbumPost('getPhotoTrash', {});
+                renderPhotoTrashItems(Array.isArray(result.items) ? result.items : []);
+                status.textContent = result.items && result.items.length
+                    ? 'عدد العناصر في السلة: ' + result.items.length
+                    : 'سلة المهملات فارغة.';
+            } catch (error) {
+                status.textContent = 'تعذر تحميل سلة المهملات: ' + (error.message || 'خطأ غير معروف');
+            }
+        }
+
+        function renderPhotoTrashItems(items) {
+            const list = document.getElementById('photoTrashItems');
+            if (!list) return;
+            list.innerHTML = '';
+            if (!items.length) {
+                const empty = document.createElement('p');
+                empty.className = 'text-center text-sm text-slate-500 py-8';
+                empty.textContent = 'لا توجد صور أو ألبومات محذوفة حاليًا.';
+                list.appendChild(empty);
+                return;
+            }
+            items.forEach(item => {
+                const row = document.createElement('article');
+                row.className = 'rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col sm:flex-row sm:items-center gap-3';
+                const info = document.createElement('div');
+                info.className = 'min-w-0 flex-1';
+                const name = document.createElement('p');
+                name.className = 'font-bold text-sm text-navy break-words';
+                name.textContent = (item.itemType === 'album' ? 'ألبوم: ' : 'صورة: ') + (item.name || 'عنصر بدون اسم');
+                const location = document.createElement('p');
+                location.className = 'text-xs text-slate-600 mt-1';
+                location.textContent = 'المكان الأصلي: ' + (item.originalLocation || 'غير محدد');
+                const date = document.createElement('p');
+                date.className = 'text-[11px] text-slate-400 mt-1';
+                date.textContent = 'تاريخ الحذف: ' + (item.deletedAt ? new Date(item.deletedAt).toLocaleString('ar-EG') : 'غير متاح');
+                info.append(name, location, date);
+                const actions = document.createElement('div');
+                actions.className = 'flex flex-wrap gap-2 shrink-0';
+                const restore = document.createElement('button');
+                restore.type = 'button';
+                restore.className = 'rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold';
+                restore.textContent = 'استعادة';
+                restore.addEventListener('click', () => restorePhotoTrashItem(item.id));
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold';
+                remove.textContent = 'حذف نهائي';
+                remove.addEventListener('click', () => permanentlyDeletePhotoTrashItem(item.id, item.name));
+                actions.append(restore, remove);
+                row.append(info, actions);
+                list.appendChild(row);
+            });
+        }
+
+        async function restorePhotoTrashItem(itemId) {
+            if (!hasDualAdminAuthorization()) return;
+            try {
+                const result = await photoAlbumPost('restorePhotoTrashItem', { itemId: itemId });
+                const status = document.getElementById('photoTrashStatus');
+                if (status) status.textContent = result.message || 'تمت استعادة العنصر.';
+                await loadPhotoTrashBin();
+                try {
+                    const images = await fetchTabletGalleryImages();
+                    tabletGalleryCache = images;
+                    await renderTabletGallery(images);
+                } catch (error) { console.warn('تعذر تحديث معرض الصور بعد الاستعادة:', error); }
+                await loadPhotoAlbums();
+                if (currentPhotoAlbumId) {
+                    const album = photoAlbumsCache.find(item => String(item.id) === String(currentPhotoAlbumId));
+                    if (album) openPhotoAlbum(album.id);
+                }
+            } catch (error) {
+                alert('تعذرت الاستعادة: ' + (error.message || 'خطأ غير معروف'));
+            }
+        }
+
+        async function permanentlyDeletePhotoTrashItem(itemId, itemName) {
+            if (!hasDualAdminAuthorization()) return;
+            if (!confirm('سيتم حذف «' + (itemName || 'هذا العنصر') + '» نهائيًا من Google Drive، ولن يمكن استعادته بعد ذلك. هل تريد المتابعة؟')) return;
+            try {
+                const result = await photoAlbumPost('permanentlyDeletePhotoTrashItem', { itemId: itemId });
+                const status = document.getElementById('photoTrashStatus');
+                if (status) status.textContent = result.message || 'تم الحذف النهائي.';
+                await loadPhotoTrashBin();
+            } catch (error) {
+                alert('تعذر الحذف النهائي: ' + (error.message || 'تحقق من تفعيل Drive API وصلاحياته في Apps Script.'));
+            }
+        }
 
     </script>
 </body>
