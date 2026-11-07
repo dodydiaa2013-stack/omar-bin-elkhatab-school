@@ -1,0 +1,366 @@
+PHOTO TRASH BIN - APPS SCRIPT PATCH
+===================================
+
+IMPORTANT:
+- Do not add this file as a new .gs file.
+- Copy the helper functions into the existing Apps Script project.
+- Apply the five small insertions and three doPost route additions described at the end.
+- No schedule/class-list function is changed by this patch.
+
+HELPER FUNCTIONS
+----------------
+
+function photoTrashKey_(id) {
+  return "PHOTO_TRASH_ITEM_V1_" + String(id);
+}
+
+function photoTrashOrderIds_(scope, albumId) {
+  const key = getPhotoContentOrderKey_(scope, albumId || "");
+  const saved = PropertiesService.getScriptProperties().getProperty(key);
+  if (saved) {
+    try {
+      const ids = JSON.parse(saved);
+      if (Array.isArray(ids)) return ids.map(String);
+    } catch (e) {}
+  }
+  return getPhotoContentItemsForOrder_(scope, albumId || "")
+    .map(function(item) { return String(item.id); });
+}
+
+function registerPhotoTrashItem_(item, scope, albumId, isCover) {
+  const id = String(item.getId());
+  const parents = item.getParents();
+  if (!parents.hasNext()) {
+    throw new Error("تعذر تحديد المجلد الأصلي للعنصر؛ لم يتم حذفه.");
+  }
+  const parent = parents.next();
+  const isFolder = typeof item.getMimeType !== "function";
+  const record = {
+    id: id,
+    kind: isFolder ? "folder" : "file",
+    scope: String(scope || ""),
+    albumId: String(albumId || ""),
+    parentFolderId: parent.getId(),
+    parentName: parent.getName(),
+    name: item.getName(),
+    mimeType: isFolder ? "application/vnd.google-apps.folder" : item.getMimeType(),
+    isCover: Boolean(isCover),
+    deletedAt: new Date().toISOString(),
+    originalOrderIds: []
+  };
+
+  if (scope === "gallery" || scope === "albums" || scope === "albumImages") {
+    record.originalOrderIds = photoTrashOrderIds_(scope, albumId);
+  }
+
+  PropertiesService.getScriptProperties().setProperty(
+    photoTrashKey_(id),
+    JSON.stringify(record)
+  );
+  return record;
+}
+
+function getPhotoTrash(p) {
+  p = p || {};
+  try {
+    if (!isPhotoAlbumAdminAuthorized(p)) {
+      throw new Error("غير مصرح لك بعرض سلة المهملات");
+    }
+
+    const all = PropertiesService.getScriptProperties().getProperties();
+    const prefix = "PHOTO_TRASH_ITEM_V1_";
+    const items = [];
+
+    Object.keys(all).forEach(function(key) {
+      if (key.indexOf(prefix) !== 0) return;
+      try {
+        const record = JSON.parse(all[key]);
+        const item = record.kind === "folder"
+          ? DriveApp.getFolderById(record.id)
+          : DriveApp.getFileById(record.id);
+
+        if (!item.isTrashed()) {
+          PropertiesService.getScriptProperties().deleteProperty(key);
+          return;
+        }
+
+        items.push({
+          id: record.id,
+          itemType: record.kind === "folder" ? "album" : "image",
+          name: record.name || "عنصر بدون اسم",
+          originalLocation: record.parentName || "مجلد الصور",
+          deletedAt: record.deletedAt || ""
+        });
+      } catch (itemError) {
+        console.warn("تعذر قراءة عنصر سلة الصور: " + itemError.message);
+      }
+    });
+
+    items.sort(function(a, b) {
+      return String(b.deletedAt).localeCompare(String(a.deletedAt));
+    });
+
+    return photoAlbumPostMessage(p, { success: true, items: items });
+  } catch (error) {
+    return photoAlbumPostMessage(p, {
+      success: false,
+      message: error.message || "تعذر تحميل سلة المهملات"
+    });
+  }
+}
+
+function restorePhotoTrashOrder_(record) {
+  const scope = record.scope;
+  if (!["gallery", "albums", "albumImages"].includes(scope)) return;
+
+  const albumId = record.albumId || "";
+  const key = getPhotoContentOrderKey_(scope, albumId);
+  const currentIds = getPhotoContentItemsForOrder_(scope, albumId)
+    .map(function(item) { return String(item.id); });
+  let ordered = [];
+
+  if (record.isCover && scope === "albumImages") {
+    ordered = currentIds.filter(function(id) { return id !== String(record.id); });
+    ordered.push(String(record.id));
+  } else {
+    const currentSet = new Set(currentIds);
+    (record.originalOrderIds || []).forEach(function(id) {
+      id = String(id);
+      if (currentSet.has(id) && ordered.indexOf(id) === -1) ordered.push(id);
+    });
+    currentIds.forEach(function(id) {
+      if (ordered.indexOf(id) === -1) ordered.push(id);
+    });
+  }
+
+  PropertiesService.getScriptProperties().setProperty(key, JSON.stringify(ordered));
+}
+
+function restorePhotoTrashItem(p) {
+  p = p || {};
+  const lock = LockService.getScriptLock();
+  try {
+    if (!isPhotoAlbumAdminAuthorized(p)) {
+      throw new Error("غير مصرح لك باستعادة العناصر");
+    }
+
+    const id = String(p.itemId || "").trim();
+    if (!id) throw new Error("معرّف العنصر غير موجود");
+
+    lock.waitLock(20000);
+    try {
+      const props = PropertiesService.getScriptProperties();
+      const key = photoTrashKey_(id);
+      const raw = props.getProperty(key);
+      if (!raw) throw new Error("العنصر غير موجود في سلة الموقع");
+
+      const record = JSON.parse(raw);
+      let parent;
+
+      if (record.scope === "gallery") {
+        parent = getFolder();
+      } else if (record.scope === "albums") {
+        parent = getPhotoAlbumsFolder();
+      } else if (record.scope === "albumImages") {
+        const root = getPhotoAlbumsFolder();
+        const album = DriveApp.getFolderById(record.albumId);
+        if (!isFolderInsideFolder(album, root.getId())) {
+          throw new Error("الألبوم الأصلي لم يعد تابعًا لمجلد ألبومات المدرسة");
+        }
+        if (album.isTrashed()) album.setTrashed(false);
+        parent = album;
+      } else {
+        throw new Error("مكان العنصر الأصلي غير معروف؛ أوقفنا الاستعادة لحماية الملفات");
+      }
+
+      if (parent.getId() !== String(record.parentFolderId)) {
+        throw new Error("المجلد الأصلي لا يطابق سجل الحذف؛ لم تتم الاستعادة");
+      }
+
+      const item = record.kind === "folder"
+        ? DriveApp.getFolderById(id)
+        : DriveApp.getFileById(id);
+
+      if (!item.isTrashed()) {
+        props.deleteProperty(key);
+        throw new Error("العنصر لم يعد في سلة Google Drive؛ تم تحديث سجل السلة");
+      }
+
+      item.setTrashed(false);
+      if (item.isTrashed()) throw new Error("لم يؤكد Google Drive استعادة العنصر");
+
+      const parents = item.getParents();
+      let inOriginalFolder = false;
+      while (parents.hasNext()) {
+        if (parents.next().getId() === parent.getId()) {
+          inOriginalFolder = true;
+          break;
+        }
+      }
+      if (!inOriginalFolder) {
+        if (record.kind === "folder") parent.addFolder(item);
+        else parent.addFile(item);
+      }
+
+      restorePhotoTrashOrder_(record);
+      props.deleteProperty(key);
+    } finally {
+      lock.releaseLock();
+    }
+
+    return photoAlbumPostMessage(p, {
+      success: true,
+      message: "تمت استعادة العنصر إلى مكانه الأصلي بنجاح"
+    });
+  } catch (error) {
+    return photoAlbumPostMessage(p, {
+      success: false,
+      message: error.message || "تعذرت استعادة العنصر"
+    });
+  }
+}
+
+function permanentlyDeleteDriveItem_(fileId) {
+  const token = ScriptApp.getOAuthToken();
+  const headers = { Authorization: "Bearer " + token };
+
+  function apiRequest_(url, method) {
+    const response = UrlFetchApp.fetch(url, {
+      method: method || "get",
+      headers: headers,
+      muteHttpExceptions: true
+    });
+    const code = response.getResponseCode();
+    if (code < 200 || code >= 300) {
+      throw new Error(
+        "رفض Google Drive الحذف النهائي (HTTP " + code +
+        "). تأكد من تفعيل Google Drive API وإعادة تفويض Apps Script."
+      );
+    }
+    return response;
+  }
+
+  function deleteRecursively_(id) {
+    let pageToken = "";
+    do {
+      const query = encodeURIComponent("'" + id + "' in parents");
+      let url = "https://www.googleapis.com/drive/v3/files?q=" + query +
+        "&pageSize=1000&fields=nextPageToken,files(id,mimeType)" +
+        "&supportsAllDrives=true&includeItemsFromAllDrives=true";
+      if (pageToken) url += "&pageToken=" + encodeURIComponent(pageToken);
+
+      const response = apiRequest_(url, "get");
+      const data = JSON.parse(response.getContentText() || "{}");
+      const children = Array.isArray(data.files) ? data.files : [];
+      children.forEach(function(child) { deleteRecursively_(child.id); });
+      pageToken = data.nextPageToken || "";
+    } while (pageToken);
+
+    apiRequest_(
+      "https://www.googleapis.com/drive/v3/files/" +
+      encodeURIComponent(id) + "?supportsAllDrives=true",
+      "delete"
+    );
+  }
+
+  deleteRecursively_(String(fileId));
+}
+
+function permanentlyDeletePhotoTrashItem(p) {
+  p = p || {};
+  const lock = LockService.getScriptLock();
+  try {
+    if (!isPhotoAlbumAdminAuthorized(p)) {
+      throw new Error("غير مصرح لك بالحذف النهائي");
+    }
+
+    const id = String(p.itemId || "").trim();
+    if (!id) throw new Error("معرّف العنصر غير موجود");
+
+    lock.waitLock(20000);
+    try {
+      const props = PropertiesService.getScriptProperties();
+      const key = photoTrashKey_(id);
+      const raw = props.getProperty(key);
+      if (!raw) throw new Error("العنصر غير موجود في سلة الموقع");
+
+      const record = JSON.parse(raw);
+      const item = record.kind === "folder"
+        ? DriveApp.getFolderById(id)
+        : DriveApp.getFileById(id);
+
+      if (!item.isTrashed()) {
+        throw new Error("العنصر ليس في سلة Google Drive؛ لم يتم الحذف النهائي");
+      }
+
+      permanentlyDeleteDriveItem_(id);
+      props.deleteProperty(key);
+
+      if (record.scope === "albums") {
+        props.deleteProperty(getPhotoContentOrderKey_("albumImages", id));
+      }
+    } finally {
+      lock.releaseLock();
+    }
+
+    return photoAlbumPostMessage(p, {
+      success: true,
+      message: "تم حذف العنصر نهائيًا من Google Drive"
+    });
+  } catch (error) {
+    return photoAlbumPostMessage(p, {
+      success: false,
+      message: error.message || "تعذر الحذف النهائي"
+    });
+  }
+}
+
+REQUIRED INSERTIONS IN EXISTING FUNCTIONS
+-----------------------------------------
+
+1) In deleteGalleryImage(p), immediately before file.setTrashed(true), insert:
+registerPhotoTrashItem_(file, "gallery", "", false);
+
+2) In deletePhotoAlbumImage(p), immediately before file.setTrashed(true), insert:
+registerPhotoTrashItem_(file, "albumImages", albumId, false);
+
+3) In replacePhotoAlbumImage(p), immediately before oldFile.setTrashed(true), insert:
+registerPhotoTrashItem_(oldFile, "albumImages", albumId, metadata.coverFileId === oldFileId);
+
+4) In deletePhotoAlbum(p), immediately before albumFolder.setTrashed(true), insert:
+registerPhotoTrashItem_(albumFolder, "albums", "", false);
+
+5) In bulkDeletePhotoContent(p), replace the existing targets.forEach block that only calls target.item.setTrashed(true) with:
+targets.forEach(function(target) {
+  registerPhotoTrashItem_(
+    target.item,
+    scope,
+    scope === "albumImages" ? albumId : "",
+    false
+  );
+  target.item.setTrashed(true);
+});
+
+REQUIRED doPost ROUTES
+----------------------
+
+Add these three routes inside doPost(e), before its default unknown-action response:
+
+if (action === "getPhotoTrash") return getPhotoTrash(p);
+if (action === "restorePhotoTrashItem") return restorePhotoTrashItem(p);
+if (action === "permanentlyDeletePhotoTrashItem") return permanentlyDeletePhotoTrashItem(p);
+
+Also add these three strings to the action array in the catch block that routes photo-album errors through photoAlbumPostMessage:
+
+"getPhotoTrash",
+"restorePhotoTrashItem",
+"permanentlyDeletePhotoTrashItem"
+
+SAFETY NOTES
+------------
+
+- No schedule, class-list, or bulkDeleteSchedules code is modified.
+- Restore checks the original parent folder and restores a deleted parent album before restoring an image inside it.
+- A restored former cover image is restored as a normal album image; it does not replace the newer cover.
+- Permanent deletion uses Drive API v3 and requires adequate OAuth authorization. If the API rejects the request, the trash record is retained and the UI displays the error.
+- Test with a disposable image and album before using permanent deletion on real content.
