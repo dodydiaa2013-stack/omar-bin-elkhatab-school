@@ -335,11 +335,12 @@ registerPhotoTrashItem_(albumFolder, "albums", "", false);
 
 5) In bulkDeletePhotoContent(p), immediately before the targets.forEach block, save the original full order snapshot. This ensures every item in a multi-delete records the same pre-delete order:
 
-const props = PropertiesService.getScriptProperties();
-const orderKey = getPhotoContentOrderKey_(scope, albumId);
-props.setProperty(orderKey, JSON.stringify(currentItems.map(function(item) {
-  return String(item.id);
-})));
+PropertiesService.getScriptProperties().setProperty(
+  getPhotoContentOrderKey_(scope, albumId),
+  JSON.stringify(currentItems.map(function(item) {
+    return String(item.id);
+  }))
+);
 
 Then replace the existing targets.forEach block that only calls target.item.setTrashed(true) with:
 targets.forEach(function(target) {
