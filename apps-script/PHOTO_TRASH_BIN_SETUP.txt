@@ -243,7 +243,7 @@ function permanentlyDeleteDriveItem_(fileId) {
   function deleteRecursively_(id) {
     let pageToken = "";
     do {
-      const query = encodeURIComponent("'" + id + "' in parents");
+      const query = encodeURIComponent("'" + id + "' in parents and (trashed = true or trashed = false)");
       let url = "https://www.googleapis.com/drive/v3/files?q=" + query +
         "&pageSize=1000&fields=nextPageToken,files(id,mimeType)" +
         "&supportsAllDrives=true&includeItemsFromAllDrives=true";
@@ -330,7 +330,15 @@ registerPhotoTrashItem_(oldFile, "albumImages", albumId, metadata.coverFileId ==
 4) In deletePhotoAlbum(p), immediately before albumFolder.setTrashed(true), insert:
 registerPhotoTrashItem_(albumFolder, "albums", "", false);
 
-5) In bulkDeletePhotoContent(p), replace the existing targets.forEach block that only calls target.item.setTrashed(true) with:
+5) In bulkDeletePhotoContent(p), immediately before the targets.forEach block, save the original full order snapshot. This ensures every item in a multi-delete records the same pre-delete order:
+
+const props = PropertiesService.getScriptProperties();
+const orderKey = getPhotoContentOrderKey_(scope, albumId);
+props.setProperty(orderKey, JSON.stringify(currentItems.map(function(item) {
+  return String(item.id);
+})));
+
+Then replace the existing targets.forEach block that only calls target.item.setTrashed(true) with:
 targets.forEach(function(target) {
   registerPhotoTrashItem_(
     target.item,
@@ -361,6 +369,7 @@ SAFETY NOTES
 
 - No schedule, class-list, or bulkDeleteSchedules code is modified.
 - Restore checks the original parent folder and restores a deleted parent album before restoring an image inside it.
+- In bulkDeletePhotoContent(p), remove the existing cleanup block that deletes each deleted album's albumImages order property. Keep those order properties so a restored album retains its previous internal image order.
 - A restored former cover image is restored as a normal album image; it does not replace the newer cover.
 - Permanent deletion uses Drive API v3 and requires adequate OAuth authorization. If the API rejects the request, the trash record is retained and the UI displays the error.
 - Test with a disposable image and album before using permanent deletion on real content.
