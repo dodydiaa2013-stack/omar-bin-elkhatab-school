@@ -85,6 +85,8 @@
             }
         }
         :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
+        /* لا تعرض إطار التركيز حول حاوية القسم نفسها عند نقل التركيز إليها برمجيًا. */
+        .tab-content:focus-visible { outline: none; }
 
         .content-sortable-card { transition: transform .16s ease, opacity .16s ease, outline-color .16s ease; }
         .content-drag-handle { touch-action: none; }
