@@ -3874,7 +3874,7 @@ async function deleteScheduleImage(cls) {
                 return;
             }
             const noun = scope === 'albums' ? 'ألبومًا' : 'صورة';
-            if (!confirm('سيتم نقل ' + ids.length + ' ' + noun + ' محدد إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
+            if (!confirm('سيتم نقل ' + ids.length + ' ' + noun + ' محدد إلى سلة مهملات الصور والألبومات داخل لوحة الموقع، ويمكنك استعادتها من هناك. هل تريد المتابعة؟')) return;
 
             const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
             const statusId = scope === 'gallery' ? 'googleSignInStatus'
