@@ -450,20 +450,41 @@
                     .home-feature-card:hover,.home-feature-card:hover .home-feature-icon,.home-feature-action:hover { transform:none; }
                 }
                 .home-values {
-                    margin-top:1.15rem; padding:1.15rem; border-radius:1.25rem;
-                    background:linear-gradient(135deg,#f8fbff 0%,#edf4ff 100%);
-                    border:1px solid #d8e5f7; box-shadow:0 8px 22px rgba(5,20,50,.07);
+                    margin-top:1.15rem; padding:1.6rem; border-radius:1.5rem;
+                    background:linear-gradient(145deg,#102b57 0%,#0b2349 100%);
+                    border:1px solid rgba(242,195,76,.28);
+                    box-shadow:0 12px 28px rgba(5,20,50,.18);
+                    color:#fff;
                 }
-                .home-values-heading { display:flex; align-items:center; justify-content:center; gap:.6rem; margin:0 0 .9rem; color:#0b2d66; font-size:1.12rem; font-weight:900; }
-                .home-values-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.85rem; }
-                .home-value-card { display:flex; align-items:flex-start; gap:.8rem; padding:.9rem 1rem; border-radius:1rem; background:#fff; border:1px solid #e0e9f5; }
-                .home-value-icon { width:2.65rem; height:2.65rem; flex:0 0 auto; display:flex; align-items:center; justify-content:center; border-radius:.85rem; color:#092654; background:linear-gradient(145deg,#ffe58a,#f5ad16); font-size:1.15rem; }
-                .home-value-title { margin:0 0 .25rem; color:#0b2d66; font-weight:900; font-size:.98rem; }
-                .home-value-text { margin:0; color:#40516b; font-size:.84rem; line-height:1.8; }
-                @media(max-width:700px) {
-                    .home-values { margin-top:.9rem; padding:.9rem; }
-                    .home-values-grid { grid-template-columns:1fr; gap:.65rem; }
-                    .home-value-card { padding:.8rem; }
+                .home-values-heading {
+                    display:flex; align-items:center; justify-content:center; gap:.75rem;
+                    margin:0 0 1.5rem; color:#f5cf68; font-size:clamp(1.5rem,2.5vw,2.15rem);
+                    font-weight:900; letter-spacing:.01em; text-align:center;
+                }
+                .home-values-heading i { color:#f5cf68 !important; }
+                .home-values-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.2rem; }
+                .home-value-card {
+                    display:flex; flex-direction:column; align-items:flex-start; gap:1rem;
+                    min-height:18rem; padding:1.6rem 1.7rem; border-radius:1.5rem;
+                    background:linear-gradient(145deg,#1d4678 0%,#193c69 100%);
+                    border:1px solid rgba(255,255,255,.06);
+                    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+                }
+                .home-value-icon {
+                    width:auto; height:auto; flex:0 0 auto; display:flex; align-items:center;
+                    justify-content:center; border-radius:0; color:#f5cf68;
+                    background:transparent; font-size:2.2rem; padding:.1rem .2rem;
+                }
+                .home-value-title { margin:0 0 .2rem; color:#fff; font-weight:900; font-size:1.55rem; }
+                .home-value-text { margin:0; color:#f2f6fc; font-size:1.15rem; line-height:2.05; }
+                @media(max-width:640px) {
+                    .home-values { margin-top:.9rem; padding:1.1rem; border-radius:1.2rem; }
+                    .home-values-heading { font-size:1.45rem; margin-bottom:1rem; }
+                    .home-values-grid { grid-template-columns:1fr; gap:.8rem; }
+                    .home-value-card { min-height:0; padding:1.15rem 1.2rem; gap:.65rem; border-radius:1.1rem; }
+                    .home-value-icon { font-size:1.8rem; }
+                    .home-value-title { font-size:1.25rem; }
+                    .home-value-text { font-size:1rem; line-height:1.9; }
                 }
 
                 @media(max-width:700px) {
