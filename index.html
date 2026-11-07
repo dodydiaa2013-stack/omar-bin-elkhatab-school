@@ -3548,7 +3548,7 @@ async function deleteScheduleImage(cls) {
             }
             const summary = selections.map(item => 'فصل ' + item.className).join('، ');
             if (!confirm('سيتم نقل ' + selections.length + ' قائمة محددة (' + summary +
-                ') إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
+                ') إلى سلة مهملات الصور والألبومات داخل لوحة الموقع، ويمكنك استعادتها من هناك. هل تريد المتابعة؟')) return;
 
             const operationKey = 'schedule-bulk-delete';
             if (!beginImageOperation(operationKey)) return;
@@ -3898,7 +3898,7 @@ async function deleteScheduleImage(cls) {
             // The server has confirmed deletion. Never report deletion failure
             // merely because refreshing the visible list fails afterward.
             imageContentSelections[scope].clear();
-            if (status) status.textContent = 'تم حذف العناصر المحددة ونقلها إلى سلة مهملات Google Drive.';
+            if (status) status.textContent = 'تم نقل العناصر المحددة إلى سلة مهملات الموقع.';
             contentSelectionStatus(scope);
 
             try {
@@ -4490,7 +4490,7 @@ async function deletePhotoAlbumImage(imageId) {
         alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
         return;
     }
-    if (!confirm('هل تريد نقل هذه الصورة إلى سلة مهملات Google Drive؟ ويمكنك استعادتها من درايف.')) return;
+    if (!confirm('هل تريد نقل هذه الصورة إلى سلة مهملات الصور والألبومات داخل لوحة الموقع؟')) return;
 
     const albumId = String(currentPhotoAlbumId || '');
     const operationKey = 'album-delete-image-' + albumId + '-' + imageId;
@@ -4514,7 +4514,7 @@ async function deleteCurrentPhotoAlbum() {
         return;
     }
     if (!currentPhotoAlbumId ||
-        !confirm('سيتم حذف الألبوم وصورة غلافه وجميع الصور الموجودة بداخله. هل أنت متأكد؟')) return;
+        !confirm('سيتم نقل الألبوم وصورة غلافه وجميع الصور الموجودة بداخله إلى سلة مهملات الموقع، ويمكنك استعادته لاحقًا. هل تريد المتابعة؟')) return;
 
     const albumId = String(currentPhotoAlbumId);
     const operationKey = 'album-delete-' + albumId;
