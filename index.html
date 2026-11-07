@@ -1838,10 +1838,17 @@ function toggleLiveEditing() {
     isLiveEditing = !isLiveEditing;
     document.querySelectorAll('[data-page-edit-id]').forEach(el => {
         if (isLiveEditing) {
+            // صرّح بإمكانية إدخال النص ولوحة المفاتيح على الهواتف، بما فيها Android.
             el.setAttribute('contenteditable', 'true');
+            el.setAttribute('inputmode', 'text');
+            el.setAttribute('tabindex', '0');
+            el.setAttribute('autocapitalize', 'off');
             el.classList.add('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
         } else {
             el.removeAttribute('contenteditable');
+            el.removeAttribute('inputmode');
+            el.removeAttribute('tabindex');
+            el.removeAttribute('autocapitalize');
             el.classList.remove('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
         }
     });
@@ -2059,6 +2066,10 @@ function applyPageChangesList(changes) {
         if (!item || typeof item.id !== "string" || typeof item.text !== "string") return;
         const element = document.querySelector('[data-page-edit-id="' + CSS.escape(item.id) + '"]');
         if (!element) return;
+
+        // لا تطبّق ردود الخادم فوق نص يحرره المسؤول حاليًا؛
+        // سيُلتقط النص الذي كتبه عند تأكيد الحفظ عبر cacheCurrentPageChanges().
+        if (isLiveEditing && element.isContentEditable) return;
 
         // حافظ على المعالجة الخاصة بنص التذييل فقط، واترك بقية النصوص قابلة للتعديل.
         const savedText = item.id === "footer-leadership"
