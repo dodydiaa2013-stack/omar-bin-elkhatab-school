@@ -401,6 +401,54 @@
                 .home-hero-tablet { background:linear-gradient(180deg,#1682e8,#0753ae); color:#fff; border:1px solid #48a9ff; text-shadow:0 1px 2px #002c66; }
                 .home-hero-photo { min-height:100%; padding:.65rem; display:flex; align-items:stretch; position:relative; }
                 .home-hero-photo img { width:100%; height:100%; min-height:300px; object-fit:cover; object-position:center 28%; border-radius:1.1rem; border:0; box-shadow:0 8px 24px #0005; }
+
+                .home-feature-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.15rem; }
+                .home-feature-card {
+                    min-width:0; min-height:100%; padding:clamp(1.15rem,2vw,1.6rem);
+                    display:flex; flex-direction:column; align-items:flex-start; text-align:right;
+                    position:relative; isolation:isolate; overflow:hidden; border-radius:1.35rem;
+                    color:#fff; background:radial-gradient(circle at 90% 5%,rgba(39,112,202,.42),transparent 42%),
+                    linear-gradient(135deg,#071b43 0%,#0b2d66 58%,#123f80 100%);
+                    border:1px solid rgba(148,197,255,.48); box-shadow:0 12px 28px rgba(5,20,50,.18);
+                    transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease;
+                }
+                .home-feature-card::after {
+                    content:""; position:absolute; inset:auto -2.5rem -3.7rem auto; width:9rem; height:9rem;
+                    border:1px solid rgba(255,211,62,.18); border-radius:50%; z-index:-1;
+                    box-shadow:0 0 0 1.1rem rgba(255,255,255,.025),0 0 0 2.2rem rgba(255,255,255,.018);
+                }
+                .home-feature-card:hover { transform:translateY(-5px); border-color:rgba(255,211,62,.75); box-shadow:0 19px 36px rgba(5,20,50,.28),0 0 22px rgba(48,126,220,.18); }
+                .home-feature-icon {
+                    width:3.65rem; height:3.65rem; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+                    margin-bottom:1rem; border-radius:1.1rem; font-size:1.65rem; color:#092654;
+                    background:linear-gradient(145deg,#ffe58a,#f5ad16); border:1px solid rgba(255,255,255,.65);
+                    box-shadow:0 8px 18px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.65);
+                    transition:transform .3s ease,box-shadow .3s ease;
+                }
+                .home-feature-card:hover .home-feature-icon { transform:translateY(-3px) rotate(-7deg) scale(1.08); box-shadow:0 12px 23px rgba(0,0,0,.3),0 0 0 5px rgba(255,211,62,.1); }
+                .home-feature-title { color:#fff; font-size:1.12rem; line-height:1.5; font-weight:900; margin:0 0 .55rem; }
+                .home-feature-description { color:#e8f1ff; font-size:.92rem; line-height:1.9; margin:0 0 1.2rem; flex:1; }
+                .home-feature-action {
+                    min-height:2.8rem; width:100%; display:flex; align-items:center; justify-content:center; gap:.55rem;
+                    padding:.65rem 1rem; border-radius:.9rem; color:#092654; font-size:.92rem; font-weight:900;
+                    background:linear-gradient(180deg,#ffe071,#f5ad16); border:1px solid #ffe89a;
+                    box-shadow:0 6px 14px rgba(0,0,0,.2); transition:transform .2s ease,filter .2s ease,box-shadow .2s ease;
+                }
+                .home-feature-action:hover { transform:translateY(-2px); filter:brightness(1.06); box-shadow:0 9px 18px rgba(0,0,0,.27); }
+                .home-feature-action i { transition:transform .2s ease; }
+                .home-feature-action:hover i { transform:translateX(-4px); }
+                .home-feature-card:focus-within { border-color:#ffd33e; box-shadow:0 0 0 2px rgba(255,211,62,.25),0 12px 28px rgba(5,20,50,.2); }
+                @media(max-width:900px) and (min-width:701px) { .home-feature-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+                @media(max-width:700px) {
+                    .home-feature-grid { grid-template-columns:1fr; gap:.9rem; }
+                    .home-feature-card { min-height:0; padding:1.2rem; }
+                    .home-feature-icon { width:3.3rem; height:3.3rem; font-size:1.5rem; margin-bottom:.8rem; }
+                    .home-feature-description { margin-bottom:1rem; }
+                }
+                @media(prefers-reduced-motion:reduce) {
+                    .home-feature-card,.home-feature-icon,.home-feature-action,.home-feature-action i { transition:none; }
+                    .home-feature-card:hover,.home-feature-card:hover .home-feature-icon,.home-feature-action:hover { transform:none; }
+                }
                 @media(max-width:700px) {
                     .home-hero { grid-template-columns:1fr; }
                     .home-hero-copy { padding:1.35rem; }
@@ -432,37 +480,31 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group">
-                    <div class="w-12 h-12 bg-amber-100 text-gold rounded-lg flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-award"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-navy mb-2"><span data-page-edit-id="results-card-title">منظومة النتائج الإلكترونية</span></h3>
-                    <p class="text-slate-600 text-sm mb-4"><span data-page-edit-id="results-card-description">عرض مفصل لدرجات المواد والنسبة المئوية والتقدير العام بالرقم القومي و الكود بسهولة ودقة.</span></p>
-                    <button onclick="switchTab('results')" class="text-gold font-bold text-sm hover:underline flex items-center gap-1">
-                        انتقل للنتائج <i class="fa-solid fa-arrow-left text-xs"></i>
+            <div class="home-feature-grid">
+                <article class="home-feature-card">
+                    <div class="home-feature-icon" aria-hidden="true"><i class="fa-solid fa-award"></i></div>
+                    <h3 class="home-feature-title"><span data-page-edit-id="results-card-title">منظومة النتائج الإلكترونية</span></h3>
+                    <p class="home-feature-description"><span data-page-edit-id="results-card-description">عرض مفصل لدرجات المواد والنسبة المئوية والتقدير العام بالرقم القومي و الكود بسهولة ودقة.</span></p>
+                    <button type="button" onclick="switchTab('results')" class="home-feature-action">
+                        انتقل للنتائج <i class="fa-solid fa-arrow-left text-xs" aria-hidden="true"></i>
                     </button>
-                </div>
-                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group">
-                    <div class="w-12 h-12 bg-sky-100 text-sky-600 rounded-lg flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-headset"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-navy mb-2"><span data-page-edit-id="support-card-title">الدعم الفني للتابلت</span></h3>
-                    <p class="text-slate-600 text-sm mb-4"><span data-page-edit-id="support-card-description">إشراف أ. ضياء يسري وأ. منى سعيد حل مشكلات السيرفر ورابط المنظومة وتحديثات التابلت المدرسي.</span></p>
-                    <button onclick="switchTab('tablet')" class="text-sky-600 font-bold text-sm hover:underline flex items-center gap-1">
-                        تعليمات التابلت <i class="fa-solid fa-arrow-left text-xs"></i>
+                </article>
+                <article class="home-feature-card">
+                    <div class="home-feature-icon" aria-hidden="true"><i class="fa-solid fa-headset"></i></div>
+                    <h3 class="home-feature-title"><span data-page-edit-id="support-card-title">الدعم الفني للتابلت</span></h3>
+                    <p class="home-feature-description"><span data-page-edit-id="support-card-description">إشراف أ. ضياء يسري وأ. منى سعيد حل مشكلات السيرفر ورابط المنظومة وتحديثات التابلت المدرسي.</span></p>
+                    <button type="button" onclick="switchTab('tablet')" class="home-feature-action">
+                        تعليمات التابلت <i class="fa-solid fa-arrow-left text-xs" aria-hidden="true"></i>
                     </button>
-                </div>
-                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group">
-                    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition">
-                        <i class="fa-solid fa-calendar-check"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-navy mb-2"><span data-page-edit-id="schedules-card-title">القوائم الدراسية</span></h3>
-                    <p class="text-slate-600 text-sm mb-4"><span data-page-edit-id="schedules-card-description">اطّلع على قوائم الفصول لجميع فصول المدرسة لمتابعة المواعيد والتنظيم.</span></p>
-                    <button onclick="switchTab('schedules')" class="text-emerald-600 font-bold text-sm hover:underline flex items-center gap-1">
-                        استعرض القوائم <i class="fa-solid fa-arrow-left text-xs"></i>
+                </article>
+                <article class="home-feature-card">
+                    <div class="home-feature-icon" aria-hidden="true"><i class="fa-solid fa-calendar-check"></i></div>
+                    <h3 class="home-feature-title"><span data-page-edit-id="schedules-card-title">القوائم الدراسية</span></h3>
+                    <p class="home-feature-description"><span data-page-edit-id="schedules-card-description">اطّلع على قوائم الفصول لجميع فصول المدرسة لمتابعة المواعيد والتنظيم.</span></p>
+                    <button type="button" onclick="switchTab('schedules')" class="home-feature-action">
+                        استعرض القوائم <i class="fa-solid fa-arrow-left text-xs" aria-hidden="true"></i>
                     </button>
-                </div>
+                </article>
             </div>
         </section>
 
