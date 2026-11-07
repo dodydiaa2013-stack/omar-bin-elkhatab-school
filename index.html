@@ -3548,7 +3548,7 @@ async function deleteScheduleImage(cls) {
             }
             const summary = selections.map(item => 'فصل ' + item.className).join('، ');
             if (!confirm('سيتم نقل ' + selections.length + ' قائمة محددة (' + summary +
-                ') إلى سلة مهملات الصور والألبومات داخل لوحة الموقع، ويمكنك استعادتها من هناك. هل تريد المتابعة؟')) return;
+                ') إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
 
             const operationKey = 'schedule-bulk-delete';
             if (!beginImageOperation(operationKey)) return;
