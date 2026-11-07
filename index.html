@@ -178,6 +178,28 @@
 <style>
     /* ثبّت القسم الحالي قبل تحميل Tailwind حتى لا تظهر الرئيسية أو أقسام أخرى أثناء التحديث. */
     html[data-current-tab] .tab-content { display: none !important; }
+
+    /* اضبط لون تبويب القسم المطلوب من أول رسم، دون انتظار switchTab. */
+    html[data-current-tab="results"] #tab-home,
+    html[data-current-tab="leaders"] #tab-home,
+    html[data-current-tab="tablet"] #tab-home,
+    html[data-current-tab="schedules"] #tab-home,
+    html[data-current-tab="alerts"] #tab-home,
+    html[data-current-tab="student-queries"] #tab-home {
+        color: #cbd5e1;
+        border-bottom-color: transparent;
+    }
+
+    html[data-current-tab="home"] #tab-home,
+    html[data-current-tab="results"] #tab-results,
+    html[data-current-tab="leaders"] #tab-leaders,
+    html[data-current-tab="tablet"] #tab-tablet,
+    html[data-current-tab="schedules"] #tab-schedules,
+    html[data-current-tab="alerts"] #tab-alerts,
+    html[data-current-tab="student-queries"] #tab-student-queries {
+        color: #F59E0B;
+        border-bottom-color: #F59E0B;
+    }
     html[data-current-tab="home"] #content-home,
     html[data-current-tab="results"] #content-results,
     html[data-current-tab="leaders"] #content-leaders,
