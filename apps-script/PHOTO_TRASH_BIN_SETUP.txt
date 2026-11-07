@@ -242,6 +242,7 @@ function permanentlyDeleteDriveItem_(fileId) {
 
   function deleteRecursively_(id) {
     let pageToken = "";
+    const childIds = [];
     do {
       const query = encodeURIComponent("'" + id + "' in parents and (trashed = true or trashed = false)");
       let url = "https://www.googleapis.com/drive/v3/files?q=" + query +
@@ -252,9 +253,11 @@ function permanentlyDeleteDriveItem_(fileId) {
       const response = apiRequest_(url, "get");
       const data = JSON.parse(response.getContentText() || "{}");
       const children = Array.isArray(data.files) ? data.files : [];
-      children.forEach(function(child) { deleteRecursively_(child.id); });
+      children.forEach(function(child) { childIds.push(child.id); });
       pageToken = data.nextPageToken || "";
     } while (pageToken);
+
+    childIds.forEach(function(childId) { deleteRecursively_(childId); });
 
     apiRequest_(
       "https://www.googleapis.com/drive/v3/files/" +
