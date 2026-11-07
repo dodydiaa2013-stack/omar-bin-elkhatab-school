@@ -1492,7 +1492,24 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         function toggleAdminModal() {
-            document.getElementById('adminModal').classList.toggle('hidden');
+            const modal = document.getElementById('adminModal');
+            if (!modal) return;
+
+            const willOpen = modal.classList.contains('hidden');
+            modal.classList.toggle('hidden');
+
+            // عند فتح نافذة الدخول، انقل تركيز لوحة المفاتيح إلى حقل كلمة المرور
+            // حتى يعمل Enter مباشرة دون الحاجة إلى النقر داخل الحقل أولًا.
+            if (willOpen) {
+                const passwordInput = document.getElementById('adminPasswordInput');
+                if (passwordInput) {
+                    requestAnimationFrame(() => {
+                        if (!modal.classList.contains('hidden')) {
+                            passwordInput.focus({ preventScroll: true });
+                        }
+                    });
+                }
+            }
         }
 
         function verifyAdminPassword() {
