@@ -1676,7 +1676,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 if (emailInput) emailInput.focus();
                 return;
             }
-            if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recoveryEmail)) {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) {
                 setRecoveryMessage('صيغة البريد الإلكتروني غير صحيحة.', true);
                 if (emailInput) emailInput.focus();
                 return;
@@ -2240,7 +2240,7 @@ function receivePageChanges(data) {
     });
 
     // إزالة علامات التحديد الخاصة بالتحرير
-    pageCopy.querySelectorAll('.outline-dashed, .outline-2, .outline-navy, .p-0\\.5')
+    pageCopy.querySelectorAll('.outline-dashed, .outline-2, .outline-navy, .p-0\.5')
         .forEach(el => {
             el.classList.remove(
                 'outline-dashed',
