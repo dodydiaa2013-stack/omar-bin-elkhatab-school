@@ -849,15 +849,14 @@
                 <h3 class="text-xl font-extrabold text-navy">تسجيل دخول المعلم / المطور</h3>
                 <p class="text-xs text-slate-500">أدخل الرقم السري لتفعيل لوحة التعديل ورفع النتائج</p>
             </div>
-            <div class="space-y-3">
-                <input type="password" id="adminPasswordInput" aria-label="كلمة مرور المسؤول" autocomplete="current-password" placeholder="أدخل الرقم السري هنا..." 
-                       onkeydown="if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); verifyAdminPassword(); }"
+            <form id="adminLoginForm" class="space-y-3" onsubmit="event.preventDefault(); verifyAdminPassword();">
+                <input type="password" id="adminPasswordInput" aria-label="كلمة مرور المسؤول" autocomplete="current-password" placeholder="أدخل الرقم السري هنا..."
                        class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800 focus:ring-2 focus:ring-gold outline-none">
                 <div id="adminErrorMsg" class="text-xs text-red-600 text-center hidden font-bold">الرقم السري غير صحيح! حاول مرة أخرى.</div>
-                <button onclick="verifyAdminPassword()" class="w-full bg-navy hover:bg-navy-light text-gold font-bold py-3 rounded-xl transition shadow">
+                <button type="submit" id="adminLoginSubmit" class="w-full bg-navy hover:bg-navy-light text-gold font-bold py-3 rounded-xl transition shadow">
                     تأكيد الدخول
                 </button>
-            </div>
+            </form>
             <div class="text-center">
                 <button type="button" onclick="showPasswordRecovery()" class="text-sm text-blue-700 hover:text-blue-900 font-bold underline">
                     نسيت كلمة المرور؟
@@ -1497,100 +1496,120 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         function verifyAdminPassword() {
-    const input = document.getElementById('adminPasswordInput');
-    const error = document.getElementById('adminErrorMsg');
-    const password = input.value;
+            const input = document.getElementById('adminPasswordInput');
+            const error = document.getElementById('adminErrorMsg');
+            const submitButton = document.getElementById('adminLoginSubmit');
+            const password = input.value;
 
-    if (!password) {
-        error.textContent = 'من فضلك أدخل كلمة المرور.';
-        error.classList.remove('hidden');
-        return;
-    }
+            if (!password) {
+                error.textContent = 'من فضلك أدخل كلمة المرور.';
+                error.classList.remove('hidden');
+                input.focus();
+                return;
+            }
 
-    error.classList.add('hidden');
-
-    let frame = document.getElementById('adminLoginFrame');
-
-    if (!frame) {
-        frame = document.createElement('iframe');
-        frame.name = 'adminLoginFrame';
-        frame.id = 'adminLoginFrame';
-        frame.style.display = 'none';
-        document.body.appendChild(frame);
-    }
-
-    const nonce = (window.crypto && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : String(Date.now()) + Math.random().toString(36).slice(2);
-
-    const handleMessage = function(event) {
-        // Apps Script HtmlService wraps the returned HTML in its own sandboxFrame.
-        // The postMessage source is therefore the nested Google iframe, not the outer
-        // adminLoginFrame. Validate the trusted Google origin here and bind the reply
-        // to this request with the unpredictable nonce below.
-        if (!isTrustedAppsScriptMessage(event)) return;
-        const data = event.data;
-
-        if (!data || data.type !== 'adminLoginResult' || data.nonce !== nonce) {
-            return;
-        }
-
-        window.removeEventListener('message', handleMessage);
-        clearTimeout(timeout);
-
-        if (data.result && data.result.success) {
-            window.adminSessionToken = data.result.token;
-            isAdminLoggedIn = true;
-            input.value = '';
+            // Prevent Enter/click double submissions while one request is pending.
+            if (verifyAdminPassword.inProgress) return;
+            verifyAdminPassword.inProgress = true;
+            if (submitButton) submitButton.disabled = true;
 
             error.classList.add('hidden');
-            toggleAdminModal();
-            updateTeacherUI();
-            renderSchedules();
-            renderTabletGallery();
 
-            alert('تم تسجيل الدخول بنجاح.');
-        } else {
-            error.textContent =
-                (data.result && data.result.message) || 'كلمة المرور غير صحيحة.';
-            error.classList.remove('hidden');
+            let frame = document.getElementById('adminLoginFrame');
+
+            if (!frame) {
+                frame = document.createElement('iframe');
+                frame.name = 'adminLoginFrame';
+                frame.id = 'adminLoginFrame';
+                frame.style.display = 'none';
+                document.body.appendChild(frame);
+            }
+
+            const nonce = (window.crypto && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : String(Date.now()) + Math.random().toString(36).slice(2);
+
+            const releaseRequest = function() {
+                verifyAdminPassword.inProgress = false;
+                if (submitButton) submitButton.disabled = false;
+            };
+
+            const handleMessage = function(event) {
+                // Apps Script HtmlService wraps the response in a nested Google iframe.
+                // Validate its origin and bind the response to this request's nonce.
+                if (!isTrustedAppsScriptMessage(event)) return;
+                const data = event.data;
+
+                if (!data || data.type !== 'adminLoginResult' || data.nonce !== nonce) {
+                    return;
+                }
+
+                window.removeEventListener('message', handleMessage);
+                clearTimeout(timeout);
+                releaseRequest();
+
+                if (data.result && data.result.success) {
+                    window.adminSessionToken = data.result.token;
+                    isAdminLoggedIn = true;
+                    input.value = '';
+
+                    error.classList.add('hidden');
+                    document.getElementById('adminModal').classList.add('hidden');
+                    updateTeacherUI();
+                    renderSchedules();
+                    renderTabletGallery();
+
+                    alert('تم تسجيل الدخول بنجاح.');
+                } else {
+                    error.textContent =
+                        (data.result && data.result.message) || 'كلمة المرور غير صحيحة.';
+                    error.classList.remove('hidden');
+                    input.focus();
+                }
+            };
+
+            window.addEventListener('message', handleMessage);
+
+            const timeout = setTimeout(() => {
+                window.removeEventListener('message', handleMessage);
+                releaseRequest();
+                error.textContent = 'لم يصل رد من السيرفر. حاول مرة أخرى.';
+                error.classList.remove('hidden');
+            }, 20000);
+
+            try {
+                const requestForm = document.createElement('form');
+                requestForm.method = 'POST';
+                requestForm.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+                requestForm.target = 'adminLoginFrame';
+                requestForm.style.display = 'none';
+
+                const fields = {
+                    action: 'adminLogin',
+                    password: password,
+                    nonce: nonce,
+                    origin: window.location.origin
+                };
+
+                Object.entries(fields).forEach(([name, value]) => {
+                    const field = document.createElement('input');
+                    field.type = 'hidden';
+                    field.name = name;
+                    field.value = value;
+                    requestForm.appendChild(field);
+                });
+
+                document.body.appendChild(requestForm);
+                requestForm.submit();
+                requestForm.remove();
+            } catch (submissionError) {
+                window.removeEventListener('message', handleMessage);
+                clearTimeout(timeout);
+                releaseRequest();
+                error.textContent = 'تعذر إرسال طلب تسجيل الدخول. حاول مرة أخرى.';
+                error.classList.remove('hidden');
+            }
         }
-    };
-
-    window.addEventListener('message', handleMessage);
-
-    const timeout = setTimeout(() => {
-        window.removeEventListener('message', handleMessage);
-        error.textContent = 'لم يصل رد من السيرفر. حاول مرة أخرى.';
-        error.classList.remove('hidden');
-    }, 20000);
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
-    form.target = 'adminLoginFrame';
-    form.style.display = 'none';
-
-    const fields = {
-        action: 'adminLogin',
-        password: password,
-        nonce: nonce,
-        origin: window.location.origin
-    };
-
-    Object.entries(fields).forEach(([name, value]) => {
-        const field = document.createElement('input');
-        field.type = 'hidden';
-        field.name = name;
-        field.value = value;
-        form.appendChild(field);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
-}
-
         // استعادة كلمة المرور: معزولة عن مسار تسجيل الدخول الأصلي.
         let recoveryResetToken = "";
 
