@@ -248,6 +248,17 @@
             "?action=pageChanges&callback=receivePageChangesEarly&_=" +
             Date.now();
 
+        request.onload = () => {
+            // قد يكتمل تحميل السكربت دون استدعاء callback؛ لا تترك الصفحة دون خطة بديلة.
+            if (!window.__earlyPageChangesReceived) {
+                window.__earlyPageChangesFailed = true;
+                if (window.__pageChangesDomReady &&
+                    typeof window.loadSavedPageChanges === "function") {
+                    window.loadSavedPageChanges();
+                }
+            }
+        };
+
         request.onerror = () => {
             window.__earlyPageChangesFailed = true;
             console.warn("تعذر تحميل تعديلات النصوص مبكرًا؛ سيتم استخدام مسار التحميل الاحتياطي.");
