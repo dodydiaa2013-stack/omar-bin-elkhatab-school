@@ -64,6 +64,8 @@
                 animation-play-state: paused !important;
             }
         }
+        /* امنع وميض النصوص الافتراضية قبل تطبيق تعديلات الصفحة المحفوظة. */
+        html[data-page-edits-pending="true"] [data-page-edit-id] { visibility: hidden; }
         :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
         /* لا تعرض إطار التركيز حول حاوية القسم نفسها عند نقل التركيز إليها برمجيًا. */
         .tab-content:focus-visible { outline: none; }
@@ -1360,7 +1362,7 @@ window.addEventListener('DOMContentLoaded', () => {
     renderTabletGallery();
     assignPageEditIds();
     applyCachedPageChanges();
-    document.documentElement.removeAttribute("data-page-edits-cache-pending");
+    document.documentElement.removeAttribute("data-page-edits-pending");
     loadSavedPageChanges();
     updateTeacherUI();
 });
