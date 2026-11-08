@@ -2452,7 +2452,14 @@ function receivePageChanges(data) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function hideTabletImageUploadProgress() {
+    const progress = document.getElementById('tabletImageUploadProgress');
+    if (progress) progress.classList.add('hidden');
+}
+
 async function refreshTabletGallery(button) {
+    // لا نحتفظ بحالة رفع سابقة أثناء تحديث المعرض يدويًا.
+    hideTabletImageUploadProgress();
     const oldHtml = button ? button.innerHTML : '';
     if (button) { button.disabled = true; button.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1"></i> جارٍ التحديث...'; }
     try { await renderTabletGallery(); }
@@ -2750,6 +2757,7 @@ async function deleteDriveTabletImage(fileId, fileName) {
 
     const operationKey = 'gallery-delete-' + String(fileId);
     if (!beginImageOperation(operationKey)) return;
+    hideTabletImageUploadProgress();
 
     const status = document.getElementById('googleSignInStatus');
     const deleteButtons = document.querySelectorAll('#tabletGallery button');
@@ -2941,6 +2949,8 @@ async function uploadTabletImage() {
         }
         if (button) button.disabled = false;
         endImageOperation(operationKey);
+        // أخفِ شريط التقدم بعد اكتمال العملية، مع الإبقاء على رسالة النتيجة.
+        hideTabletImageUploadProgress();
     }
 }
 
@@ -4063,6 +4073,8 @@ async function deleteScheduleImage(cls) {
             }
             const noun = scope === 'albums' ? 'ألبومًا' : 'صورة';
             if (!confirm('سيتم نقل ' + ids.length + ' ' + noun + ' محدد إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
+
+            if (scope === 'gallery') hideTabletImageUploadProgress();
 
             const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
             const statusId = scope === 'gallery' ? 'googleSignInStatus'
