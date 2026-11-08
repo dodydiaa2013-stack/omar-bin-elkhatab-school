@@ -698,7 +698,7 @@
                     <div id="googleSignInButton" class="my-2"></div>
 <p id="googleSignInStatus" class="text-xs text-slate-600">سجّل الدخول بحساب Google المصرح له برفع الصور.</p>
                     <div id="tabletImageUploadControls" class="hidden gap-2">
-                        <input type="file" id="tabletImgInput" accept="image/*" class="block w-full text-xs text-slate-500 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy file:text-white">
+                        <input type="file" id="tabletImgInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="block w-full text-xs text-slate-500 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy file:text-white" aria-label="اختيار عدة صور لنشرات التطوير والتابلت">
                         <button type="button" onclick="uploadTabletImage()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-lg text-xs shrink-0">
                             رفع وحفظ داخل الكود
                         </button>
@@ -2807,62 +2807,87 @@ async function uploadTabletImage() {
         status.textContent = 'سجّل الدخول بحساب Google وكلمة مرور المسؤول أولاً.';
         return;
     }
-    if (!input.files || !input.files[0]) {
-        alert('يرجى اختيار صورة أولاً.');
+
+    const files = Array.from(input?.files || []);
+    if (!files.length) {
+        alert('يرجى اختيار صورة واحدة على الأقل.');
+        return;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const invalidFile = files.find(file =>
+        !allowedTypes.includes(file.type) || file.size > 4 * 1024 * 1024
+    );
+    if (invalidFile) {
+        status.textContent = !allowedTypes.includes(invalidFile.type)
+            ? 'نوع الصورة غير مسموح: ' + invalidFile.name + '. استخدم JPG أو PNG أو WEBP أو GIF.'
+            : 'حجم الصورة أكبر من 4 ميجابايت: ' + invalidFile.name;
         return;
     }
 
     const operationKey = 'gallery-upload';
     if (!beginImageOperation(operationKey)) return;
 
-    const file = input.files[0];
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
-        status.textContent = 'نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF.';
-        endImageOperation(operationKey);
-        return;
-    }
-    if (file.size > 4 * 1024 * 1024) {
-        status.textContent = 'حجم الصورة يجب ألا يتجاوز 4 ميجابايت.';
-        endImageOperation(operationKey);
-        return;
-    }
+    let succeeded = 0;
+    const failures = [];
 
+    if (input) input.disabled = true;
     if (button) button.disabled = true;
-    status.textContent = 'جارٍ تجهيز الصورة ورفعها إلى Google Drive...';
+
     try {
-        // قراءة القائمة السابقة مساعدة للتحقق الاحتياطي فقط؛ لا تمنع الرفع إذا تعذر جلبها.
-        let initialImages = null;
-        try {
-            initialImages = await fetchTabletGalleryImages();
-        } catch (snapshotError) {
-            console.warn('تعذر جلب المعرض قبل الرفع؛ سيعتمد التأكيد على رد الخادم:', snapshotError);
+        for (let index = 0; index < files.length; index++) {
+            const file = files[index];
+            status.textContent = 'جارٍ تجهيز ورفع الصورة ' + (index + 1) +
+                ' من ' + files.length + ': ' + file.name;
+
+            try {
+                // تُحدّث اللقطة قبل كل صورة حتى يكون التحقق الاحتياطي خاصًا بهذه العملية.
+                let baselineImages = null;
+                try {
+                    baselineImages = await fetchTabletGalleryImages();
+                } catch (snapshotError) {
+                    console.warn('تعذر جلب المعرض قبل رفع الصورة؛ سيعتمد التأكيد على رد الخادم:', snapshotError);
+                }
+
+                const data = await prepareImageUploadData(file, readScheduleFileAsBase64);
+                await galleryUploadPost({
+                    fileName: file.name,
+                    mimeType: file.type,
+                    data: data
+                }, baselineImages);
+
+                succeeded++;
+                status.textContent = 'تم رفع ' + succeeded + ' من ' + files.length +
+                    ' صورة. جارٍ متابعة بقية الصور...';
+            } catch (error) {
+                failures.push({ name: file.name, message: error.message || 'حدث خطأ غير معروف.' });
+                status.textContent = 'تعذر رفع ' + file.name + '. جارٍ متابعة بقية الصور...';
+            }
         }
 
-        const data = await prepareImageUploadData(file, readScheduleFileAsBase64);
-        await galleryUploadPost({
-            fileName: file.name,
-            mimeType: file.type,
-            data: data
-        }, initialImages);
-
-        // نجاح رد Apps Script هو تأكيد الحفظ. تحديث العرض خطوة منفصلة لا تلغي نجاح الرفع.
-        let refreshed = false;
-        try {
-            const images = await fetchTabletGalleryImages();
-            await renderTabletGallery(images);
-            refreshed = Array.isArray(images);
-        } catch (refreshError) {
-            console.warn('تم تأكيد الرفع لكن تعذر تحديث المعرض تلقائيًا:', refreshError);
+        if (succeeded > 0) {
+            try {
+                const images = await fetchTabletGalleryImages();
+                await renderTabletGallery(images);
+            } catch (refreshError) {
+                console.warn('تم تأكيد رفع الصور لكن تعذر تحديث المعرض تلقائيًا:', refreshError);
+            }
         }
 
-        status.textContent = refreshed
-            ? 'تم رفع الصورة بنجاح وتحديث المعرض.'
-            : 'تم رفع الصورة بنجاح. تعذر تحديث المعرض تلقائيًا؛ استخدم زر تحديث المعرض.';
-        input.value = '';
-    } catch (error) {
-        status.textContent = error.message || 'تعذر تأكيد الرفع من الخادم. حدّث المعرض قبل إعادة المحاولة.';
+        if (failures.length === 0) {
+            status.textContent = 'تم رفع الصور بنجاح وتحديث المعرض: ' + succeeded + ' صورة.';
+        } else if (succeeded > 0) {
+            status.textContent = 'اكتمل الرفع جزئيًا: ' + succeeded + ' ناجح، ' +
+                failures.length + ' فشل. ' + failures.map(item => item.name).join('، ');
+        } else {
+            status.textContent = 'لم يتم تأكيد رفع أي صورة. ' +
+                failures.map(item => item.name + ': ' + item.message).join(' | ');
+        }
     } finally {
+        if (input) {
+            input.value = '';
+            input.disabled = false;
+        }
         if (button) button.disabled = false;
         endImageOperation(operationKey);
     }
