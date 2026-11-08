@@ -2231,6 +2231,7 @@ function assignPageEditIds() {
 }
 
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
+let pageChangesResponseReceived = false;
 
 // اقبل التعديلات المحفوظة كما هي، بما فيها عناوين الاستعلامات ووصف قسم التابلت.
 function normalizeFixedPageChanges(changes) {
@@ -2328,19 +2329,23 @@ function loadSavedPageChanges() {
     const scriptURL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
     const script = document.createElement("script");
 
+    pageChangesResponseReceived = false;
     script.src =
         scriptURL +
         "?action=pageChanges&callback=receivePageChanges&_=" +
         Date.now();
 
     script.onerror = () => {
-        console.error("تعذر تحميل تعديلات نصوص الموقع؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
+        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
         document.documentElement.removeAttribute("data-page-edits-pending");
         script.remove();
     };
 
     script.onload = () => {
-        // إذا لم يرسل الخادم بيانات صالحة، أظهر النص الافتراضي بدل ترك العنوان مخفيًا.
+        // تحميل ملف JavaScript لا يعني بالضرورة أن callback أعاد بيانات صالحة.
+        if (!pageChangesResponseReceived) {
+            console.error("وصل رد من خدمة التعديلات دون استدعاء receivePageChanges؛ لم يتم تأكيد تحميل التعديلات.");
+        }
         document.documentElement.removeAttribute("data-page-edits-pending");
         script.remove();
     };
@@ -2349,11 +2354,18 @@ function loadSavedPageChanges() {
 }
 
 function receivePageChanges(data) {
-    if (!data || !data.success || !Array.isArray(data.changes)) return;
+    pageChangesResponseReceived = true;
 
-    // قد يعيد Apps Script قائمة فارغة عند تعذر قراءة ملف التعديلات.
-    // لا تستبدل نسخة محلية محفوظة بتلك القائمة المشكوك فيها.
-    // عند حفظ تفريغ حقيقي للتعديلات، تكون النسخة المحلية قد حُدثت بالفعل إلى [].
+    // لا نحوّل خطأ قراءة الخادم أو الاستجابة غير السليمة إلى قائمة تعديلات فارغة.
+    if (!data || data.success !== true || !Array.isArray(data.changes)) {
+        const message = data && (data.message || data.error)
+            ? (data.message || data.error)
+            : "استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.";
+        console.error("تعذر استرجاع تعديلات نصوص الموقع:", message);
+        return false;
+    }
+
+    // لا تستبدل نسخة محلية محفوظة بقائمة فارغة قبل التأكد من صحة رد الخادم.
     try {
         const cachedRaw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
         if (cachedRaw && data.changes.length === 0) {
@@ -2361,7 +2373,7 @@ function receivePageChanges(data) {
             if (cached && Array.isArray(cached.changes) && cached.changes.length > 0) {
                 console.warn("وصلت قائمة تعديلات فارغة من الخادم مع وجود نسخة محلية محفوظة؛ تم الاحتفاظ بالنسخة المحلية.");
                 applyPageChangesList(cached.changes);
-                return;
+                return true;
             }
         }
     } catch (error) {
@@ -2383,7 +2395,10 @@ function receivePageChanges(data) {
     messages.forEach((message, index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
+
+    return true;
 }
+
         function exportUpdatedHTML() {
     if (!isDeveloperLoggedIn) {
         alert('سجّل الدخول بحساب Google المصرح به أولاً.');
