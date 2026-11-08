@@ -1361,8 +1361,9 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
+    // طبّق الكاش أولًا، لكن لا تكشف النصوص القابلة للتحرير قبل وصول رد الخادم
+    // أو انتهاء تحميله؛ مع استثناء أزرار التابات من الإخفاء حتى تظل ثابتة.
     applyCachedPageChanges();
-    document.documentElement.removeAttribute("data-page-edits-pending");
     loadSavedPageChanges();
     updateTeacherUI();
 });
@@ -2158,6 +2159,7 @@ function assignPageEditIds() {
         '#adminErrorMsg',
         '#recoveryMessage',
         '#schoolImageViewer',
+        '.tab-btn',
         '[data-page-no-auto-edit="true"]'
     ].join(',');
 
