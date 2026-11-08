@@ -223,6 +223,43 @@
         document.documentElement.setAttribute('data-current-tab', tabId);
     })();
 </script>
+<script>
+    // ابدأ طلب تعديلات النصوص أثناء قراءة الصفحة بدل انتظار DOMContentLoaded.
+    // إذا وصلت الاستجابة قبل تجهيز عناصر الصفحة، احتفظ بها حتى تصبح جاهزة.
+    (() => {
+        const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+        window.__pageChangesDomReady = false;
+        window.__earlyPageChangesReceived = false;
+
+        window.receivePageChangesEarly = function(data) {
+            if (window.__pageChangesDomReady &&
+                typeof window.receivePageChanges === "function") {
+                window.receivePageChanges(data);
+                return;
+            }
+
+            window.__earlyPageChangesData = data;
+            window.__earlyPageChangesReceived = true;
+        };
+
+        const request = document.createElement("script");
+        request.async = true;
+        request.src = endpoint +
+            "?action=pageChanges&callback=receivePageChangesEarly&_=" +
+            Date.now();
+
+        request.onerror = () => {
+            window.__earlyPageChangesFailed = true;
+            console.warn("تعذر تحميل تعديلات النصوص مبكرًا؛ سيتم استخدام مسار التحميل الاحتياطي.");
+            if (window.__pageChangesDomReady &&
+                typeof window.loadSavedPageChanges === "function") {
+                window.loadSavedPageChanges();
+            }
+        };
+
+        document.head.appendChild(request);
+    })();
+</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
@@ -1380,8 +1417,20 @@ window.addEventListener('DOMContentLoaded', () => {
     renderTabletGallery();
     assignPageEditIds();
     applyCachedPageChanges();
+
+    // أصبحت عناصر الصفحة جاهزة؛ طبّق الاستجابة المبكرة إن كانت وصلت بالفعل.
+    window.__pageChangesDomReady = true;
+    if (window.__earlyPageChangesReceived) {
+        const earlyData = window.__earlyPageChangesData;
+        window.__earlyPageChangesData = null;
+        window.__earlyPageChangesReceived = false;
+        receivePageChanges(earlyData);
+    } else if (window.__earlyPageChangesFailed) {
+        // خطة احتياطية عند فشل الطلب الذي بدأ من head.
+        loadSavedPageChanges();
+    }
+
     document.documentElement.removeAttribute("data-page-edits-pending");
-    loadSavedPageChanges();
     updateTeacherUI();
 });
 
