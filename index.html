@@ -1185,6 +1185,24 @@
                     image.style.height = height + 'px';
                     level.textContent = Math.round(viewer._zoom * 100) + '%';
                 };
+                // انتظر استقرار ظهور العارض وأبعاد مساحة الصورة قبل حساب مقاس الملاءمة.
+                // يمنع ذلك ظهور الصورة مكبرة في أول فتح عندما تكون أبعاد الحاوية لم تُحسب بعد.
+                viewer._fitRequest = 0;
+                viewer._scheduleFit = function (resetZoom) {
+                    const request = ++viewer._fitRequest;
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            if (
+                                request !== viewer._fitRequest ||
+                                viewer.classList.contains('hidden') ||
+                                !image.naturalWidth
+                            ) return;
+                            if (resetZoom) viewer._zoom = 1;
+                            viewer._applyZoom();
+                            if (resetZoom) stage.scrollTo({ top: 0, left: 0 });
+                        });
+                    });
+                };
                 viewer._changeZoom = function (factor) {
                     viewer._zoom = Math.max(0.5, Math.min(5, viewer._zoom * factor));
                     viewer._applyZoom();
@@ -1309,9 +1327,7 @@
                     if (activePointers.has(event.pointerId)) finishPointer(event);
                 });
                 image.addEventListener('load', () => {
-                    viewer._zoom = 1;
-                    viewer._applyZoom();
-                    stage.scrollTo({ top: 0, left: 0 });
+                    viewer._scheduleFit(true);
                 });
                 viewer.addEventListener('click', event => {
                     const content = viewer.firstElementChild;
@@ -1348,7 +1364,7 @@
                     }
                 });
                 window.addEventListener('resize', () => {
-                    if (!viewer.classList.contains('hidden')) viewer._applyZoom();
+                    if (!viewer.classList.contains('hidden')) viewer._scheduleFit(false);
                 });
                 document.body.appendChild(viewer);
             }
@@ -1364,7 +1380,7 @@
             viewer.classList.add('flex');
             document.body.classList.add('overflow-hidden');
             viewer.querySelector('#schoolImageViewerClose').focus();
-            if (image.complete && image.naturalWidth) viewer._applyZoom();
+            if (image.complete && image.naturalWidth) viewer._scheduleFit(true);
         }
 
         function closeSchoolImageViewer() {
