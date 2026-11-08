@@ -703,6 +703,16 @@
                             رفع وحفظ داخل الكود
                         </button>
                     </div>
+                    <div id="tabletImageUploadProgress" class="hidden mt-3 rounded-lg border border-blue-200 bg-white p-3 space-y-2" aria-live="polite">
+                        <div class="flex items-center justify-between gap-3">
+                            <span class="text-xs font-bold text-navy">متابعة رفع الصور</span>
+                            <span id="tabletImageUploadCounter" class="text-sm font-extrabold text-blue-700 tabular-nums">0 / 0</span>
+                        </div>
+                        <div class="h-2.5 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="تقدم رفع الصور" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="tabletImageUploadProgressBar">
+                            <div id="tabletImageUploadProgressFill" class="h-full rounded-full bg-blue-600 transition-all duration-300" style="width:0%"></div>
+                        </div>
+                        <p id="tabletImageUploadProgressLabel" class="text-xs text-slate-600">في انتظار بدء الرفع...</p>
+                    </div>
                 </div>
 
                 <div class="flex justify-end pt-2">
@@ -2802,6 +2812,11 @@ async function uploadTabletImage() {
     const input = document.getElementById('tabletImgInput');
     const status = document.getElementById('googleSignInStatus');
     const button = document.querySelector('#tabletImageUploadControls button');
+    const progress = document.getElementById('tabletImageUploadProgress');
+    const counter = document.getElementById('tabletImageUploadCounter');
+    const progressBar = document.getElementById('tabletImageUploadProgressBar');
+    const progressFill = document.getElementById('tabletImageUploadProgressFill');
+    const progressLabel = document.getElementById('tabletImageUploadProgressLabel');
 
     if (!googleUploadToken || !window.adminSessionToken) {
         status.textContent = 'سجّل الدخول بحساب Google وكلمة مرور المسؤول أولاً.';
@@ -2830,15 +2845,26 @@ async function uploadTabletImage() {
 
     let succeeded = 0;
     const failures = [];
+    const total = files.length;
 
+    // أظهر العداد من بداية العملية، وابدأ من صفر من إجمالي الصور المختارة.
+    if (progress) progress.classList.remove('hidden');
+    if (counter) counter.textContent = '0 / ' + total;
+    if (progressBar) progressBar.setAttribute('aria-valuenow', '0');
+    if (progressFill) progressFill.style.width = '0%';
+    if (progressLabel) progressLabel.textContent = 'تم رفع 0 من ' + total + ' صور.';
     if (input) input.disabled = true;
     if (button) button.disabled = true;
 
     try {
-        for (let index = 0; index < files.length; index++) {
+        for (let index = 0; index < total; index++) {
             const file = files[index];
             status.textContent = 'جارٍ تجهيز ورفع الصورة ' + (index + 1) +
-                ' من ' + files.length + ': ' + file.name;
+                ' من ' + total + ': ' + file.name;
+            if (progressLabel) {
+                progressLabel.textContent = 'جارٍ رفع الصورة ' + (index + 1) +
+                    ' من ' + total + ': ' + file.name;
+            }
 
             try {
                 // تُحدّث اللقطة قبل كل صورة حتى يكون التحقق الاحتياطي خاصًا بهذه العملية.
@@ -2857,11 +2883,22 @@ async function uploadTabletImage() {
                 }, baselineImages);
 
                 succeeded++;
-                status.textContent = 'تم رفع ' + succeeded + ' من ' + files.length +
+                status.textContent = 'تم رفع ' + succeeded + ' من ' + total +
                     ' صورة. جارٍ متابعة بقية الصور...';
             } catch (error) {
                 failures.push({ name: file.name, message: error.message || 'حدث خطأ غير معروف.' });
                 status.textContent = 'تعذر رفع ' + file.name + '. جارٍ متابعة بقية الصور...';
+            }
+
+            // العداد يوضح عدد الصور التي انتهت معالجتها، سواء نجحت أو فشلت.
+            const processed = index + 1;
+            const percent = Math.round((processed / total) * 100);
+            if (counter) counter.textContent = processed + ' / ' + total;
+            if (progressBar) progressBar.setAttribute('aria-valuenow', String(percent));
+            if (progressFill) progressFill.style.width = percent + '%';
+            if (progressLabel) {
+                progressLabel.textContent = 'تمت معالجة ' + processed + ' من ' + total +
+                    ' صور — الناجح: ' + succeeded + '، الفاشل: ' + failures.length;
             }
         }
 
@@ -2883,6 +2920,10 @@ async function uploadTabletImage() {
             status.textContent = 'لم يتم تأكيد رفع أي صورة. ' +
                 failures.map(item => item.name + ': ' + item.message).join(' | ');
         }
+        if (progressLabel) {
+            progressLabel.textContent = 'انتهى الرفع — الناجح: ' + succeeded +
+                '، الفاشل: ' + failures.length + ' من ' + total + ' صور.';
+        }
     } finally {
         if (input) {
             input.value = '';
@@ -2892,7 +2933,6 @@ async function uploadTabletImage() {
         endImageOperation(operationKey);
     }
 }
-
 
 
 async function galleryUploadPost(fields, baselineImages) {
