@@ -66,6 +66,24 @@
         }
         :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
 
+        /* تمييز التابة المحددة أثناء التحرير الحي بوضوح دون تغيير تخطيط الصفحة. */
+        html[data-live-editing="true"] .tab-content.page-edit-tab-selected {
+            outline: 3px solid rgba(245, 158, 11, .9);
+            outline-offset: 4px;
+            border-radius: 14px;
+        }
+        html[data-live-editing="true"] .tab-btn.page-edit-tab-selected {
+            background: rgba(245, 158, 11, .16);
+            box-shadow: inset 0 0 0 2px rgba(245, 158, 11, .75);
+        }
+        html[data-live-editing="true"] [data-page-edit-id][contenteditable="true"]:focus {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+            border-radius: 4px;
+            cursor: text;
+        }
+
+
         /* تثبيت أبعاد عارض الصور على الشاشات الكبيرة قبل حساب مقاس الصورة. */
         #schoolImageViewer > div {
             display: flex;
@@ -1681,6 +1699,58 @@ window.addEventListener('DOMContentLoaded', () => {
 
         const VALID_TAB_IDS = ['home', 'results', 'leaders', 'tablet', 'schedules', 'alerts', 'student-queries'];
 
+        // حدّد القسم الذي يعمل عليه المسؤول دون نقل التركيز بعيدًا عن النص الجاري تحريره.
+        function setSelectedPageEditTab(tabId) {
+            if (!VALID_TAB_IDS.includes(tabId)) return;
+            document.querySelectorAll('.tab-content.page-edit-tab-selected')
+                .forEach(section => section.classList.remove('page-edit-tab-selected'));
+            document.querySelectorAll('.tab-btn.page-edit-tab-selected')
+                .forEach(button => button.classList.remove('page-edit-tab-selected'));
+
+            const section = document.getElementById('content-' + tabId);
+            const button = document.getElementById('tab-' + tabId);
+            if (section) section.classList.add('page-edit-tab-selected');
+            if (button) button.classList.add('page-edit-tab-selected');
+            document.documentElement.setAttribute('data-edit-selected-tab', tabId);
+        }
+
+        // التحديد عند بداية النقر يجعل الإطار يظهر فورًا، مع الحفاظ على تركيز محرر النص.
+        document.addEventListener('pointerdown', event => {
+            if (!isLiveEditing || !(event.target instanceof Element)) return;
+            const section = event.target.closest('.tab-content[id^="content-"]');
+            if (!section) return;
+            const tabId = section.id.slice('content-'.length);
+            if (VALID_TAB_IDS.includes(tabId)) setSelectedPageEditTab(tabId);
+        }, true);
+
+        document.addEventListener('click', event => {
+            if (!isLiveEditing || !(event.target instanceof Element)) return;
+            const section = event.target.closest('.tab-content[id^="content-"]');
+            if (!section) return;
+            const tabId = section.id.slice('content-'.length);
+            if (VALID_TAB_IDS.includes(tabId)) setSelectedPageEditTab(tabId);
+        }, true);
+
+        // اسمح للمسافة بإدخال مسافة داخل النص، ولا تسمح لمعالجات اختصارات الصفحة بالتقاطها.
+        // لا نستخدم preventDefault حتى لا نمنع الكتابة أو سلوك المحرر الأصلي.
+        document.addEventListener('keydown', event => {
+            if (!(event.target instanceof Element)) return;
+            const editable = event.target.closest('[contenteditable="true"]');
+            if (!editable || !isLiveEditing) return;
+            if (event.key === ' ' || event.code === 'Space') {
+                event.stopPropagation();
+            }
+        }, true);
+
+        // اترك النقر المزدوج يحدد الكلمات داخل النص القابل للتحرير.
+        document.addEventListener('dblclick', event => {
+            if (!(event.target instanceof Element)) return;
+            if (event.target.closest('[contenteditable="true"]')) {
+                event.stopPropagation();
+            }
+        }, true);
+
+
         function initializeTabNavigation() {
             const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
             switchTab(VALID_TAB_IDS.includes(requested) ? requested : 'home', { updateHistory: false, focus: false });
@@ -1711,6 +1781,9 @@ window.addEventListener('DOMContentLoaded', () => {
                 window.history.pushState({ tabId }, '', '#' + tabId);
             }
             if (tabId === 'alerts') loadPhotoAlbums(false);
+
+            if (isLiveEditing) setSelectedPageEditTab(tabId);
+
 
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2135,6 +2208,15 @@ function toggleLiveEditing() {
         return;
     }
     isLiveEditing = !isLiveEditing;
+    document.documentElement.setAttribute('data-live-editing', isLiveEditing ? 'true' : 'false');
+    if (isLiveEditing) {
+        const currentTab = document.documentElement.getAttribute('data-current-tab') || 'home';
+        setSelectedPageEditTab(currentTab);
+    } else {
+        document.querySelectorAll('.tab-content.page-edit-tab-selected, .tab-btn.page-edit-tab-selected')
+            .forEach(el => el.classList.remove('page-edit-tab-selected'));
+        document.documentElement.removeAttribute('data-edit-selected-tab');
+    }
     document.querySelectorAll('[data-page-edit-id]').forEach(el => {
         if (isLiveEditing) {
             // صرّح بإمكانية إدخال النص ولوحة المفاتيح على الهواتف، بما فيها Android.
