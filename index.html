@@ -1361,8 +1361,9 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
+    // طبّق النسخة المحلية أولًا، لكن أبقِ النصوص مخفية حتى يصل رد الخادم
+    // أو ينتهي طلبه؛ حتى لا تظهر القيم الافتراضية ثم تتبدل إلى النصوص المحفوظة.
     applyCachedPageChanges();
-    document.documentElement.removeAttribute("data-page-edits-pending");
     loadSavedPageChanges();
     updateTeacherUI();
 });
