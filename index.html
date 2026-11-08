@@ -2259,26 +2259,55 @@ function normalizeFixedPageChanges(changes) {
 }
 
 function applyPageChangesList(changes) {
-    if (!Array.isArray(changes)) return;
+    const stats = {
+        received: Array.isArray(changes) ? changes.length : 0,
+        matched: 0,
+        applied: 0,
+        unchanged: 0,
+        skippedEditing: 0,
+        missing: 0,
+        invalid: 0,
+        missingIds: []
+    };
+
+    if (!Array.isArray(changes)) return stats;
+
     changes.forEach(item => {
-        if (!item || typeof item.id !== "string" || typeof item.text !== "string") return;
-        const element = document.querySelector('[data-page-edit-id="' + CSS.escape(item.id) + '"]');
-        if (!element) return;
+        if (!item || typeof item.id !== "string" || typeof item.text !== "string") {
+            stats.invalid++;
+            return;
+        }
 
-        // لا تطبّق ردود الخادم فوق نص يحرره المسؤول حاليًا؛
-        // سيُلتقط النص الذي كتبه عند تأكيد الحفظ عبر cacheCurrentPageChanges().
-        if (isLiveEditing && element.isContentEditable) return;
+        const element = document.querySelector(
+            '[data-page-edit-id="' + CSS.escape(item.id) + '"]'
+        );
 
-        // حافظ على المعالجة الخاصة بنص التذييل فقط، واترك بقية النصوص قابلة للتعديل.
+        if (!element) {
+            stats.missing++;
+            if (stats.missingIds.length < 20) {
+                stats.missingIds.push(item.id);
+            }
+            return;
+        }
+
+        stats.matched++;
+
+        // لا تطبّق ردود الخادم فوق نص يحرره المسؤول حاليًا.
+        if (isLiveEditing && element.isContentEditable) {
+            stats.skippedEditing++;
+            return;
+        }
+
         const savedText = item.id === "footer-leadership"
             ? item.text.replace("مديرية التربية والتعليم بمحافظة القاهرة", "وزارة التربية والتعليم بمحافظة القاهرة")
             : item.text;
 
-        // لا تعِد كتابة النص إذا كان مطابقًا؛ فهذا يمنع إعادة إنشاء عناصر التذييل
-        // دون داعٍ عند وصول نسخة الخادم المطابقة للكاش المحلي.
-        if (element.textContent.trim() === savedText.trim()) return;
+        if (element.textContent.trim() === savedText.trim()) {
+            stats.unchanged++;
+            return;
+        }
 
-        // حافظ على تنسيق اسم مدير المدرسة داخل التذييل عند تحديث النص المحفوظ.
+        // حافظ على تنسيق اسم مدير المدرسة داخل التذييل.
         if (item.id === "footer-manager") {
             const managerName = element.querySelector("span");
             const separator = savedText.indexOf(":");
@@ -2289,15 +2318,16 @@ function applyPageChangesList(changes) {
                 if (firstTextNode) firstTextNode.nodeValue = prefix;
                 else element.insertBefore(document.createTextNode(prefix), managerName);
                 managerName.textContent = savedText.slice(separator + 1).trim();
+                stats.applied++;
                 return;
             }
         }
 
         element.textContent = savedText;
+        stats.applied++;
     });
 
-    // أعد تثبيت النصوص المعتمدة حتى لو وصلت قيم قديمة أو فارغة من التخزين.
-
+    return stats;
 }
 
 function applyCachedPageChanges() {
@@ -2401,7 +2431,23 @@ function receivePageChanges(data) {
     }
 
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
-    applyPageChangesList(normalizedChanges);
+    const applyStats = applyPageChangesList(normalizedChanges);
+
+    console.info("[PageChanges] نتيجة استرجاع التعديلات:", {
+        serverReceived: data.changes.length,
+        normalized: normalizedChanges.length,
+        matched: applyStats.matched,
+        applied: applyStats.applied,
+        unchanged: applyStats.unchanged,
+        skippedEditing: applyStats.skippedEditing,
+        missing: applyStats.missing,
+        invalid: applyStats.invalid,
+        missingIds: applyStats.missingIds
+    });
+
+    if (applyStats.missing > 0 || applyStats.invalid > 0) {
+        console.warn("[PageChanges] توجد تعديلات لم تُطبّق على عناصر الصفحة. راجع المعرّفات المفقودة أو البيانات غير الصحيحة.");
+    }
 
     try {
         localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
