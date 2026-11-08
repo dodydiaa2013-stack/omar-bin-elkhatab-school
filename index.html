@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="ar" dir="rtl" data-tablet-tip-pending="true">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -65,8 +65,6 @@
             }
         }
         :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
-        /* أخفِ نقطة شحن التابلت وحدها حتى تُستعاد صياغتها المحفوظة، دون إخفاء بقية الصفحة. */
-        html[data-tablet-tip-pending="true"] [data-page-edit-id="tablet-support-tip-4"] { visibility: hidden; }
         /* لا تعرض إطار التركيز حول حاوية القسم نفسها عند نقل التركيز إليها برمجيًا. */
         .tab-content:focus-visible { outline: none; }
 
@@ -1361,9 +1359,7 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
-    const hasCachedTabletTip = hasCachedPageChange("tablet-support-tip-4");
     applyCachedPageChanges();
-    if (hasCachedTabletTip) revealTabletSupportTip();
     document.documentElement.removeAttribute("data-page-edits-pending");
     loadSavedPageChanges();
     updateTeacherUI();
@@ -2236,22 +2232,6 @@ function assignPageEditIds() {
 
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
 
-function hasCachedPageChange(id) {
-    try {
-        const cached = JSON.parse(localStorage.getItem(PAGE_CHANGES_CACHE_KEY) || "null");
-        return !!cached && Array.isArray(cached.changes) && cached.changes.some(item =>
-            item && item.id === id && typeof item.text === "string"
-        );
-    } catch (error) {
-        console.warn("تعذر فحص النسخة المحلية لنص دعم التابلت.", error);
-        return false;
-    }
-}
-
-function revealTabletSupportTip() {
-    document.documentElement.removeAttribute("data-tablet-tip-pending");
-}
-
 // اقبل التعديلات المحفوظة كما هي، بما فيها عناوين الاستعلامات ووصف قسم التابلت.
 function normalizeFixedPageChanges(changes) {
     return Array.isArray(changes) ? changes : [];
@@ -2356,7 +2336,6 @@ function loadSavedPageChanges() {
     script.onerror = () => {
         console.error("تعذر تحميل تعديلات نصوص الموقع؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
         document.documentElement.removeAttribute("data-page-edits-pending");
-        revealTabletSupportTip();
         script.remove();
     };
 
@@ -2383,7 +2362,6 @@ function receivePageChanges(data) {
             if (cached && Array.isArray(cached.changes) && cached.changes.length > 0) {
                 console.warn("وصلت قائمة تعديلات فارغة من الخادم مع وجود نسخة محلية محفوظة؛ تم الاحتفاظ بالنسخة المحلية.");
                 applyPageChangesList(cached.changes);
-                revealTabletSupportTip();
                 return;
             }
         }
@@ -2393,7 +2371,6 @@ function receivePageChanges(data) {
 
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
     applyPageChangesList(normalizedChanges);
-    revealTabletSupportTip();
 
     try {
         localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
