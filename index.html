@@ -65,6 +65,22 @@
             }
         }
         :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
+
+        /* تثبيت أبعاد عارض الصور على الشاشات الكبيرة قبل حساب مقاس الصورة. */
+        #schoolImageViewer > div {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            max-height: 100dvh;
+        }
+        #schoolImageViewer .school-image-viewer-stage {
+            display: block;
+            flex: 1 1 0%;
+            width: 100%;
+            height: 0;
+            min-height: 0;
+        }
         /* لا تعرض إطار التركيز حول حاوية القسم نفسها عند نقل التركيز إليها برمجيًا. */
         .tab-content:focus-visible { outline: none; }
 
@@ -1176,8 +1192,9 @@
                 viewer._zoom = 1;
                 viewer._fitScale = 1;
                 viewer._applyZoom = function () {
-                    if (!image.naturalWidth || !stage.clientWidth || !stage.clientHeight) return;
-                    const fit = Math.min(stage.clientWidth / image.naturalWidth, stage.clientHeight / image.naturalHeight, 1);
+                    const stageRect = stage.getBoundingClientRect();
+                    if (!image.naturalWidth || stageRect.width < 1 || stageRect.height < 1) return;
+                    const fit = Math.min(stageRect.width / image.naturalWidth, stageRect.height / image.naturalHeight, 1);
                     viewer._fitScale = fit || 1;
                     const width = Math.round(image.naturalWidth * viewer._fitScale * viewer._zoom);
                     const height = Math.round(image.naturalHeight * viewer._fitScale * viewer._zoom);
@@ -1203,6 +1220,15 @@
                         });
                     });
                 };
+                // راقب أبعاد مساحة العرض نفسها؛ تغيير تخطيط سطح المكتب قد لا يصاحبه resize للنافذة.
+                if (typeof ResizeObserver !== 'undefined') {
+                    viewer._stageResizeObserver = new ResizeObserver(() => {
+                        if (!viewer.classList.contains('hidden') && image.naturalWidth) {
+                            viewer._scheduleFit(false);
+                        }
+                    });
+                    viewer._stageResizeObserver.observe(stage);
+                }
                 viewer._changeZoom = function (factor) {
                     viewer._zoom = Math.max(0.5, Math.min(5, viewer._zoom * factor));
                     viewer._applyZoom();
