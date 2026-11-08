@@ -2342,7 +2342,6 @@ function loadSavedPageChanges() {
     script.onload = () => {
         // إذا لم يرسل الخادم بيانات صالحة، أظهر النص الافتراضي بدل ترك العنوان مخفيًا.
         document.documentElement.removeAttribute("data-page-edits-pending");
-        revealTabletSupportTip();
         script.remove();
     };
 
