@@ -194,6 +194,23 @@
     </style>
 
 <style>
+    /* أثناء استرجاع النصوص، أخفِ النصوص القابلة للتحرير دون تغيير أبعادها. */
+    html[data-page-edits-pending="true"] [data-page-edit-id] {
+        visibility: hidden !important;
+    }
+    html[data-page-edits-pending="true"] [data-page-edit-id] i,
+    html[data-page-edits-pending="true"] [data-page-edit-id] svg,
+    html[data-page-edits-pending="true"] [data-page-edit-id] img,
+    html[data-page-edits-pending="true"] [data-page-edit-id] video {
+        visibility: visible !important;
+    }
+    /* تظل الروابط قابلة للنقر وبمساحتها الأصلية أثناء إخفاء نصها القديم. */
+    html[data-page-edits-pending="true"] a[data-page-edit-id] {
+        visibility: visible !important;
+        color: transparent !important;
+        text-decoration-color: transparent !important;
+    }
+
     /* ثبّت القسم الحالي قبل تحميل Tailwind حتى لا تظهر الرئيسية أو أقسام أخرى أثناء التحديث. */
     html[data-current-tab] .tab-content { display: none !important; }
 
@@ -243,6 +260,7 @@
     // ابدأ طلب تعديلات النصوص أثناء قراءة الصفحة بدل انتظار DOMContentLoaded.
     // إذا وصلت الاستجابة قبل تجهيز عناصر الصفحة، احتفظ بها حتى تصبح جاهزة.
     (() => {
+        document.documentElement.setAttribute("data-page-edits-pending", "true");
         const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
         window.__pageChangesDomReady = false;
         window.__earlyPageChangesReceived = false;
@@ -283,6 +301,13 @@
                 window.loadSavedPageChanges();
             }
         };
+
+        window.__pageChangesPendingFallbackTimer = window.setTimeout(() => {
+            if (document.documentElement.hasAttribute("data-page-edits-pending")) {
+                document.documentElement.removeAttribute("data-page-edits-pending");
+                console.warn("انتهت مهلة استرجاع النصوص؛ تم إظهار محتوى الصفحة بدل إبقائه مخفيًا.");
+            }
+        }, 12000);
 
         document.head.appendChild(request);
     })();
@@ -1483,7 +1508,6 @@ window.addEventListener('DOMContentLoaded', () => {
         loadSavedPageChanges();
     }
 
-    document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
 });
 
@@ -2355,6 +2379,14 @@ function assignPageEditIds() {
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
 let pageChangesResponseReceived = false;
 
+function finishPageChangesInitialLoad() {
+    document.documentElement.removeAttribute("data-page-edits-pending");
+    if (window.__pageChangesPendingFallbackTimer) {
+        clearTimeout(window.__pageChangesPendingFallbackTimer);
+        window.__pageChangesPendingFallbackTimer = null;
+    }
+}
+
 // اقبل التعديلات المحفوظة كما هي، بما فيها عناوين الاستعلامات ووصف قسم التابلت.
 function normalizeFixedPageChanges(changes) {
     return Array.isArray(changes) ? changes : [];
@@ -2409,6 +2441,19 @@ function applyPageChangesList(changes) {
             return;
         }
 
+        // حافظ على أيقونة معرض الصور عند استبدال عنوان القسم.
+        if (item.id === "alerts-title") {
+            const headingIcon = element.querySelector(":scope > i");
+            if (headingIcon) {
+                Array.from(element.childNodes).forEach(node => {
+                    if (node.nodeType === Node.TEXT_NODE) node.remove();
+                });
+                element.appendChild(document.createTextNode(" " + savedText));
+                stats.applied++;
+                return;
+            }
+        }
+
         // حافظ على تنسيق اسم مدير المدرسة داخل التذييل.
         if (item.id === "footer-manager") {
             const managerName = element.querySelector("span");
@@ -2450,7 +2495,7 @@ function applyCachedPageChanges() {
         localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify(parsed));
         applyPageChangesList(parsed.changes);
 
-        return true;
+        return parsed.changes.length > 0;
     } catch (error) {
 
         console.warn("تعذر تطبيق النسخة المحلية من تعديلات النصوص.", error);
@@ -2489,7 +2534,7 @@ function loadSavedPageChanges() {
 
     script.onerror = () => {
         console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
-        document.documentElement.removeAttribute("data-page-edits-pending");
+        finishPageChangesInitialLoad();
         script.remove();
     };
 
@@ -2498,7 +2543,7 @@ function loadSavedPageChanges() {
         if (!pageChangesResponseReceived) {
             console.error("وصل رد من خدمة التعديلات دون استدعاء receivePageChanges؛ لم يتم تأكيد تحميل التعديلات.");
         }
-        document.documentElement.removeAttribute("data-page-edits-pending");
+        finishPageChangesInitialLoad();
         script.remove();
     };
 
@@ -2525,6 +2570,7 @@ function receivePageChanges(data) {
             if (cached && Array.isArray(cached.changes) && cached.changes.length > 0) {
                 console.warn("وصلت قائمة تعديلات فارغة من الخادم مع وجود نسخة محلية محفوظة؛ تم الاحتفاظ بالنسخة المحلية.");
                 applyPageChangesList(cached.changes);
+                finishPageChangesInitialLoad();
                 return true;
             }
         }
@@ -2564,6 +2610,7 @@ function receivePageChanges(data) {
         message.classList.toggle('active', index === currentNewsIndex)
     );
 
+    finishPageChangesInitialLoad();
     return true;
 }
 
@@ -4893,6 +4940,13 @@ async function deleteCurrentPhotoAlbum() {
     }
 }
 
+        // جهّز النصوص الثابتة والكاش قبل أول عرض مرئي للصفحة.
+        try {
+            assignPageEditIds();
+            if (applyCachedPageChanges()) finishPageChangesInitialLoad();
+        } catch (error) {
+            console.warn("تعذر تجهيز تعديلات النصوص قبل العرض الأول.", error);
+        }
     </script>
 </body>
 </html>
