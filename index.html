@@ -65,6 +65,8 @@
             }
         }
         :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
+        /* احترام خاصية HTML hidden حتى عند تعذر تحميل Tailwind أو تأخره. */
+        [hidden] { display: none !important; }
 
         /* تثبيت أبعاد عارض الصور على الشاشات الكبيرة قبل حساب مقاس الصورة. */
         #schoolImageViewer > div {
@@ -767,11 +769,11 @@
                     <span class="text-xs text-slate-500">نشرات توضيحية مصورة للطلاب والمعلمين</span>
                 </div>
 
-                <div id="tabletTeacherUpload" class="hidden bg-slate-50 p-4 rounded-xl border border-slate-300 space-y-2">
+                <div id="tabletTeacherUpload" hidden class="hidden bg-slate-50 p-4 rounded-xl border border-slate-300 space-y-2">
                     <label class="block text-xs font-bold text-navy">إضافة صورة جديدة لنشرة التطوير (خاص بالمعلم):</label>
                     <div id="googleSignInButton" class="my-2"></div>
 <p id="googleSignInStatus" class="text-xs text-slate-600">سجّل الدخول بحساب Google المصرح له برفع الصور.</p>
-                    <div id="tabletImageUploadControls" class="hidden gap-2">
+                    <div id="tabletImageUploadControls" hidden class="hidden gap-2">
                         <input type="file" id="tabletImgInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="block w-full text-xs text-slate-500 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy file:text-white" aria-label="اختيار عدة صور لنشرات التطوير والتابلت">
                         <button type="button" onclick="uploadTabletImage()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-lg text-xs shrink-0">
                             رفع وحفظ داخل الكود
@@ -794,7 +796,7 @@
                         <i class="fa-solid fa-rotate ml-1"></i> تحديث الصور
                     </button>
                 </div>
-                <div id="tabletImageManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div id="tabletImageManagement" hidden class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <span class="text-xs font-bold text-navy">إدارة الصور:</span>
                     <button type="button" onclick="selectAllContent('gallery')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
                     <button type="button" onclick="clearContentSelection('gallery')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
@@ -1073,7 +1075,7 @@
                     نسيت كلمة المرور؟
                 </button>
             </div>
-            <div id="passwordRecoveryPanel" class="hidden border-t border-slate-200 pt-4 space-y-3">
+            <div id="passwordRecoveryPanel" hidden class="hidden border-t border-slate-200 pt-4 space-y-3">
                 <div class="text-center">
                     <h4 class="font-extrabold text-navy">استعادة كلمة المرور</h4>
                     <p class="text-xs text-slate-500">سيتم إرسال رمز تحقق إلى البريد البديل المعتمد.</p>
@@ -1083,11 +1085,11 @@
                     <input id="recoveryEmailInput" type="email" dir="ltr" inputmode="email" autocomplete="email" maxlength="254" required placeholder="أدخل البريد الإلكتروني البديل" aria-label="البريد الإلكتروني البديل المعتمد" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none">
                     <button type="button" id="recoverySendButton" onclick="requestPasswordRecovery()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">إرسال رمز التحقق</button>
                 </div>
-                <div id="recoveryStepVerify" class="hidden space-y-3">
+                <div id="recoveryStepVerify" hidden class="hidden space-y-3">
                     <input id="recoveryCodeInput" type="text" aria-label="رمز التحقق المكوّن من ستة أرقام" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="أدخل رمز التحقق المكوّن من 6 أرقام" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
                     <button type="button" id="recoveryVerifyButton" onclick="verifyPasswordRecoveryCode()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">التحقق من الرمز</button>
                 </div>
-                <div id="recoveryStepReset" class="hidden space-y-3">
+                <div id="recoveryStepReset" hidden class="hidden space-y-3">
                     <input id="recoveryNewPassword" type="password" aria-label="كلمة المرور الجديدة" autocomplete="new-password" minlength="12" maxlength="128" placeholder="كلمة المرور الجديدة (12 حرفًا على الأقل)" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
                     <input id="recoveryConfirmPassword" type="password" aria-label="تأكيد كلمة المرور الجديدة" autocomplete="new-password" minlength="12" maxlength="128" placeholder="أعد كتابة كلمة المرور الجديدة" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
                     <button type="button" id="recoveryResetButton" onclick="resetAdminPassword()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl transition">حفظ كلمة المرور الجديدة</button>
@@ -1462,48 +1464,65 @@
 
         
 window.addEventListener('DOMContentLoaded', () => {
-    initLocalStorage();
-    initializeTabNavigation();
-    // Photo albums are loaded independently after page initialization.
-    renderSchedules();
-    loadSchedulesFromDrive();
-    renderTabletGallery();
-    assignPageEditIds();
-    applyCachedPageChanges();
+    // كل خطوة مستقلة؛ تعطل التخزين المحلي أو قسم واحد لا يوقف بقية الصفحة.
+    const runSafely = (label, task) => {
+        try {
+            const result = task();
+            if (result && typeof result.then === 'function') {
+                result.catch(error => console.warn('تعذر تنفيذ ' + label + ':', error));
+            }
+        } catch (error) {
+            console.warn('تعذر تنفيذ ' + label + ':', error);
+        }
+    };
 
-    // أصبحت عناصر الصفحة جاهزة؛ طبّق الاستجابة المبكرة إن كانت وصلت بالفعل.
+    runSafely('تهيئة التخزين المحلي', initLocalStorage);
+    runSafely('تهيئة التنقل بين الأقسام', initializeTabNavigation);
+    runSafely('عرض الجداول المحلية', renderSchedules);
+    runSafely('تحميل الجداول من الخادم', loadSchedulesFromDrive);
+    runSafely('تحميل نشرات التابلت', renderTabletGallery);
+    runSafely('تجهيز معرّفات تعديلات النصوص', assignPageEditIds);
+    runSafely('تطبيق تعديلات النصوص المحفوظة محليًا', applyCachedPageChanges);
+
+    // لا نترك حالة انتظار تعديلات النصوص معلقة بسبب خطأ في خطوة سابقة.
     window.__pageChangesDomReady = true;
     if (window.__earlyPageChangesReceived) {
         const earlyData = window.__earlyPageChangesData;
         window.__earlyPageChangesData = null;
         window.__earlyPageChangesReceived = false;
-        receivePageChanges(earlyData);
+        runSafely('تطبيق تعديلات النصوص المبكرة', () => receivePageChanges(earlyData));
     } else if (window.__earlyPageChangesFailed) {
-        // خطة احتياطية عند فشل الطلب الذي بدأ من head.
-        loadSavedPageChanges();
+        runSafely('تحميل تعديلات النصوص احتياطيًا', loadSavedPageChanges);
     }
 
     document.documentElement.removeAttribute("data-page-edits-pending");
-    updateTeacherUI();
+    runSafely('تحديث واجهة صلاحيات المعلم', updateTeacherUI);
 });
 
 
         function initLocalStorage() {
-            if (!localStorage.getItem('obk_alerts')) {
-                const defaultAlerts = [
-                    { id: 1, title: "تنبيه بخصوص امتحانات الشهر", text: "على جميع الطلاب الالتزام بالحضور بالزي المدرسي واصطحاب التابلت مشحون بالكامل.", date: "2026-10-25" },
-                    { id: 2, title: "تحديث منصة التابلت", text: "برجاء مراجعة قسم التطوير والتكنولوجيا (أ. ضياء يسري / أ. منى سعيد) لتحديث المنظومة.", date: "2026-10-22" }
-                ];
-                localStorage.setItem('obk_alerts', JSON.stringify(defaultAlerts));
-            }
-            if (!localStorage.getItem('obk_schedules')) {
-                const defaultSchedules = {
-                    "1/1": "", "1/2": "", "1/3": "", "1/4": "", "1/5": "", "1/6": "", "1/7": "", "1/8": ""
-                };
-                localStorage.setItem('obk_schedules', JSON.stringify(defaultSchedules));
-            }
-            if (!localStorage.getItem('obk_tablet_imgs')) {
-                localStorage.setItem('obk_tablet_imgs', JSON.stringify([]));
+            try {
+                if (!localStorage.getItem('obk_alerts')) {
+                    const defaultAlerts = [
+                        { id: 1, title: "تنبيه بخصوص امتحانات الشهر", text: "على جميع الطلاب الالتزام بالحضور بالزي المدرسي واصطحاب التابلت مشحون بالكامل.", date: "2026-10-25" },
+                        { id: 2, title: "تحديث منصة التابلت", text: "برجاء مراجعة قسم التطوير والتكنولوجيا (أ. ضياء يسري / أ. منى سعيد) لتحديث المنظومة.", date: "2026-10-22" }
+                    ];
+                    localStorage.setItem('obk_alerts', JSON.stringify(defaultAlerts));
+                }
+                if (!localStorage.getItem('obk_schedules')) {
+                    const defaultSchedules = {
+                        "1/1": "", "1/2": "", "1/3": "", "1/4": "", "1/5": "", "1/6": "", "1/7": "", "1/8": ""
+                    };
+                    localStorage.setItem('obk_schedules', JSON.stringify(defaultSchedules));
+                }
+                if (!localStorage.getItem('obk_tablet_imgs')) {
+                    localStorage.setItem('obk_tablet_imgs', JSON.stringify([]));
+                }
+                return true;
+            } catch (error) {
+                // بعض إعدادات الخصوصية تمنع localStorage؛ لا تسمح لذلك بإيقاف تهيئة الموقع.
+                console.warn('التخزين المحلي غير متاح في هذا المتصفح؛ ستعمل الصفحة دون بياناته المحلية:', error);
+                return false;
             }
         }
 
@@ -1880,16 +1899,23 @@ window.addEventListener('DOMContentLoaded', () => {
         // استعادة كلمة المرور: معزولة عن مسار تسجيل الدخول الأصلي.
         let recoveryResetToken = "";
 
+        function setRecoveryStepVisible(id, visible) {
+            const element = document.getElementById(id);
+            if (!element) return;
+            element.classList.toggle('hidden', !visible);
+            element.hidden = !visible;
+        }
+
         function showPasswordRecovery() {
-            document.getElementById('passwordRecoveryPanel').classList.remove('hidden');
-            document.getElementById('recoveryStepRequest').classList.remove('hidden');
-            document.getElementById('recoveryStepVerify').classList.add('hidden');
-            document.getElementById('recoveryStepReset').classList.add('hidden');
+            setRecoveryStepVisible('passwordRecoveryPanel', true);
+            setRecoveryStepVisible('recoveryStepRequest', true);
+            setRecoveryStepVisible('recoveryStepVerify', false);
+            setRecoveryStepVisible('recoveryStepReset', false);
             setRecoveryMessage('', false);
         }
 
         function hidePasswordRecovery() {
-            document.getElementById('passwordRecoveryPanel').classList.add('hidden');
+            setRecoveryStepVisible('passwordRecoveryPanel', false);
             recoveryResetToken = '';
             ['recoveryEmailInput', 'recoveryCodeInput', 'recoveryNewPassword', 'recoveryConfirmPassword'].forEach(id => {
                 const field = document.getElementById(id);
@@ -1974,8 +2000,8 @@ window.addEventListener('DOMContentLoaded', () => {
             try {
                 const result = await recoveryPost('requestPasswordRecovery', { recoveryEmail: recoveryEmail }, 60000);
                 if (!result.success) throw new Error(result.message || 'تعذر إرسال رمز التحقق.');
-                document.getElementById('recoveryStepRequest').classList.add('hidden');
-                document.getElementById('recoveryStepVerify').classList.remove('hidden');
+                setRecoveryStepVisible('recoveryStepRequest', false);
+                setRecoveryStepVisible('recoveryStepVerify', true);
                 setRecoveryMessage(result.message || 'تم إرسال رمز التحقق إلى البريد البديل المعتمد.', false);
             } catch (error) {
                 const message = error && error.message ? error.message : '';
@@ -2003,8 +2029,8 @@ window.addEventListener('DOMContentLoaded', () => {
                 const result = await recoveryPost('verifyPasswordRecoveryCode', { code: code });
                 if (!result.success || !result.resetToken) throw new Error(result.message || 'رمز التحقق غير صحيح.');
                 recoveryResetToken = result.resetToken;
-                document.getElementById('recoveryStepVerify').classList.add('hidden');
-                document.getElementById('recoveryStepReset').classList.remove('hidden');
+                setRecoveryStepVisible('recoveryStepVerify', false);
+                setRecoveryStepVisible('recoveryStepReset', true);
                 setRecoveryMessage('تم التحقق بنجاح. أدخل كلمة المرور الجديدة.', false);
             } catch (error) {
                 setRecoveryMessage(error.message || 'تعذر التحقق من الرمز.', true);
@@ -2042,7 +2068,7 @@ window.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('adminPasswordInput').value = '';
                 document.getElementById('recoveryNewPassword').value = '';
                 document.getElementById('recoveryConfirmPassword').value = '';
-                document.getElementById('recoveryStepReset').classList.add('hidden');
+                setRecoveryStepVisible('recoveryStepReset', false);
                 setRecoveryMessage('تم تغيير كلمة المرور بنجاح. أغلق النافذة ثم سجّل الدخول بكلمة المرور الجديدة.', false);
             } catch (error) {
                 setRecoveryMessage(error.message || 'تعذر تغيير كلمة المرور.', true);
@@ -2088,12 +2114,30 @@ window.addEventListener('DOMContentLoaded', () => {
                 adminBadge.classList.toggle('hidden', !isAdminLoggedIn);
             }
 
+            const canManage = hasDualAdminAuthorization();
+
+            // إخفاء عناصر الرفع والإدارة فعليًا بخاصية HTML، لا بكلاس Tailwind وحده.
             const teacherUpload = document.getElementById('tabletTeacherUpload');
             if (teacherUpload) {
-                teacherUpload.classList.toggle('hidden', !isAdminLoggedIn);
+                teacherUpload.classList.toggle('hidden', !canManage);
+                teacherUpload.hidden = !canManage;
+                teacherUpload.style.display = canManage ? '' : 'none';
             }
 
-            const canManage = hasDualAdminAuthorization();
+            const tabletUploadControls = document.getElementById('tabletImageUploadControls');
+            if (tabletUploadControls) {
+                tabletUploadControls.classList.toggle('hidden', !canManage);
+                tabletUploadControls.classList.toggle('flex', canManage);
+                tabletUploadControls.hidden = !canManage;
+                tabletUploadControls.style.display = canManage ? 'flex' : 'none';
+            }
+
+            const tabletManagement = document.getElementById('tabletImageManagement');
+            if (tabletManagement) {
+                tabletManagement.classList.toggle('hidden', !canManage);
+                tabletManagement.hidden = !canManage;
+                tabletManagement.style.display = canManage ? 'flex' : 'none';
+            }
             const albumControl = document.getElementById('alertsTeacherControl');
             if (albumControl) {
                 albumControl.classList.toggle('hidden', !canManage);
@@ -2761,7 +2805,12 @@ async function fetchTabletGalleryImages() {
 async function renderTabletGallery(imagesOverride) {
     const gallery = document.getElementById('tabletGallery');
     const management = document.getElementById('tabletImageManagement');
-    if (management) management.classList.toggle('hidden', !hasDualAdminAuthorization());
+    if (management) {
+        const canManage = hasDualAdminAuthorization();
+        management.classList.toggle('hidden', !canManage);
+        management.hidden = !canManage;
+        management.style.display = canManage ? 'flex' : 'none';
+    }
     if (!Array.isArray(imagesOverride)) {
         gallery.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4">جارٍ تحميل النشرات...</p>';
     }
