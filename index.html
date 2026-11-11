@@ -288,8 +288,65 @@
     })();
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <noscript>
+        <style>
+            html, body {
+                min-height: 100%;
+                margin: 0 !important;
+                background: #ffffff !important;
+            }
+            body > :not(#javascript-disabled-message) {
+                display: none !important;
+            }
+            #javascript-disabled-message {
+                box-sizing: border-box;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 14px;
+                padding: 28px 20px;
+                text-align: center;
+                color: #0B132B;
+                font-family: Tahoma, Arial, sans-serif;
+                background: #ffffff;
+            }
+            #javascript-disabled-message .school-name {
+                margin: 0;
+                font-size: clamp(20px, 4vw, 28px);
+                font-weight: 800;
+                line-height: 1.6;
+            }
+            #javascript-disabled-message .notice {
+                margin: 0;
+                color: #B45309;
+                font-size: clamp(17px, 3vw, 21px);
+                font-weight: 700;
+                line-height: 1.8;
+            }
+            #javascript-disabled-message .details {
+                max-width: 560px;
+                margin: 0;
+                color: #64748B;
+                font-size: 14px;
+                line-height: 1.9;
+            }
+        </style>
+    </noscript>
+
 </head>
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+
+    <noscript>
+        <main id="javascript-disabled-message" lang="ar" dir="rtl" role="alert">
+            <h1 class="school-name">مدرسة عمر بن الخطاب الثانوية بنين</h1>
+            <p class="notice">يُرجى تفعيل JavaScript لمواصلة البحث</p>
+            <p class="details">يحتاج الموقع إلى JavaScript لعرض المحتوى وتشغيل الخدمات الإلكترونية بصورة صحيحة.</p>
+        </main>
+    </noscript>
+
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:right-3 focus:z-[200] focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:font-bold focus:text-navy focus:shadow-xl">تخطي إلى المحتوى</a>
 
     <!-- Developer Live Control Bar (يظهر فقط عند تفعيل وضع المعلم) -->
