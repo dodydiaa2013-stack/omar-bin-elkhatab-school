@@ -404,6 +404,10 @@
                 <i class="fa-solid fa-key"></i>
                 <span id="loginBtnText">تسجيل الدخول</span>
             </button>
+            <button type="button" id="adminLogoutBtn" onclick="logoutAdmin()" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow" aria-label="تسجيل الخروج" title="تسجيل الخروج">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                <span>تسجيل الخروج</span>
+            </button>
         </div>
     </div>
 
@@ -2128,6 +2132,141 @@ window.addEventListener('DOMContentLoaded', () => {
                 Boolean(window.adminSessionToken);
         }
 
+        function clearAdminClientSession_() {
+            window.adminSessionToken = null;
+            googleUploadToken = null;
+            isAdminLoggedIn = false;
+            isDeveloperLoggedIn = false;
+
+            if (isLiveEditing) {
+                document.querySelectorAll('[data-page-edit-id]').forEach(el => {
+                    el.removeAttribute('contenteditable');
+                    el.removeAttribute('inputmode');
+                    el.removeAttribute('tabindex');
+                    el.removeAttribute('autocapitalize');
+                    el.classList.remove('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+                });
+
+                const ticker = document.getElementById('tickerText');
+                if (ticker) ticker.classList.remove('ticker-editing');
+
+                const editButton = document.getElementById('editToggleBtn');
+                if (editButton) {
+                    editButton.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي';
+                    editButton.className = 'bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1';
+                }
+
+                isLiveEditing = false;
+            }
+
+            updateDeveloperUI();
+            updateTeacherUI();
+            renderTabletGallery();
+            renderSchedules();
+        }
+
+        function logoutAdmin() {
+            if (logoutAdmin.inProgress) return;
+
+            const hasAnySession = Boolean(
+                isAdminLoggedIn ||
+                isDeveloperLoggedIn ||
+                googleUploadToken ||
+                window.adminSessionToken
+            );
+
+            if (!hasAnySession) return;
+            if (!confirm('هل تريد تسجيل الخروج من لوحة إدارة الموقع؟')) return;
+
+            const token = String(window.adminSessionToken || '');
+            if (!token) {
+                clearAdminClientSession_();
+                const status = document.getElementById('googleSignInStatus');
+                if (status) status.textContent = 'تم تسجيل الخروج من الموقع.';
+                return;
+            }
+
+            logoutAdmin.inProgress = true;
+            const button = document.getElementById('adminLogoutBtn');
+            if (button) {
+                button.disabled = true;
+                button.classList.add('opacity-60', 'cursor-wait');
+            }
+
+            let frame = document.getElementById('adminLogoutFrame');
+            if (!frame) {
+                frame = document.createElement('iframe');
+                frame.id = 'adminLogoutFrame';
+                frame.name = 'adminLogoutFrame';
+                frame.style.display = 'none';
+                document.body.appendChild(frame);
+            }
+
+            const nonce = (window.crypto && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+
+            const releaseRequest = function() {
+                logoutAdmin.inProgress = false;
+                if (button) {
+                    button.disabled = false;
+                    button.classList.remove('opacity-60', 'cursor-wait');
+                }
+            };
+
+            const onMessage = function(event) {
+                if (!isTrustedAppsScriptMessage(event)) return;
+                const data = event.data;
+                if (!data || data.type !== 'adminLogoutResult' || data.nonce !== nonce) return;
+
+                window.removeEventListener('message', onMessage);
+                clearTimeout(timeout);
+                releaseRequest();
+
+                if (data.result && data.result.success) {
+                    clearAdminClientSession_();
+                    const status = document.getElementById('googleSignInStatus');
+                    if (status) status.textContent = 'تم تسجيل الخروج من الموقع بنجاح.';
+                    alert('تم تسجيل الخروج بنجاح.');
+                } else {
+                    alert((data.result && data.result.message) || 'تعذر إتمام تسجيل الخروج. حاول مرة أخرى.');
+                }
+            };
+
+            window.addEventListener('message', onMessage);
+
+            const timeout = setTimeout(() => {
+                window.removeEventListener('message', onMessage);
+                releaseRequest();
+                alert('لم يصل تأكيد تسجيل الخروج من الخادم. لم يتم تغيير حالة الدخول؛ حاول مرة أخرى.');
+            }, 20000);
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = GOOGLE_SCRIPT_URL;
+            form.target = 'adminLogoutFrame';
+            form.style.display = 'none';
+
+            const fields = {
+                action: 'adminLogout',
+                token: token,
+                nonce: nonce,
+                origin: location.origin
+            };
+
+            Object.entries(fields).forEach(([name, value]) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = value;
+                form.appendChild(input);
+            });
+
+            document.body.appendChild(form);
+            form.submit();
+            form.remove();
+        }
+
         function updateTeacherUI() {
             const loginButton = document.getElementById('loginBtn');
             const loginButtonText = document.getElementById('loginBtnText');
@@ -2163,6 +2302,25 @@ window.addEventListener('DOMContentLoaded', () => {
             }
 
             const canManage = hasDualAdminAuthorization();
+
+            const logoutButton = document.getElementById('adminLogoutBtn');
+            if (logoutButton) {
+                const hasAnySession = Boolean(
+                    isAdminLoggedIn ||
+                    isDeveloperLoggedIn ||
+                    googleUploadToken ||
+                    window.adminSessionToken
+                );
+                logoutButton.classList.toggle('hidden', !hasAnySession);
+                logoutButton.disabled = Boolean(logoutAdmin.inProgress);
+            }
+
+            const tabletUploadControls = document.getElementById('tabletImageUploadControls');
+            if (tabletUploadControls) {
+                tabletUploadControls.classList.toggle('hidden', !canManage);
+                tabletUploadControls.classList.toggle('flex', canManage);
+            }
+
             const albumControl = document.getElementById('alertsTeacherControl');
             if (albumControl) {
                 albumControl.classList.toggle('hidden', !canManage);
