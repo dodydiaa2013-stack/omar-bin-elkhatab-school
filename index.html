@@ -2312,6 +2312,8 @@ window.addEventListener('DOMContentLoaded', () => {
                     window.adminSessionToken
                 );
                 logoutButton.classList.toggle('hidden', !hasAnySession);
+                logoutButton.hidden = !hasAnySession;
+                logoutButton.style.display = hasAnySession ? 'inline-flex' : 'none';
                 logoutButton.disabled = Boolean(logoutAdmin.inProgress);
             }
 
