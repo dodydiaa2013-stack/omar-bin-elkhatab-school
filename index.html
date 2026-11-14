@@ -3648,16 +3648,6 @@ function initGooglePhotoLogin() {
 window.addEventListener('load', initGooglePhotoLogin);
 
 
-        function deleteTabletImage(idx) {
-            if (confirm('هل أنت متأكد من مسح هذه الصورة نهائياً؟')) {
-                let imgs = JSON.parse(localStorage.getItem('obk_tablet_imgs')) || [];
-                imgs.splice(idx, 1);
-                localStorage.setItem('obk_tablet_imgs', JSON.stringify(imgs));
-                renderTabletGallery();
-                alert('تم مسح الصورة بنجاح.');
-            }
-        }
-
         const CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
 let driveSchedules = {};
        
