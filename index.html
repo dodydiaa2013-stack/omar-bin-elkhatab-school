@@ -3115,6 +3115,23 @@ async function renderTabletGallery(imagesOverride) {
             }
 
             
+if (fileId && hasDualAdminAuthorization()) {
+    const replaceInput = document.createElement('input');
+    replaceInput.type = 'file';
+    replaceInput.accept = 'image/jpeg,image/png,image/webp,image/gif';
+    replaceInput.className = 'hidden';
+    replaceInput.setAttribute('aria-label', 'اختيار صورة بديلة');
+    replaceInput.addEventListener('change', () => {
+        if (replaceInput.files && replaceInput.files[0]) replaceDriveTabletImage(fileId, image.name || 'هذه الصورة', replaceInput.files[0], replaceInput);
+    });
+    const replaceButton = document.createElement('button');
+    replaceButton.type = 'button';
+    replaceButton.textContent = 'استبدال';
+    replaceButton.className = 'inline-block rounded-lg bg-amber-500 text-white px-3 py-2 hover:bg-amber-600';
+    replaceButton.addEventListener('click', () => replaceInput.click());
+    actions.append(replaceButton, replaceInput);
+}
+
 if (fileId && googleUploadToken) {
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
@@ -3187,7 +3204,41 @@ async function loadSchedulesFromDrive() {
     }
 }
 
-async function deleteDriveTabletImage(fileId, fileName) {
+async async function replaceDriveTabletImage(fileId, fileName, file, input) {
+    if (!hasDualAdminAuthorization() || !googleUploadToken || !window.adminSessionToken) { alert('سجّل الدخول بحساب Google وكلمة مرور المسؤول أولاً.'); return; }
+    if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4 * 1024 * 1024) { alert('اختر صورة JPG أو PNG أو WEBP أو GIF لا يتجاوز حجمها 4 ميجابايت.'); if (input) input.value = ''; return; }
+    if (!confirm('سيتم استبدال «' + fileName + '» ونقل الصورة القديمة إلى سلة مهملات Google Drive. هل تريد المتابعة؟')) { if (input) input.value = ''; return; }
+    const key = 'gallery-replace-' + String(fileId);
+    if (!beginImageOperation(key)) return;
+    const status = document.getElementById('googleSignInStatus');
+    let frame = null, form = null;
+    try {
+        if (status) status.textContent = 'جارٍ استبدال الصورة...';
+        const data = await prepareImageUploadData(file, readScheduleFileAsBase64);
+        const nonce = 'replace-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+        frame = document.createElement('iframe');
+        const target = 'galleryReplaceFrame_' + nonce.replace(/[^a-zA-Z0-9_]/g, '');
+        frame.name = target; frame.style.display = 'none';
+        form = document.createElement('form'); form.method = 'POST'; form.action = GOOGLE_SCRIPT_URL; form.target = target; form.style.display = 'none';
+        const fields = { action:'replaceGalleryImage', nonce:nonce, token:googleUploadToken, adminSessionToken:window.adminSessionToken || '', origin:window.location.origin, oldFileId:fileId, fileName:file.name, mimeType:file.type, data:data };
+        Object.entries(fields).forEach(([name,value]) => { const field=document.createElement('input'); field.type='hidden'; field.name=name; field.value=String(value == null ? '' : value); form.appendChild(field); });
+        const result = await new Promise((resolve,reject) => {
+            let settled = false;
+            const cleanup = () => { window.removeEventListener('message', onMessage); clearTimeout(timer); if(form) form.remove(); if(frame) frame.remove(); };
+            const finish = (fn,value) => { if(settled) return; settled=true; cleanup(); fn(value); };
+            const onMessage = event => { if(!isTrustedAppsScriptMessage(event)) return; const message=event.data; if(!message || message.type!=='galleryUploadResult' || message.nonce!==nonce) return; if(message.result && message.result.success) finish(resolve,message.result); else finish(reject,new Error((message.result && message.result.message) || 'فشل الاستبدال.')); };
+            const timer = setTimeout(() => finish(reject,new Error('انتهت مهلة انتظار تأكيد الاستبدال.')),90000);
+            window.addEventListener('message',onMessage); document.body.append(frame,form); form.submit();
+        });
+        const images = await fetchTabletGalleryImages();
+        if (!images.some(item => String((item && item.id) || '') === String(result.fileId))) throw new Error('تم تنفيذ الطلب لكن لم يظهر الملف الجديد في المعرض. حدّث الصور للتحقق.');
+        await renderTabletGallery(images);
+        if(status) status.textContent='تم استبدال الصورة بنجاح.';
+    } catch(error) { if(status) status.textContent=error.message || 'تعذر استبدال الصورة.'; else alert(error.message); }
+    finally { if(form) form.remove(); if(frame) frame.remove(); if(input) input.value=''; endImageOperation(key); }
+}
+
+function deleteDriveTabletImage(fileId, fileName) {
     if (!googleUploadToken || !window.adminSessionToken) {
         alert('سجّل الدخول بحساب Google وكلمة مرور المسؤول أولاً.');
         return;
@@ -3749,6 +3800,12 @@ function renderSchedules() {
                 <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
 
                 <div class="flex items-center gap-2">
+                    ${imgUrl && hasDualAdminAuthorization()
+                        ? `<button type="button" onclick="replaceScheduleImage('${cls}')"
+                            class="text-amber-600 hover:underline font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-repeat"></i> استبدال
+                           </button>`
+                        : ''}
                     ${imgUrl && isAdminLoggedIn && isDeveloperLoggedIn && googleUploadToken && window.adminSessionToken
                         ? `<button onclick="deleteScheduleImage('${cls}')"
                             class="text-red-600 hover:underline font-bold flex items-center gap-1">
@@ -3966,6 +4023,24 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
         document.body.appendChild(form);
         form.submit();
     }));
+}
+
+async function replaceScheduleImage(className) {
+    if (!hasDualAdminAuthorization()) { alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.'); return; }
+    const current = driveSchedules && driveSchedules[className];
+    if (!current || !current.id) { alert('لم يتم العثور على قائمة هذا الفصل.'); return; }
+    const picker = document.createElement('input'); picker.type='file'; picker.accept='image/jpeg,image/png,image/webp,image/gif'; picker.style.display='none'; document.body.appendChild(picker);
+    picker.addEventListener('change', async () => {
+        const file = picker.files && picker.files[0]; if(!file) { picker.remove(); return; }
+        if(!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) { alert('اختر صورة JPG أو PNG أو WEBP أو GIF لا يتجاوز حجمها 4 ميجابايت.'); picker.remove(); return; }
+        if(!confirm('سيتم استبدال قائمة فصل ' + className + ' ونقل القائمة القديمة إلى سلة مهملات Google Drive. هل تريد المتابعة؟')) { picker.remove(); return; }
+        const key='schedule-replace-' + className; if(!beginImageOperation(key)) { picker.remove(); return; }
+        const status=document.getElementById('scheduleOperationStatus');
+        try { if(status) status.textContent='جارٍ استبدال قائمة فصل ' + className + '...'; const prepared=await prepareImageUploadData(file,readScheduleFileAsBase64); await uploadOneScheduleFile(file,className,Date.now(),prepared); await loadSchedulesFromDrive(); if(status) status.textContent='تم استبدال قائمة فصل ' + className + ' بنجاح.'; }
+        catch(error) { if(status) status.textContent=error.message || 'تعذر استبدال قائمة الفصل.'; }
+        finally { picker.remove(); endImageOperation(key); }
+    }, {once:true});
+    picker.click();
 }
 
 async function saveScheduleImage() {
