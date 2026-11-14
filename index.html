@@ -4026,29 +4026,104 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
 }
 
 async function replaceScheduleImage(className) {
-    if (!hasDualAdminAuthorization()) { alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.'); return; }
+    if (!hasDualAdminAuthorization()) {
+        alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
+        return;
+    }
+
     const current = driveSchedules && driveSchedules[className];
-    if (!current || !current.id) { alert('لم يتم العثور على قائمة هذا الفصل.'); return; }
-    const picker = document.createElement('input'); picker.type='file'; picker.accept='image/jpeg,image/png,image/webp,image/gif'; picker.style.display='none'; document.body.appendChild(picker);
+    if (!current || !current.id) {
+        alert('لم يتم العثور على قائمة هذا الفصل.');
+        return;
+    }
+
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/jpeg,image/png,image/webp,image/gif';
+    picker.style.display = 'none';
+    document.body.appendChild(picker);
+
     picker.addEventListener('change', async () => {
-        const file = picker.files && picker.files[0]; if(!file) { picker.remove(); return; }
-        if(!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4*1024*1024) { alert('اختر صورة JPG أو PNG أو WEBP أو GIF لا يتجاوز حجمها 4 ميجابايت.'); picker.remove(); return; }
-        if(!confirm('سيتم استبدال قائمة فصل ' + className + ' ونقل القائمة القديمة إلى سلة مهملات Google Drive. هل تريد المتابعة؟')) { picker.remove(); return; }
-        const key='schedule-replace-' + className; if(!beginImageOperation(key)) { picker.remove(); return; }
-        const status=document.getElementById('scheduleOperationStatus');
-        try {
-            if(status) status.textContent='جارٍ استبدال قائمة فصل ' + className + '...';
-            const prepared=await prepareImageUploadData(file,readScheduleFileAsBase64);
-            const uploadResult=await uploadOneScheduleFile(file,className,Date.now(),prepared);
-            await loadSchedulesFromDrive();
-            const oldFileWarning = uploadResult && /تعذر حذف|تعذر نقل|أخطاء الحذف/i.test(String(uploadResult.message || ''));
-            if(status) status.textContent = oldFileWarning
-                ? 'تم رفع القائمة الجديدة، لكن تعذر نقل القائمة القديمة إلى سلة Google Drive. راجع ملفات الفصل قبل إعادة المحاولة.'
-                : 'تم استبدال قائمة فصل ' + className + ' بنجاح.';
+        const file = picker.files && picker.files[0];
+        if (!file) {
+            picker.remove();
+            return;
         }
-        catch(error) { if(status) status.textContent=error.message || 'تعذر استبدال قائمة الفصل.'; }
-        finally { picker.remove(); endImageOperation(key); }
-    }, {once:true});
+
+        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type) ||
+            file.size > 4 * 1024 * 1024) {
+            alert('اختر صورة JPG أو PNG أو WEBP أو GIF لا يتجاوز حجمها 4 ميجابايت.');
+            picker.remove();
+            return;
+        }
+
+        if (!confirm('سيتم استبدال قائمة فصل ' + className +
+            ' ونقل القائمة القديمة إلى سلة مهملات Google Drive. هل تريد المتابعة؟')) {
+            picker.remove();
+            return;
+        }
+
+        const operationKey = 'schedule-replace-' + className;
+        if (!beginImageOperation(operationKey)) {
+            picker.remove();
+            return;
+        }
+
+        const status = document.getElementById('scheduleOperationStatus');
+
+        try {
+            if (status) {
+                status.textContent = 'جارٍ استبدال قائمة فصل ' + className + '...';
+            }
+
+            const preparedData = await prepareImageUploadData(file, readScheduleFileAsBase64);
+            const uploadResult = await uploadOneScheduleFile(
+                file,
+                className,
+                Date.now(),
+                preparedData
+            );
+
+            if (!uploadResult || !uploadResult.fileId) {
+                throw new Error('لم يصل تأكيد واضح من الخادم برفع القائمة الجديدة.');
+            }
+
+            // لا نعلن نجاح الاستبدال قبل التأكد أن القائمة الجديدة ظهرت في بيانات الفصل بعد إعادة التحميل.
+            const refreshedSchedules = await loadSchedulesFromDrive();
+            const refreshedItem = refreshedSchedules && refreshedSchedules[className];
+            const refreshedFileId = refreshedItem && refreshedItem.id
+                ? String(refreshedItem.id)
+                : '';
+
+            if (refreshedFileId !== String(uploadResult.fileId)) {
+                if (status) {
+                    status.textContent =
+                        'تم تأكيد رفع الصورة الجديدة، لكن لم نتأكد من تحديث عرض الفصل. ' +
+                        'حدّث القسم وتحقق من القائمة قبل إعادة المحاولة.';
+                }
+                return;
+            }
+
+            const oldFileWarning =
+                /تعذر حذف|تعذر نقل|أخطاء الحذف/i.test(String(uploadResult.message || ''));
+
+            if (status) {
+                status.textContent = oldFileWarning
+                    ? 'تم تحديث قائمة الفصل، لكن تعذر نقل القائمة القديمة إلى سلة Google Drive. راجع ملفات الفصل.'
+                    : 'تم استبدال قائمة فصل ' + className + ' بنجاح.';
+            }
+        } catch (error) {
+            if (status) {
+                status.textContent = error.message || 'تعذر استبدال قائمة الفصل.';
+            } else {
+                alert(error.message || 'تعذر استبدال قائمة الفصل.');
+            }
+        } finally {
+            picker.remove();
+            endImageOperation(operationKey);
+        }
+    }, { once: true });
+
     picker.click();
 }
 
