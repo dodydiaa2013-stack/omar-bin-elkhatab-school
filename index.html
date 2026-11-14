@@ -3204,7 +3204,7 @@ async function loadSchedulesFromDrive() {
     }
 }
 
-async async function replaceDriveTabletImage(fileId, fileName, file, input) {
+async function replaceDriveTabletImage(fileId, fileName, file, input) {
     if (!hasDualAdminAuthorization() || !googleUploadToken || !window.adminSessionToken) { alert('سجّل الدخول بحساب Google وكلمة مرور المسؤول أولاً.'); return; }
     if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 4 * 1024 * 1024) { alert('اختر صورة JPG أو PNG أو WEBP أو GIF لا يتجاوز حجمها 4 ميجابايت.'); if (input) input.value = ''; return; }
     if (!confirm('سيتم استبدال «' + fileName + '» ونقل الصورة القديمة إلى سلة مهملات Google Drive. هل تريد المتابعة؟')) { if (input) input.value = ''; return; }
@@ -4036,7 +4036,16 @@ async function replaceScheduleImage(className) {
         if(!confirm('سيتم استبدال قائمة فصل ' + className + ' ونقل القائمة القديمة إلى سلة مهملات Google Drive. هل تريد المتابعة؟')) { picker.remove(); return; }
         const key='schedule-replace-' + className; if(!beginImageOperation(key)) { picker.remove(); return; }
         const status=document.getElementById('scheduleOperationStatus');
-        try { if(status) status.textContent='جارٍ استبدال قائمة فصل ' + className + '...'; const prepared=await prepareImageUploadData(file,readScheduleFileAsBase64); await uploadOneScheduleFile(file,className,Date.now(),prepared); await loadSchedulesFromDrive(); if(status) status.textContent='تم استبدال قائمة فصل ' + className + ' بنجاح.'; }
+        try {
+            if(status) status.textContent='جارٍ استبدال قائمة فصل ' + className + '...';
+            const prepared=await prepareImageUploadData(file,readScheduleFileAsBase64);
+            const uploadResult=await uploadOneScheduleFile(file,className,Date.now(),prepared);
+            await loadSchedulesFromDrive();
+            const oldFileWarning = uploadResult && /تعذر حذف|تعذر نقل|أخطاء الحذف/i.test(String(uploadResult.message || ''));
+            if(status) status.textContent = oldFileWarning
+                ? 'تم رفع القائمة الجديدة، لكن تعذر نقل القائمة القديمة إلى سلة Google Drive. راجع ملفات الفصل قبل إعادة المحاولة.'
+                : 'تم استبدال قائمة فصل ' + className + ' بنجاح.';
+        }
         catch(error) { if(status) status.textContent=error.message || 'تعذر استبدال قائمة الفصل.'; }
         finally { picker.remove(); endImageOperation(key); }
     }, {once:true});
