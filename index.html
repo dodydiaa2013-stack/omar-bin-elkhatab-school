@@ -4732,7 +4732,7 @@ async function refreshPhotoAlbums(button) {
                 card.className = 'bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-lg transition group';
                 const cover = getSafeHttpsUrl(album.coverUrl) || photoAlbumPlaceholder(album.title);
                 card.innerHTML = `
-                    <button type="button" class="photo-album-open-button block w-full text-right">
+                    <button type="button" class="block w-full text-right" onclick="openPhotoAlbum('${photoAlbumEscape(album.id)}')">
                         <div class="relative overflow-hidden bg-slate-100">
                             <img decoding="async" src="${photoAlbumEscape(cover)}" alt="${photoAlbumEscape(album.title)}" loading="lazy" class="w-full h-48 object-cover group-hover:scale-105 transition duration-300">
                             <span class="absolute bottom-3 right-3 bg-navy/90 text-white text-[11px] px-3 py-1 rounded-full">${Number(Array.isArray(album.images) ? album.images.length : (album.imageCount || 0))} صورة</span>
@@ -4771,8 +4771,6 @@ async function refreshPhotoAlbums(button) {
                     card.appendChild(controls);
                 }
                 grid.appendChild(card);
-                const openButton = card.querySelector('.photo-album-open-button');
-                if (openButton) openButton.addEventListener('click', () => openPhotoAlbum(album.id));
             });
             contentSelectionStatus('albums');
         }
@@ -4901,8 +4899,8 @@ async function refreshPhotoAlbums(button) {
                     </button>
                     <div class="p-2 text-[11px] text-navy font-bold truncate">${photoAlbumEscape(image.name || ('صورة ' + (index+1)))}</div>
                     ${hasDualAdminAuthorization() ? `<div class="flex gap-1 p-2 pt-0">
-                        <button type="button" class="photo-album-image-replace flex-1 rounded-md bg-amber-100 text-amber-900 py-1.5 text-[10px] font-bold">استبدال</button>
-                        <button type="button" class="photo-album-image-delete flex-1 rounded-md bg-red-100 text-red-700 py-1.5 text-[10px] font-bold">حذف</button>
+                        <button type="button" onclick="replacePhotoAlbumImage('${photoAlbumEscape(image.id)}')" class="flex-1 rounded-md bg-amber-100 text-amber-900 py-1.5 text-[10px] font-bold">استبدال</button>
+                        <button type="button" onclick="deletePhotoAlbumImage('${photoAlbumEscape(image.id)}')" class="flex-1 rounded-md bg-red-100 text-red-700 py-1.5 text-[10px] font-bold">حذف</button>
                     </div>` : ''}`;
                 if (hasDualAdminAuthorization()) {
                     const controls = document.createElement('div');
@@ -4934,10 +4932,6 @@ async function refreshPhotoAlbums(button) {
                 grid.appendChild(card);
                 const previewButton = card.querySelector('.photo-album-image-preview');
                 if (previewButton) previewButton.addEventListener('click', () => openSchoolImageViewer(safeImageUrl, image.name || ('صورة ' + (index + 1))));
-                const replaceButton = card.querySelector('.photo-album-image-replace');
-                if (replaceButton) replaceButton.addEventListener('click', () => replacePhotoAlbumImage(id));
-                const deleteButton = card.querySelector('.photo-album-image-delete');
-                if (deleteButton) deleteButton.addEventListener('click', () => deletePhotoAlbumImage(id));
             });
             if (!grid.children.length) grid.innerHTML = '<p class="col-span-full text-center text-sm text-slate-400 py-8">لا توجد صور داخل هذا الألبوم حتى الآن.</p>';
             contentSelectionStatus('albumImages');
