@@ -3115,6 +3115,17 @@ async function renderTabletGallery(imagesOverride) {
             }
 
             
+if (fileId && hasDualAdminAuthorization()) {
+    const replaceButton = document.createElement('button');
+    replaceButton.type = 'button';
+    replaceButton.textContent = 'استبدال الصورة';
+    replaceButton.className = 'inline-block rounded-lg bg-amber-500 text-white px-3 py-2 hover:bg-amber-600';
+    replaceButton.addEventListener('click', () => {
+        replaceDriveTabletImage(fileId, image.name || 'هذه الصورة', replaceButton);
+    });
+    actions.appendChild(replaceButton);
+}
+
 if (fileId && googleUploadToken) {
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
@@ -3562,6 +3573,84 @@ async function galleryUploadPost(fields, baselineImages) {
 }
 
         
+
+async function replaceDriveTabletImage(fileId, imageName, triggerButton) {
+    if (!hasDualAdminAuthorization()) {
+        alert('يلزم تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به معًا.');
+        return;
+    }
+    if (!fileId) {
+        alert('معرّف الصورة غير موجود.');
+        return;
+    }
+
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/jpeg,image/png,image/webp,image/gif';
+
+    picker.onchange = async () => {
+        const file = picker.files && picker.files[0];
+        if (!file) return;
+
+        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+            alert('نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF.');
+            return;
+        }
+        if (file.size > 4 * 1024 * 1024) {
+            alert('حجم الصورة يجب ألا يتجاوز 4 ميجابايت.');
+            return;
+        }
+        if (!confirm('سيتم استبدال الصورة المحددة في المعرض بالصورة الجديدة، ونقل الصورة القديمة إلى سلة مهملات Google Drive. هل تريد المتابعة؟')) {
+            return;
+        }
+
+        const operationKey = 'gallery-replace-' + String(fileId);
+        if (!beginImageOperation(operationKey)) return;
+
+        const progress = document.getElementById('tabletImageUploadProgress');
+        const progressLabel = document.getElementById('tabletImageUploadProgressLabel');
+        if (progress) progress.classList.remove('hidden');
+        if (progressLabel) progressLabel.textContent = 'جارٍ تجهيز الصورة الجديدة لاستبدال ' + (imageName || 'الصورة المحددة') + '...';
+        if (triggerButton) triggerButton.disabled = true;
+
+        try {
+            let baselineImages = null;
+            try {
+                baselineImages = await fetchTabletGalleryImages();
+            } catch (snapshotError) {
+                console.warn('تعذر جلب المعرض قبل الاستبدال؛ سيعتمد التأكيد على نتيجة الخادم:', snapshotError);
+            }
+
+            const data = await prepareImageUploadData(file, readScheduleFileAsBase64);
+            if (progressLabel) progressLabel.textContent = 'جارٍ استبدال الصورة والتحقق من حفظها...';
+
+            await galleryUploadPost({
+                action: 'replaceGalleryImage',
+                oldFileId: String(fileId),
+                fileName: file.name,
+                mimeType: file.type,
+                data: data
+            }, baselineImages);
+
+            const refreshedImages = await fetchTabletGalleryImages();
+            await renderTabletGallery(refreshedImages);
+            if (progressLabel) progressLabel.textContent = 'تم استبدال الصورة بنجاح وتحديث المعرض.';
+        } catch (error) {
+            if (progressLabel) progressLabel.textContent = error.message || 'تعذر استبدال الصورة.';
+            alert(error.message || 'تعذر استبدال الصورة.');
+        } finally {
+            if (triggerButton) triggerButton.disabled = false;
+            endImageOperation(operationKey);
+            if (progress) {
+                setTimeout(() => progress.classList.add('hidden'), 7000);
+            }
+            picker.value = '';
+        }
+    };
+
+    picker.click();
+}
+
 let googleUploadToken = null;
 
 
@@ -3749,6 +3838,13 @@ function renderSchedules() {
                 <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
 
                 <div class="flex items-center gap-2">
+                    ${imgUrl && hasDualAdminAuthorization()
+                        ? `<button type="button" onclick="replaceScheduleImage('${cls}', this)"
+                            class="text-amber-600 hover:underline font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-arrows-rotate"></i> استبدال
+                           </button>`
+                        : ''}
+
                     ${imgUrl && isAdminLoggedIn && isDeveloperLoggedIn && googleUploadToken && window.adminSessionToken
                         ? `<button onclick="deleteScheduleImage('${cls}')"
                             class="text-red-600 hover:underline font-bold flex items-center gap-1">
@@ -4054,6 +4150,68 @@ async function saveScheduleImage() {
     if (!failures.length) {
         fileInputs.forEach(input => { input.value = ''; });
     }
+}
+
+async function replaceScheduleImage(className, triggerButton) {
+    if (!hasDualAdminAuthorization()) {
+        alert('يلزم تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به معًا.');
+        return;
+    }
+    if (!CLASSES.includes(className)) {
+        alert('الفصل المحدد غير صحيح.');
+        return;
+    }
+
+    const picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/jpeg,image/png,image/webp,image/gif';
+
+    picker.onchange = async () => {
+        const file = picker.files && picker.files[0];
+        if (!file) return;
+
+        if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+            alert('نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF.');
+            return;
+        }
+        if (file.size > 4 * 1024 * 1024) {
+            alert('حجم الصورة يجب ألا يتجاوز 4 ميجابايت.');
+            return;
+        }
+        if (!confirm('سيتم استبدال قائمة فصل ' + className + ' بالصورة الجديدة، ونقل القائمة القديمة إلى سلة مهملات Google Drive. هل تريد المتابعة؟')) {
+            return;
+        }
+
+        const operationKey = 'schedule-replace-' + className;
+        if (!beginImageOperation(operationKey)) return;
+
+        const status = document.getElementById('scheduleOperationStatus');
+        if (triggerButton) triggerButton.disabled = true;
+        if (status) status.textContent = 'جارٍ تجهيز قائمة فصل ' + className + ' للاستبدال...';
+
+        try {
+            const preparedData = await prepareImageUploadData(file, readScheduleFileAsBase64);
+            if (status) status.textContent = 'جارٍ استبدال قائمة فصل ' + className + ' والتحقق من الحفظ...';
+
+            // uploadScheduleImage يستبدل القائمة الحالية للفصل بعد حفظ الصورة الجديدة.
+            await uploadOneScheduleFile(file, className, Date.now(), preparedData);
+
+            const refreshedSchedules = await fetchSchedulesSnapshot();
+            driveSchedules = refreshedSchedules;
+            renderSchedules();
+
+            if (status) status.textContent = 'تم استبدال قائمة فصل ' + className + ' بنجاح.';
+        } catch (error) {
+            if (status) status.textContent = 'تعذر استبدال قائمة فصل ' + className + ': ' + (error.message || 'حدث خطأ غير معروف.');
+            alert(error.message || 'تعذر استبدال قائمة الفصل.');
+        } finally {
+            if (triggerButton) triggerButton.disabled = false;
+            endImageOperation(operationKey);
+            picker.value = '';
+        }
+    };
+
+    picker.click();
 }
 
 async function deleteScheduleImage(cls) {
