@@ -3624,7 +3624,7 @@ async function replaceDriveTabletImage(fileId, imageName, triggerButton) {
             const data = await prepareImageUploadData(file, readScheduleFileAsBase64);
             if (progressLabel) progressLabel.textContent = 'جارٍ استبدال الصورة والتحقق من حفظها...';
 
-            await galleryUploadPost({
+            const replacementResult = await galleryUploadPost({
                 action: 'replaceGalleryImage',
                 oldFileId: String(fileId),
                 fileName: file.name,
@@ -3632,9 +3632,19 @@ async function replaceDriveTabletImage(fileId, imageName, triggerButton) {
                 data: data
             }, baselineImages);
 
-            const refreshedImages = await fetchTabletGalleryImages();
-            await renderTabletGallery(refreshedImages);
-            if (progressLabel) progressLabel.textContent = 'تم استبدال الصورة بنجاح وتحديث المعرض.';
+            // تأكيد الخادم يعني أن الاستبدال تم؛ فشل تحديث العرض لا يحوّل العملية إلى فشل.
+            let galleryRefreshed = false;
+            try {
+                const refreshedImages = await fetchTabletGalleryImages();
+                await renderTabletGallery(refreshedImages);
+                galleryRefreshed = true;
+            } catch (refreshError) {
+                console.warn('تم تأكيد استبدال الصورة لكن تعذر تحديث المعرض تلقائيًا:', refreshError);
+            }
+            if (progressLabel) {
+                progressLabel.textContent = (replacementResult.message || 'تم استبدال الصورة بنجاح.') +
+                    (galleryRefreshed ? '' : ' حدّث المعرض لرؤية الصورة الجديدة.');
+            }
         } catch (error) {
             if (progressLabel) progressLabel.textContent = error.message || 'تعذر استبدال الصورة.';
             alert(error.message || 'تعذر استبدال الصورة.');
@@ -4194,13 +4204,23 @@ async function replaceScheduleImage(className, triggerButton) {
             if (status) status.textContent = 'جارٍ استبدال قائمة فصل ' + className + ' والتحقق من الحفظ...';
 
             // uploadScheduleImage يستبدل القائمة الحالية للفصل بعد حفظ الصورة الجديدة.
-            await uploadOneScheduleFile(file, className, Date.now(), preparedData);
+            const replacementResult = await uploadOneScheduleFile(file, className, Date.now(), preparedData);
 
-            const refreshedSchedules = await fetchSchedulesSnapshot();
-            driveSchedules = refreshedSchedules;
-            renderSchedules();
+            // لا نعتبر تعذر تحديث الواجهة فشلًا في الاستبدال بعد تأكيد الخادم.
+            let schedulesRefreshed = false;
+            try {
+                const refreshedSchedules = await fetchSchedulesSnapshot();
+                driveSchedules = refreshedSchedules;
+                renderSchedules();
+                schedulesRefreshed = true;
+            } catch (refreshError) {
+                console.warn('تم تأكيد استبدال القائمة لكن تعذر تحديث العرض تلقائيًا:', refreshError);
+            }
 
-            if (status) status.textContent = 'تم استبدال قائمة فصل ' + className + ' بنجاح.';
+            if (status) {
+                status.textContent = (replacementResult.message || ('تم استبدال قائمة فصل ' + className + ' بنجاح.')) +
+                    (schedulesRefreshed ? '' : ' حدّث قوائم الفصول لرؤية الصورة الجديدة.');
+            }
         } catch (error) {
             if (status) status.textContent = 'تعذر استبدال قائمة فصل ' + className + ': ' + (error.message || 'حدث خطأ غير معروف.');
             alert(error.message || 'تعذر استبدال قائمة الفصل.');
