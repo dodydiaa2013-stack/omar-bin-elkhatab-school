@@ -2167,6 +2167,36 @@ window.addEventListener('DOMContentLoaded', () => {
             updateTeacherUI();
             renderTabletGallery();
             renderSchedules();
+
+            // أزل أدوات إدارة الألبومات فور تسجيل الخروج، حتى لو كان الألبوم مفتوحًا.
+            imageContentSelections.albums.clear();
+            imageContentSelections.albumImages.clear();
+
+            const albumEditor = document.getElementById('photoAlbumEditor');
+            if (albumEditor) albumEditor.classList.add('hidden');
+
+            const albumImagesInput = document.getElementById('photoAlbumImagesInput');
+            if (albumImagesInput) albumImagesInput.value = '';
+
+            const albumCoverInput = document.getElementById('photoAlbumCoverInput');
+            if (albumCoverInput) albumCoverInput.value = '';
+
+            const albumActions = document.getElementById('photoAlbumActions');
+            if (albumActions) albumActions.classList.add('hidden');
+
+            const albumImagesManagement = document.getElementById('albumImagesManagement');
+            if (albumImagesManagement) albumImagesManagement.classList.add('hidden');
+
+            // إعادة بناء بطاقات الألبومات والصور وفق حالة الصلاحيات الجديدة.
+            renderPhotoAlbums();
+
+            const albumViewer = document.getElementById('photoAlbumViewer');
+            if (albumViewer && !albumViewer.classList.contains('hidden') && currentPhotoAlbumId) {
+                const currentAlbum = photoAlbumsCache.find(
+                    item => String(item.id) === String(currentPhotoAlbumId)
+                );
+                if (currentAlbum) renderPhotoAlbumImages(currentAlbum);
+            }
         }
 
         function logoutAdmin() {
