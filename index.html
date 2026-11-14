@@ -2163,14 +2163,27 @@ window.addEventListener('DOMContentLoaded', () => {
                 isLiveEditing = false;
             }
 
+            // امسح كل التحديدات الإدارية قبل إعادة رسم الأقسام بعد تسجيل الخروج.
+            imageContentSelections.gallery.clear();
+            imageContentSelections.albums.clear();
+            imageContentSelections.albumImages.clear();
+            scheduleBulkSelection.clear();
+
+            // أغلق نافذة رفع قوائم الفصول وألغِ أي ملفات اختيرت ولم تُرفع بعد.
+            const scheduleModal = document.getElementById('scheduleModal');
+            if (scheduleModal) scheduleModal.classList.add('hidden');
+
+            document.querySelectorAll(
+                '#scheduleClassFiles input[type="file"], #tabletImgInput'
+            ).forEach(input => {
+                input.value = '';
+                input.disabled = false;
+            });
+
             updateDeveloperUI();
             updateTeacherUI();
             renderTabletGallery();
             renderSchedules();
-
-            // أزل أدوات إدارة الألبومات فور تسجيل الخروج، حتى لو كان الألبوم مفتوحًا.
-            imageContentSelections.albums.clear();
-            imageContentSelections.albumImages.clear();
 
             const albumEditor = document.getElementById('photoAlbumEditor');
             if (albumEditor) albumEditor.classList.add('hidden');
