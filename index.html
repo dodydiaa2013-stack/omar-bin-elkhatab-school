@@ -58,6 +58,36 @@
         }
     </style>
     <style>
+        /* لا تعرض الصفحة قبل تأكيد تحميل آخر تعديلات النصوص من الخادم. */
+        html[data-page-edits-pending] body > :not(#pageChangesGate) {
+            display: none !important;
+        }
+        #pageChangesGate {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+            padding: 24px;
+            background: #f8fafc;
+            color: #0B132B;
+            text-align: center;
+            font-family: 'Cairo', sans-serif;
+        }
+        #pageChangesGate[hidden] { display: none !important; }
+        #pageChangesGate button {
+            border: 0;
+            border-radius: 8px;
+            padding: 9px 18px;
+            background: #0B132B;
+            color: #fff;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 
@@ -252,13 +282,35 @@
     // إذا وصلت الاستجابة قبل تجهيز عناصر الصفحة، احتفظ بها حتى تصبح جاهزة.
     (() => {
         const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+        document.documentElement.setAttribute("data-page-edits-pending", "");
         window.__pageChangesDomReady = false;
         window.__earlyPageChangesReceived = false;
+        window.__pageChangesLoadFailed = false;
+
+        window.failPageChangesLoad = function(message) {
+            window.__pageChangesLoadFailed = true;
+            window.__pageChangesLoadError = message || "تعذر تحميل النصوص المحفوظة من الخادم.";
+            const gate = document.getElementById("pageChangesGate");
+            const status = document.getElementById("pageChangesGateStatus");
+            if (status) status.textContent = window.__pageChangesLoadError;
+            if (gate) {
+                const retry = gate.querySelector("button");
+                if (retry) retry.hidden = false;
+            }
+        };
+
+        window.finishPageChangesLoad = function() {
+            window.__pageChangesLoadFailed = false;
+            document.documentElement.removeAttribute("data-page-edits-pending");
+            const gate = document.getElementById("pageChangesGate");
+            if (gate) gate.hidden = true;
+        };
 
         window.receivePageChangesEarly = function(data) {
             if (window.__pageChangesDomReady &&
                 typeof window.receivePageChanges === "function") {
-                window.receivePageChanges(data);
+                const accepted = window.receivePageChanges(data);
+                if (!accepted) window.failPageChangesLoad("وصلت استجابة غير صالحة لتعديلات النصوص.");
                 return;
             }
 
@@ -272,24 +324,23 @@
             "?action=pageChanges&callback=receivePageChangesEarly&_=" +
             Date.now();
 
-        request.onload = () => {
-            // قد يكتمل تحميل السكربت دون استدعاء callback؛ لا تترك الصفحة دون خطة بديلة.
+        const requestTimeout = window.setTimeout(() => {
             if (!window.__earlyPageChangesReceived) {
-                window.__earlyPageChangesFailed = true;
-                if (window.__pageChangesDomReady &&
-                    typeof window.loadSavedPageChanges === "function") {
-                    window.loadSavedPageChanges();
-                }
+                window.failPageChangesLoad("تأخر تحميل النصوص المحفوظة من الخادم. تحقق من الاتصال ثم أعد المحاولة.");
+            }
+        }, 20000);
+
+        request.onload = () => {
+            if (!window.__earlyPageChangesReceived) {
+                window.clearTimeout(requestTimeout);
+                window.failPageChangesLoad("لم يؤكد الخادم تحميل النصوص المحفوظة. أعد المحاولة.");
             }
         };
 
         request.onerror = () => {
-            window.__earlyPageChangesFailed = true;
-            console.warn("تعذر تحميل تعديلات النصوص مبكرًا؛ سيتم استخدام مسار التحميل الاحتياطي.");
-            if (window.__pageChangesDomReady &&
-                typeof window.loadSavedPageChanges === "function") {
-                window.loadSavedPageChanges();
-            }
+            window.clearTimeout(requestTimeout);
+            console.warn("تعذر تحميل تعديلات النصوص من الخادم.");
+            window.failPageChangesLoad("تعذر الاتصال بخادم النصوص المحفوظة. أعد المحاولة.");
         };
 
         document.head.appendChild(request);
@@ -350,6 +401,12 @@
 
 </head>
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+
+    <div id="pageChangesGate" role="status" aria-live="polite">
+        <strong>جارٍ تحميل آخر التعديلات المحفوظة...</strong>
+        <p id="pageChangesGateStatus">يرجى الانتظار قليلًا.</p>
+        <button type="button" hidden onclick="location.reload()">إعادة المحاولة</button>
+    </div>
 
     <noscript>
         <main id="javascript-disabled-message" lang="ar" dir="rtl" role="alert">
@@ -1542,21 +1599,21 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
-    applyCachedPageChanges();
 
-    // أصبحت عناصر الصفحة جاهزة؛ طبّق الاستجابة المبكرة إن كانت وصلت بالفعل.
+    // لا نعرض الصفحة أو نستخدم الكاش المحلي قبل تأكيد أحدث نسخة من الخادم.
     window.__pageChangesDomReady = true;
     if (window.__earlyPageChangesReceived) {
         const earlyData = window.__earlyPageChangesData;
         window.__earlyPageChangesData = null;
         window.__earlyPageChangesReceived = false;
-        receivePageChanges(earlyData);
-    } else if (window.__earlyPageChangesFailed) {
-        // خطة احتياطية عند فشل الطلب الذي بدأ من head.
-        loadSavedPageChanges();
+        const accepted = receivePageChanges(earlyData);
+        if (!accepted) {
+            window.failPageChangesLoad("تعذر اعتماد تعديلات النصوص التي وصلت من الخادم. أعد المحاولة.");
+        }
+    } else if (window.__pageChangesLoadFailed) {
+        window.failPageChangesLoad(window.__pageChangesLoadError);
     }
 
-    document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
 });
 
@@ -2721,17 +2778,21 @@ function loadSavedPageChanges() {
         Date.now();
 
     script.onerror = () => {
-        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
-        document.documentElement.removeAttribute("data-page-edits-pending");
+        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم.");
+        if (typeof window.failPageChangesLoad === "function") {
+            window.failPageChangesLoad("تعذر الاتصال بخادم النصوص المحفوظة. أعد المحاولة.");
+        }
         script.remove();
     };
 
     script.onload = () => {
-        // تحميل ملف JavaScript لا يعني بالضرورة أن callback أعاد بيانات صالحة.
+        // لا نكشف الصفحة لمجرد تحميل السكربت؛ يجب أن يصل callback صالح.
         if (!pageChangesResponseReceived) {
-            console.error("وصل رد من خدمة التعديلات دون استدعاء receivePageChanges؛ لم يتم تأكيد تحميل التعديلات.");
+            console.error("لم يصل تأكيد صالح من خدمة تعديلات النصوص.");
+            if (typeof window.failPageChangesLoad === "function") {
+                window.failPageChangesLoad("لم يؤكد الخادم تحميل النصوص المحفوظة. أعد المحاولة.");
+            }
         }
-        document.documentElement.removeAttribute("data-page-edits-pending");
         script.remove();
     };
 
@@ -2747,26 +2808,22 @@ function receivePageChanges(data) {
             ? (data.message || data.error)
             : "استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.";
         console.error("تعذر استرجاع تعديلات نصوص الموقع:", message);
+        if (typeof window.failPageChangesLoad === "function") {
+            window.failPageChangesLoad(message);
+        }
         return false;
     }
 
-    // لا تستبدل نسخة محلية محفوظة بقائمة فارغة قبل التأكد من صحة رد الخادم.
-    try {
-        const cachedRaw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (cachedRaw && data.changes.length === 0) {
-            const cached = JSON.parse(cachedRaw);
-            if (cached && Array.isArray(cached.changes) && cached.changes.length > 0) {
-                console.warn("وصلت قائمة تعديلات فارغة من الخادم مع وجود نسخة محلية محفوظة؛ تم الاحتفاظ بالنسخة المحلية.");
-                applyPageChangesList(cached.changes);
-                return true;
-            }
-        }
-    } catch (error) {
-        console.warn("تعذر فحص النسخة المحلية من تعديلات النصوص.", error);
-    }
-
+    // الخادم هو المرجع النهائي؛ لا نعيد تطبيق نسخة محلية قديمة حتى لو كانت قائمة الخادم فارغة.
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
     const applyStats = applyPageChangesList(normalizedChanges);
+    if (applyStats.invalid > 0) {
+        console.error("تحتوي استجابة الخادم على تعديلات غير صالحة؛ لن يتم إظهار الصفحة بنصوص غير مؤكدة.");
+        if (typeof window.failPageChangesLoad === "function") {
+            window.failPageChangesLoad("توجد بيانات نصوص غير صالحة في استجابة الخادم. لم يتم عرض الصفحة لتجنب إظهار نصوص قديمة.");
+        }
+        return false;
+    }
 
     console.info("[PageChanges] نتيجة استرجاع التعديلات:", {
         serverReceived: data.changes.length,
@@ -2797,6 +2854,9 @@ function receivePageChanges(data) {
         message.classList.toggle('active', index === currentNewsIndex)
     );
 
+    if (typeof window.finishPageChangesLoad === "function") {
+        window.finishPageChangesLoad();
+    }
     return true;
 }
 
