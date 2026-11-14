@@ -1902,6 +1902,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     updateTeacherUI();
                     renderSchedules();
                     renderTabletGallery();
+                    refreshPhotoAlbumAuthorizationUI_();
 
                     alert('تم تسجيل الدخول بنجاح.');
                 } else {
@@ -3672,6 +3673,7 @@ function handleGoogleCredentialResponse(response) {
         isDeveloperLoggedIn = false;
         updateDeveloperUI();
         updateTeacherUI();
+        refreshPhotoAlbumAuthorizationUI_();
         if (status) status.textContent = 'تعذر تسجيل الدخول بحساب Google.';
         return;
     }
@@ -3680,6 +3682,7 @@ function handleGoogleCredentialResponse(response) {
     isDeveloperLoggedIn = false;
     updateDeveloperUI();
     updateTeacherUI();
+    refreshPhotoAlbumAuthorizationUI_();
 
     const uploadControls = document.getElementById('tabletImageUploadControls');
     if (uploadControls) { uploadControls.classList.remove('hidden'); uploadControls.classList.add('flex'); }
@@ -3722,6 +3725,7 @@ function handleGoogleCredentialResponse(response) {
         updateTeacherUI();
         renderTabletGallery();
         renderSchedules();
+        refreshPhotoAlbumAuthorizationUI_();
     };
 
     window.addEventListener('message', onMessage);
@@ -3732,6 +3736,7 @@ function handleGoogleCredentialResponse(response) {
         isDeveloperLoggedIn = false;
         updateDeveloperUI();
         updateTeacherUI();
+        refreshPhotoAlbumAuthorizationUI_();
         if (status) status.textContent = 'لم يصل تأكيد التحقق من Google. حاول تسجيل الدخول مرة أخرى.';
     }, 20000);
 
@@ -4895,6 +4900,32 @@ async function refreshPhotoAlbums(button) {
                 if (album) openPhotoAlbum(album.id);
             } finally {
                 if (button) { button.disabled = false; button.innerHTML = oldHtml; }
+            }
+        }
+
+        function refreshPhotoAlbumAuthorizationUI_() {
+            const canManage = hasDualAdminAuthorization();
+
+            const management = document.getElementById('photoAlbumsManagement');
+            if (management) management.classList.toggle('hidden', !canManage);
+
+            const albumActions = document.getElementById('photoAlbumActions');
+            if (albumActions) albumActions.classList.toggle('hidden', !canManage);
+
+            const imageManagement = document.getElementById('albumImagesManagement');
+            if (imageManagement) imageManagement.classList.toggle('hidden', !canManage);
+
+            // أعد بناء بطاقات الألبومات وأدوات الألبوم المفتوح وفق الصلاحيات الحالية.
+            renderPhotoAlbums();
+
+            const viewer = document.getElementById('photoAlbumViewer');
+            if (viewer && !viewer.classList.contains('hidden') && currentPhotoAlbumId) {
+                const currentAlbum = photoAlbumsCache.find(
+                    item => String(item.id) === String(currentPhotoAlbumId)
+                );
+                if (currentAlbum) {
+                    renderPhotoAlbumImages(currentAlbum);
+                }
             }
         }
 
