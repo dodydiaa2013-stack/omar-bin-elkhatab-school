@@ -106,7 +106,7 @@ for (const item of payload.changes) {
   if (seen.has(item.id)) throw new Error("Duplicate edit id: " + item.id);
   seen.add(item.id);
   const target = document.querySelector(
-    '[data-page-edit-id="' + item.id.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"]'
+    '[data-page-edit-id="' + item.id + '"]'
   );
   if (!target) {
     missing.push(item.id);
