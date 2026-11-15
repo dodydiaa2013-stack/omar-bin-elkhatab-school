@@ -13,8 +13,26 @@ if (payload.changes.length > 500) {
   throw new Error("Too many page text changes.");
 }
 
-const dom = new JSDOM(html);
-const document = dom.window.document;
+// Parse only for locating nodes. Never serialize the DOM: serialization can
+// normalize or relocate markup and must not rewrite the page structure.
+function parseWithLocations(source) {
+  return new JSDOM(source, { includeNodeLocations: true });
+}
+
+function assertDocumentStructure(document, stage) {
+  if (!document.doctype || document.documentElement?.tagName !== "HTML" ||
+      !document.head || !document.body ||
+      !document.head.querySelector("title") ||
+      !document.head.querySelector('meta[charset]') ||
+      !document.head.querySelector('link[rel="stylesheet"]')) {
+    throw new Error("HTML structure validation failed " + stage + ".");
+  }
+}
+
+const initialDom = parseWithLocations(html);
+const document = initialDom.window.document;
+assertDocumentStructure(document, "before text synchronization");
+
 const excludedRoots = [
   "#devControlBar", "#loginBtn", "#adminBadge", "#adminModal",
   "#scheduleModal", "#passwordRecoveryPanel", "#tabletTeacherUpload",
@@ -61,6 +79,15 @@ const usedIds = new Set(
     .map(element => element.getAttribute("data-page-edit-id"))
     .filter(Boolean)
 );
+const sourceEdits = [];
+
+function addSourceEdit(start, end, replacement) {
+  if (!Number.isInteger(start) || !Number.isInteger(end) ||
+      start < 0 || end < start || end > html.length) {
+    throw new Error("Invalid HTML source location; refusing to modify index.html.");
+  }
+  sourceEdits.push({ start, end, replacement });
+}
 
 const candidates = Array.from(document.body.querySelectorAll("*"));
 for (const element of candidates) {
@@ -79,25 +106,79 @@ for (const element of candidates) {
     if (!element.textContent || !element.textContent.trim()) continue;
     const id = makeStableId(element);
     if (usedIds.has(id)) continue;
-    element.setAttribute("data-page-edit-id", id);
+
+    const location = initialDom.nodeLocation(element);
+    if (!location?.startTag) {
+      throw new Error("Could not locate an HTML element while creating edit IDs.");
+    }
+    const tagEnd = location.startTag.endOffset;
+    const insertionPoint = html[tagEnd - 2] === "/" ? tagEnd - 2 : tagEnd - 1;
+    addSourceEdit(insertionPoint, insertionPoint, ' data-page-edit-id="' + id + '"');
     usedIds.add(id);
     continue;
   }
 
   Array.from(element.childNodes).forEach((node, index) => {
-    if (node.nodeType !== dom.window.Node.TEXT_NODE || !node.nodeValue.trim()) return;
+    if (node.nodeType !== initialDom.window.Node.TEXT_NODE ||
+        !node.nodeValue.trim()) return;
+
     const id = makeStableId(element, index);
     if (usedIds.has(id)) return;
-    const span = document.createElement("span");
-    span.setAttribute("data-page-edit-id", id);
-    span.textContent = node.nodeValue;
-    element.replaceChild(span, node);
+    const location = initialDom.nodeLocation(node);
+    if (!location) {
+      throw new Error("Could not locate a text node while creating edit IDs.");
+    }
+    const rawText = html.slice(location.startOffset, location.endOffset);
+    addSourceEdit(
+      location.startOffset,
+      location.endOffset,
+      '<span data-page-edit-id="' + id + '">' + rawText + "</span>"
+    );
     usedIds.add(id);
   });
 }
 
+// Apply non-overlapping source edits from right to left so every original
+// offset remains valid. The original doctype, head, body, comments and scripts
+// remain byte-for-byte unchanged except for the intended edit markers.
+sourceEdits.sort((a, b) => b.start - a.start || b.end - a.end);
+let markedHtml = html;
+let previousStart = html.length + 1;
+for (const edit of sourceEdits) {
+  if (edit.end > previousStart) {
+    throw new Error("Overlapping HTML source edits detected; refusing to write.");
+  }
+  markedHtml =
+    markedHtml.slice(0, edit.start) +
+    edit.replacement +
+    markedHtml.slice(edit.end);
+  previousStart = edit.start;
+}
+
+const markedDom = parseWithLocations(markedHtml);
+const markedDocument = markedDom.window.document;
+assertDocumentStructure(markedDocument, "after adding edit markers");
+
 const seen = new Set();
+const targets = new Map();
+for (const element of markedDocument.querySelectorAll("[data-page-edit-id]")) {
+  const id = element.getAttribute("data-page-edit-id");
+  if (id) {
+    if (targets.has(id)) throw new Error("Duplicate HTML edit id: " + id);
+    targets.set(id, element);
+  }
+}
+
 const missing = [];
+const textEdits = [];
+function escapeHtml(value) {
+  return value.replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 for (const item of payload.changes) {
   if (!item || typeof item.id !== "string" || typeof item.text !== "string" ||
       item.id.length > 200 || item.text.length > 10000) {
@@ -105,14 +186,22 @@ for (const item of payload.changes) {
   }
   if (seen.has(item.id)) throw new Error("Duplicate edit id: " + item.id);
   seen.add(item.id);
-  const target = document.querySelector(
-    '[data-page-edit-id="' + item.id + '"]'
-  );
+
+  const target = targets.get(item.id);
   if (!target) {
     missing.push(item.id);
     continue;
   }
-  target.textContent = item.text;
+  const location = markedDom.nodeLocation(target);
+  if (!location?.startTag || !location?.endTag ||
+      location.endTag.startOffset < location.startTag.endOffset) {
+    throw new Error("Could not safely locate the content for edit id: " + item.id);
+  }
+  textEdits.push({
+    start: location.startTag.endOffset,
+    end: location.endTag.startOffset,
+    replacement: escapeHtml(item.text)
+  });
 }
 
 if (missing.length) {
@@ -122,7 +211,29 @@ if (missing.length) {
   );
 }
 
-const output = dom.serialize();
+textEdits.sort((a, b) => b.start - a.start);
+let output = markedHtml;
+let previousTextStart = markedHtml.length + 1;
+for (const edit of textEdits) {
+  if (edit.end > previousTextStart) {
+    throw new Error("Overlapping text replacements detected; refusing to write.");
+  }
+  output =
+    output.slice(0, edit.start) +
+    edit.replacement +
+    output.slice(edit.end);
+  previousTextStart = edit.start;
+}
+
+const finalDom = parseWithLocations(output);
+assertDocumentStructure(finalDom.window.document, "after text synchronization");
+if (finalDom.window.document.head.querySelectorAll("meta").length < 5) {
+  throw new Error("The document head appears incomplete; refusing to write index.html.");
+}
+if (finalDom.window.document.body.querySelectorAll("script").length < 1) {
+  throw new Error("The document body appears incomplete; refusing to write index.html.");
+}
+
 fs.writeFileSync(htmlPath, output, "utf8");
 console.log("Updated " + payload.changes.length + " text nodes in index.html.");
-console.log("Verified the alert title and all four ticker message IDs.");
+console.log("Preserved the original HTML source structure without DOM serialization.");
