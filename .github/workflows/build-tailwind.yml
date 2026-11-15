@@ -1,0 +1,45 @@
+name: Build static Tailwind CSS
+
+on:
+  push:
+    branches: ["**"]
+    paths-ignore:
+      - "assets/tailwind.css"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tailwind-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build Tailwind CSS
+        run: |
+          npm install --no-save --no-package-lock tailwindcss@4.3.5 @tailwindcss/cli@4.3.5
+          mkdir -p assets
+          npx @tailwindcss/cli -i ./assets/tailwind.input.css -o ./assets/tailwind.css --minify
+      - name: Commit generated CSS
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          sed -i '/<script src="https:\/\/cdn.jsdelivr.net\/npm\/@tailwindcss\/browser@4"><\/script>/d' index.html
+          git add assets/tailwind.css index.html
+          if git diff --cached --quiet; then
+            echo "Compiled CSS is already up to date."
+            exit 0
+          fi
+          git commit -m "Build compiled Tailwind CSS"
+          git push origin "HEAD:${{ github.ref_name }}"
