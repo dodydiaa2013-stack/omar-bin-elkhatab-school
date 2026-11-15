@@ -1,6 +1,11 @@
 name: Sync saved page text into index.html
 
 on:
+  pull_request:
+    paths:
+      - "page-changes-production.json"
+      - "scripts/sync-page-texts.mjs"
+      - ".github/workflows/sync-page-texts.yml"
   push:
     branches:
       - "**"
@@ -24,7 +29,7 @@ jobs:
       - name: Check out the same branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -48,4 +53,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git commit -m "Sync saved page text into index.html"
-          git push origin "HEAD:${{ github.ref_name }}"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
