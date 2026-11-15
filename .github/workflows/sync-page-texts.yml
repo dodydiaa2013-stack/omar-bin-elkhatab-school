@@ -1,37 +1,37 @@
-name: Sync saved page text into index.html
-# Keep source HTML intact; the sync script patches text by source locations.
-
+name: Sync saved page text and open review PR
+# Apps Script writes only to the dedicated input branch.
+# This workflow builds a fresh proposal from main and opens/updates a PR.
 on:
-  pull_request:
-    paths:
-      - "page-changes-production.json"
-      - "scripts/sync-page-texts.mjs"
-      - ".github/workflows/sync-page-texts.yml"
   push:
     branches:
-      - "**"
+      - "automation/page-text-sync-input"
     paths:
       - "page-changes-production.json"
-      - "scripts/sync-page-texts.mjs"
-      - ".github/workflows/sync-page-texts.yml"
   workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
-  group: page-text-sync-${{ github.ref }}
+  group: page-text-sync-proposal
   cancel-in-progress: false
 
 jobs:
-  sync:
+  sync-and-propose:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the same branch
+      - name: Check out main as the clean base
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          ref: main
           fetch-depth: 0
+
+      - name: Fetch latest saved changes
+        run: |
+          git fetch origin automation/page-text-sync-input
+          git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.json
+          node -e "const p=require('./page-changes-production.json'); if(!p || p.success!==true || !Array.isArray(p.changes)) process.exit(1);"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -44,14 +44,34 @@ jobs:
       - name: Apply saved text changes
         run: node scripts/sync-page-texts.mjs
 
-      - name: Commit updated page source
+      - name: Create or update the review branch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- index.html; then
-            echo "No index.html changes were needed."
-            exit 0
-          fi
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html
-          git commit -m "Sync saved page text into index.html"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
+
+          git switch --create automation/page-text-sync
+          git add page-changes-production.json index.html
+
+          if git diff --cached --quiet; then
+            echo "No page text changes are needed."
+            exit 0
+          fi
+
+          git commit -m "Prepare saved school page text update"
+          git push --force origin HEAD:automation/page-text-sync
+
+          open_pr_count=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq 'length')
+
+          if [ "$open_pr_count" -eq 0 ]; then
+            gh pr create               --repo "$GITHUB_REPOSITORY"               --base main               --head automation/page-text-sync               --draft               --title "Update saved school page text"               --body "## Automatic page-text update
+
+          - Generated from the latest Google Drive-saved page text payload.
+          - Updates page-changes-production.json and the matching text in index.html.
+          - This is a draft pull request for manual review.
+          - No changes are merged or published automatically."
+          else
+            echo "An open review PR already exists; its branch has been updated."
+          fi
