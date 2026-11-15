@@ -1,0 +1,57 @@
+name: Sync saved page text into index.html
+# Keep source HTML intact; the sync script patches text by source locations.
+
+on:
+  pull_request:
+    paths:
+      - "page-changes-production.json"
+      - "scripts/sync-page-texts.mjs"
+      - ".github/workflows/sync-page-texts.yml"
+  push:
+    branches:
+      - "**"
+    paths:
+      - "page-changes-production.json"
+      - "scripts/sync-page-texts.mjs"
+      - ".github/workflows/sync-page-texts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: page-text-sync-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the same branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install HTML parser
+        run: npm install --no-save jsdom@26
+
+      - name: Apply saved text changes
+        run: node scripts/sync-page-texts.mjs
+
+      - name: Commit updated page source
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "No index.html changes were needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Sync saved page text into index.html"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}"
