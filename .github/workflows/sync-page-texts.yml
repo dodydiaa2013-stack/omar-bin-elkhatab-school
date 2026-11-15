@@ -38,11 +38,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Diagnose HTML parser structure
-        run: |
-          npm install --no-save jsdom@26
-          node --input-type=module -e 'import fs from "node:fs"; import {JSDOM} from "jsdom"; const s=fs.readFileSync("index.html","utf8"); const d=new JSDOM(s,{includeNodeLocations:true}).window.document; console.log(JSON.stringify({prefix:s.slice(0,30),doctype:!!d.doctype,root:d.documentElement?.tagName,head:!!d.head,body:!!d.body,title:!!d.head?.querySelector("title"),charset:!!d.head?.querySelector("meta[charset]"),stylesheet:!!d.head?.querySelector("link[rel=stylesheet]"),headHTML:d.head?.innerHTML.slice(0,1200)},null,2));'
-
       - name: Install HTML parser
         run: npm install --no-save jsdom@26
 
