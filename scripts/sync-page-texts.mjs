@@ -16,7 +16,36 @@ if (payload.changes.length > 500) {
 // Parse only for locating nodes. Never serialize the DOM: serialization can
 // normalize or relocate markup and must not rewrite the page structure.
 function parseWithLocations(source) {
-  return new JSDOM(source, { includeNodeLocations: true });
+  // The source file starts with a UTF-8 BOM. JSDOM treats a leading BOM in
+  // an already-decoded string as text before the doctype, which moves the
+  // entire head into the body. Strip it only for parsing and shift every
+  // reported source offset by one so edits still target the original source.
+  const hasBom = source.charCodeAt(0) === 0xFEFF;
+  const dom = new JSDOM(hasBom ? source.slice(1) : source, {
+    includeNodeLocations: true
+  });
+
+  return {
+    window: dom.window,
+    nodeLocation(node) {
+      const location = dom.nodeLocation(node);
+      if (!location || !hasBom) return location;
+
+      const shiftPart = part => part ? {
+        ...part,
+        startOffset: part.startOffset + 1,
+        endOffset: part.endOffset + 1
+      } : null;
+
+      return {
+        ...location,
+        startOffset: location.startOffset + 1,
+        endOffset: location.endOffset + 1,
+        startTag: shiftPart(location.startTag),
+        endTag: shiftPart(location.endTag)
+      };
+    }
+  };
 }
 
 function assertDocumentStructure(document, stage) {
