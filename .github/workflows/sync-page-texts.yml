@@ -1,6 +1,7 @@
-name: Sync saved page text and open review PR
+name: Sync saved page text and publish automatically
 # Apps Script writes only to the dedicated input branch.
-# This workflow builds a fresh proposal from main and opens/updates a PR.
+# This workflow builds from main, validates the result, then proposes and merges
+# the text-only update. Repository branch protection remains in force.
 on:
   push:
     branches:
@@ -18,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync-and-propose:
+  sync-and-publish:
     runs-on: ubuntu-latest
     steps:
       - name: Check out main as the clean base
@@ -27,11 +28,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Fetch latest saved changes
+      - name: Fetch and validate latest saved changes
         run: |
+          set -euo pipefail
           git fetch origin automation/page-text-sync-input
           git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.json
-          node -e "const p=require('./page-changes-production.json'); if(!p || p.success!==true || !Array.isArray(p.changes)) process.exit(1);"
+          node -e "const p=require('./page-changes-production.json'); if(!p || p.success!==true || !Array.isArray(p.changes) || p.changes.some(x=>!x || typeof x.id!=='string' || typeof x.text!=='string')) process.exit(1);"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -41,14 +43,18 @@ jobs:
       - name: Install HTML parser
         run: npm install --no-save jsdom@26
 
-      - name: Apply saved text changes
-        run: node scripts/sync-page-texts.mjs
+      - name: Apply and validate saved text changes
+        run: |
+          set -euo pipefail
+          node scripts/sync-page-texts.mjs
+          test -s index.html
+          node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); if(!h.includes('data-page-edit-id=')) process.exit(1);"
 
-      - name: Create or update the review branch
+      - name: Create or update the publication pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -e
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -63,15 +69,24 @@ jobs:
           git commit -m "Prepare saved school page text update"
           git push --force origin HEAD:automation/page-text-sync
 
-          open_pr_count=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq 'length')
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number // empty')
 
-          if [ "$open_pr_count" -eq 0 ]; then
-            gh pr create               --repo "$GITHUB_REPOSITORY"               --base main               --head automation/page-text-sync               --draft               --title "Update saved school page text"               --body "## Automatic page-text update
+          if [ -z "$pr_number" ]; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head automation/page-text-sync \
+              --title "Publish saved school page text" \
+              --body "## Automatic page-text publication
 
           - Generated from the latest Google Drive-saved page text payload.
-          - Updates page-changes-production.json and the matching text in index.html.
-          - This is a draft pull request for manual review.
-          - No changes are merged or published automatically."
-          else
-            echo "An open review PR already exists; its branch has been updated."
+          - Updates only page-changes-production.json and matching text in index.html.
+          - The workflow validates the generated update before proposing it.
+          - GitHub branch protection is not bypassed; if a required approval or check blocks merging, the PR remains open and the workflow reports the failure."
+            pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
           fi
+
+          # Convert any existing draft PR to ready, then merge only if GitHub
+          # confirms all repository protection requirements are satisfied.
+          gh pr ready "$pr_number"
+          gh pr merge "$pr_number" --squash --delete-branch
