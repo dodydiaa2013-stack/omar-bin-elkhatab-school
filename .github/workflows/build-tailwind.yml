@@ -35,7 +35,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/tailwind.css
+          sed -i '/<script src="https:\/\/cdn.jsdelivr.net\/npm\/@tailwindcss\/browser@4"><\/script>/d' index.html
+          git add assets/tailwind.css index.html
           if git diff --cached --quiet; then
             echo "Compiled CSS is already up to date."
             exit 0
