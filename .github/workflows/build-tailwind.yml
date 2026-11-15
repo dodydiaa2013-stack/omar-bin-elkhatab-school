@@ -2,13 +2,14 @@ name: Build static Tailwind CSS
 
 on:
   push:
-    branches: ["**"]
-    paths-ignore:
-      - "assets/tailwind.css"
+    branches: ["main"]
+    paths:
+      - "index.html"
+      - "assets/tailwind.input.css"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: tailwind-build-${{ github.ref }}
@@ -16,7 +17,10 @@ concurrency:
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,8 +39,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          sed -i '/<script src="https:\/\/cdn.jsdelivr.net\/npm\/@tailwindcss\/browser@4"><\/script>/d' index.html
-          git add assets/tailwind.css index.html
+          git add assets/tailwind.css
           if git diff --cached --quiet; then
             echo "Compiled CSS is already up to date."
             exit 0
