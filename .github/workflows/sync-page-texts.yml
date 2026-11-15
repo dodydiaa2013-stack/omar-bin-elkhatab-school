@@ -1,4 +1,5 @@
 name: Sync saved page text into index.html
+# Keep source HTML intact; the sync script patches text by source locations.
 
 on:
   pull_request:
