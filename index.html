@@ -2398,12 +2398,27 @@ window.addEventListener('message',function(event) {
     clearTimeout(pageChangesTimeout); pendingPageChangesNonce=null;
     const status=document.getElementById('googleSignInStatus');
     const result=data.result || {};
+
     if(result.success) {
-        // تحديث النسخة المحلية فقط بعد تأكيد نجاح الحفظ من الخادم.
+        // نجاح Drive يعني أن التعديلات محفوظة؛ لا نعامل تعثر GitHub كفشل للحفظ.
         cacheCurrentPageChanges();
-        if(status) status.textContent=''; // إخفاء رسالة الحالة؛ يظل تنبيه النجاح الظاهر للمستخدم.
         if(isLiveEditing) toggleLiveEditing();
-        alert('تم حفظ التعديلات بنجاح.');
+
+        if(result.githubSynced === false) {
+            const message = result.message ||
+                'تم حفظ التعديلات في Google Drive، لكن تعذرت مزامنتها مع GitHub. لم يتم تحديث نسخة HTML بعد.';
+            if(status) status.textContent=message;
+            alert(message);
+        } else if(result.githubSynced === true) {
+            const message = result.message ||
+                'تم حفظ التعديلات في Google Drive وإرسالها إلى GitHub. تحديث نسخة الصفحة جارٍ.';
+            if(status) status.textContent=message;
+            alert(message);
+        } else {
+            // توافق رجعي مع إصدار Apps Script القديم قبل تفعيل مزامنة GitHub.
+            if(status) status.textContent='';
+            alert('تم حفظ التعديلات بنجاح.');
+        }
     } else {
         const message=result.message || result.error || 'رفض الخادم حفظ التعديلات.';
         if(status) status.textContent=message;
