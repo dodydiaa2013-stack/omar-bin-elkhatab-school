@@ -1500,9 +1500,14 @@
 
             // Accept only the Apps Script response origins, not every
             // Google-owned googleusercontent.com subdomain.
+            const sandboxSuffix = "-script.googleusercontent.com";
+            const sandboxPrefix = hostname.endsWith(sandboxSuffix)
+                ? hostname.slice(0, -sandboxSuffix.length)
+                : "";
+
             return hostname === "script.google.com" ||
                 hostname === "script.googleusercontent.com" ||
-                /^[a-z0-9-]+-script\\.googleusercontent\\.com$/.test(hostname);
+                (sandboxPrefix.length > 0 && /^[a-z0-9-]+$/.test(sandboxPrefix));
         }
 
 
