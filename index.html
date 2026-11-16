@@ -87,6 +87,9 @@
         .content-dragging { opacity: .48; outline: 2px dashed #2563eb; }
         .content-drop-target { outline: 3px solid #2563eb !important; outline-offset: 2px; transform: scale(.985); }
 
+        /* قلّل عمل المتصفح للبطاقات البعيدة، مع إبقاء مساحة تقريبية لتجنب قفز الصفحة. */
+        #photoAlbumsGrid > article { content-visibility: auto; contain-intrinsic-size: 320px; }
+
         @media (max-width: 640px) {
             #devControlBar:not(.hidden) {
                 display: flex !important;
@@ -2950,10 +2953,14 @@ function fetchSchedulesSnapshot() {
     });
 }
 
+let photoAlbumsSnapshotPromise = null;
+
 function fetchPhotoAlbumsSnapshot() {
-    const callbackName = 'photoAlbumsVerify_' + Date.now() + '_' +
-        Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
-    return new Promise((resolve, reject) => {
+    if (photoAlbumsSnapshotPromise) return photoAlbumsSnapshotPromise;
+
+    const request = new Promise((resolve, reject) => {
+        const callbackName = 'photoAlbumsVerify_' + Date.now() + '_' +
+            Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
         const script = document.createElement('script');
         let settled = false;
         const cleanup = () => {
@@ -2973,6 +2980,14 @@ function fetchPhotoAlbumsSnapshot() {
         script.src = PHOTO_ALBUMS_SCRIPT_URL + '?action=photoAlbums&callback=' + encodeURIComponent(callbackName) + '&_=' + Date.now();
         document.body.appendChild(script);
     });
+
+    const sharedRequest = request.finally(() => {
+        if (photoAlbumsSnapshotPromise === sharedRequest) {
+            photoAlbumsSnapshotPromise = null;
+        }
+    });
+    photoAlbumsSnapshotPromise = sharedRequest;
+    return sharedRequest;
 }
 
 async function fetchTabletGalleryImages() {
@@ -4925,7 +4940,7 @@ async function refreshPhotoAlbums(button) {
                 card.innerHTML = `
                     <button type="button" class="block w-full text-right" onclick="openPhotoAlbum('${photoAlbumEscape(album.id)}')">
                         <div class="relative overflow-hidden bg-slate-100">
-                            <img decoding="async" src="${photoAlbumEscape(cover)}" alt="${photoAlbumEscape(album.title)}" loading="lazy" class="w-full h-48 object-cover group-hover:scale-105 transition duration-300">
+                            <img decoding="async" src="${photoAlbumEscape(cover)}" alt="${photoAlbumEscape(album.title)}" loading="${index < 3 ? 'eager' : 'lazy'}" fetchpriority="${index === 0 ? 'high' : 'auto'}" class="w-full h-48 object-cover group-hover:scale-105 transition duration-300">
                             <span class="absolute bottom-3 right-3 bg-navy/90 text-white text-[11px] px-3 py-1 rounded-full">${Number(Array.isArray(album.images) ? album.images.length : (album.imageCount || 0))} صورة</span>
                         </div>
                         <div class="p-4">
@@ -5086,7 +5101,7 @@ async function refreshPhotoAlbums(button) {
                 card.className = 'relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group';
                 card.innerHTML = `
                     <button type="button" class="photo-album-image-preview block w-full cursor-zoom-in" aria-label="عرض الصورة داخل الموقع">
-                        <img decoding="async" src="${photoAlbumEscape(safeImageUrl)}" alt="${photoAlbumEscape(image.name || 'صورة نشاط')}" loading="lazy" class="w-full h-36 sm:h-44 object-cover">
+                        <img decoding="async" src="${photoAlbumEscape(safeImageUrl)}" alt="${photoAlbumEscape(image.name || 'صورة نشاط')}" loading="${index < 2 ? 'eager' : 'lazy'}" fetchpriority="${index === 0 ? 'high' : 'auto'}" class="w-full h-36 sm:h-44 object-cover">
                     </button>
                     <div class="p-2 text-[11px] text-navy font-bold truncate">${photoAlbumEscape(image.name || ('صورة ' + (index+1)))}</div>
                     ${hasDualAdminAuthorization() ? `<div class="flex gap-1 p-2 pt-0">
