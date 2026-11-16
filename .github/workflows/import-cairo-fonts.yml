@@ -5,7 +5,9 @@ on:
     branches:
       - "fix/self-host-cairo-font"
     paths:
+      - "*.zip"
       - "font-upload/*.zip"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,6 +18,7 @@ concurrency:
 
 jobs:
   import-fonts:
+    if: github.ref == 'refs/heads/fix/self-host-cairo-font'
     runs-on: ubuntu-latest
     steps:
       - name: Check out staging branch
@@ -32,9 +35,9 @@ jobs:
           from pathlib import Path
           import zipfile
 
-          uploads = sorted(Path("font-upload").glob("*.zip"))
+          uploads = sorted(Path(".").glob("*.zip")) + sorted(Path("font-upload").glob("*.zip"))
           if len(uploads) != 1:
-              raise SystemExit("Expected exactly one ZIP file in font-upload.")
+              raise SystemExit(f"Expected exactly one ZIP in the repository root or font-upload; found {len(uploads)}.")
 
           archive = uploads[0]
           if archive.stat().st_size > 25 * 1024 * 1024:
@@ -44,6 +47,7 @@ jobs:
           target.mkdir(parents=True, exist_ok=True)
           accepted = []
           total = 0
+          seen = set()
 
           with zipfile.ZipFile(archive) as zf:
               for info in zf.infolist():
@@ -52,6 +56,9 @@ jobs:
                   name = Path(info.filename).name
                   if not name.lower().endswith(".woff2"):
                       continue
+                  if name in seen:
+                      raise SystemExit(f"Duplicate font filename in ZIP: {name}")
+                  seen.add(name)
                   if info.file_size > 8 * 1024 * 1024:
                       raise SystemExit(f"Font file too large: {name}")
                   total += info.file_size
@@ -60,11 +67,9 @@ jobs:
                   data = zf.read(info)
                   if not data.startswith(b"wOF2"):
                       raise SystemExit(f"Invalid WOFF2 signature: {name}")
-                  if not name or name in {".", ".."}:
-                      raise SystemExit("Invalid font filename.")
                   destination = target / name
                   if destination.exists():
-                      raise SystemExit(f"Duplicate font filename: {name}")
+                      raise SystemExit(f"Font already exists: {name}")
                   destination.write_bytes(data)
                   accepted.append(name)
 
@@ -73,17 +78,17 @@ jobs:
           if len(accepted) > 30:
               raise SystemExit("Too many WOFF2 files; maximum is 30.")
           print("Imported WOFF2 files:")
-          print("\n".join(accepted))
+          print("\\n".join(accepted))
           PY
 
       - name: Remove temporary ZIP and commit imported fonts
         shell: bash
         run: |
           set -euo pipefail
-          rm -f font-upload/*.zip
+          rm -f ./*.zip font-upload/*.zip
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/fonts/cairo font-upload
+          git add assets/fonts/cairo font-upload .
           if git diff --cached --quiet; then
             echo "No font changes to commit."
             exit 0
