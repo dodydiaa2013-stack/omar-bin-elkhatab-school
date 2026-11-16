@@ -1469,21 +1469,45 @@
         }
 
         function isTrustedAppsScriptMessage(event, expectedSource) {
-            if (!event || (expectedSource && event.source !== expectedSource)) {
+            // postMessage responses must come from a different browsing context.
+            if (
+                !event ||
+                !event.source ||
+                event.source === window ||
+                (expectedSource && event.source !== expectedSource)
+            ) {
                 return false;
             }
 
-            if (event.origin === "https://script.google.com") {
-                return true;
-            }
+            let originUrl;
 
             try {
-                const originUrl = new URL(event.origin);
-                return originUrl.protocol === "https:" &&
-                    originUrl.hostname.endsWith(".googleusercontent.com");
+                originUrl = new URL(event.origin);
             } catch (error) {
                 return false;
             }
+
+            if (
+                originUrl.protocol !== "https:" ||
+                originUrl.username ||
+                originUrl.password ||
+                originUrl.port
+            ) {
+                return false;
+            }
+
+            const hostname = originUrl.hostname.toLowerCase();
+
+            // Accept only the Apps Script response origins, not every
+            // Google-owned googleusercontent.com subdomain.
+            const sandboxSuffix = "-script.googleusercontent.com";
+            const sandboxPrefix = hostname.endsWith(sandboxSuffix)
+                ? hostname.slice(0, -sandboxSuffix.length)
+                : "";
+
+            return hostname === "script.google.com" ||
+                hostname === "script.googleusercontent.com" ||
+                (sandboxPrefix.length > 0 && /^[a-z0-9-]+$/.test(sandboxPrefix));
         }
 
 
