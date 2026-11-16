@@ -1,0 +1,92 @@
+name: Import Cairo WOFF2 font files
+
+on:
+  push:
+    branches:
+      - "fix/self-host-cairo-font"
+    paths:
+      - "font-upload/*.zip"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cairo-font-import
+  cancel-in-progress: false
+
+jobs:
+  import-fonts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/self-host-cairo-font
+          fetch-depth: 0
+
+      - name: Validate and extract WOFF2 files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+
+          uploads = sorted(Path("font-upload").glob("*.zip"))
+          if len(uploads) != 1:
+              raise SystemExit("Expected exactly one ZIP file in font-upload.")
+
+          archive = uploads[0]
+          if archive.stat().st_size > 25 * 1024 * 1024:
+              raise SystemExit("ZIP exceeds the 25 MB upload limit.")
+
+          target = Path("assets/fonts/cairo")
+          target.mkdir(parents=True, exist_ok=True)
+          accepted = []
+          total = 0
+
+          with zipfile.ZipFile(archive) as zf:
+              for info in zf.infolist():
+                  if info.is_dir():
+                      continue
+                  name = Path(info.filename).name
+                  if not name.lower().endswith(".woff2"):
+                      continue
+                  if info.file_size > 8 * 1024 * 1024:
+                      raise SystemExit(f"Font file too large: {name}")
+                  total += info.file_size
+                  if total > 50 * 1024 * 1024:
+                      raise SystemExit("Total extracted font data exceeds 50 MB.")
+                  data = zf.read(info)
+                  if not data.startswith(b"wOF2"):
+                      raise SystemExit(f"Invalid WOFF2 signature: {name}")
+                  if not name or name in {".", ".."}:
+                      raise SystemExit("Invalid font filename.")
+                  destination = target / name
+                  if destination.exists():
+                      raise SystemExit(f"Duplicate font filename: {name}")
+                  destination.write_bytes(data)
+                  accepted.append(name)
+
+          if not accepted:
+              raise SystemExit("No valid WOFF2 files were found in the ZIP.")
+          if len(accepted) > 30:
+              raise SystemExit("Too many WOFF2 files; maximum is 30.")
+          print("Imported WOFF2 files:")
+          print("\n".join(accepted))
+          PY
+
+      - name: Remove temporary ZIP and commit imported fonts
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f font-upload/*.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/fonts/cairo font-upload
+          if git diff --cached --quiet; then
+            echo "No font changes to commit."
+            exit 0
+          fi
+          git commit -m "Import validated Cairo WOFF2 fonts"
+          git push origin HEAD:fix/self-host-cairo-font
