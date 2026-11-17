@@ -36,8 +36,6 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <!-- تحميل خط أيقونات Font Awesome مبكرًا لتقليل اختفائها أثناء التحديث -->
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://accounts.google.com" crossorigin>
     <title>مدرسة عمر بن الخطاب ث بنين - إدارة المستقبل التعليمية</title>
     <!-- Tailwind CSS v4 - Locally compiled stylesheet -->
@@ -45,10 +43,18 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/fontawesome.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
-    <!-- Google Font Cairo -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=optional" rel="stylesheet">
+    <!-- Cairo Variable font hosted locally: Arabic + Latin, weights 200-1000 -->
+    <link rel="preload" href="./assets/fonts/Cairo-Variable.ttf" as="font" type="font/ttf" crossorigin>
 
     <style>
+        @font-face {
+            font-family: 'Cairo';
+            src: url('./assets/fonts/Cairo-Variable.ttf') format('truetype');
+            font-style: normal;
+            font-weight: 200 1000;
+            font-display: optional;
+        }
+
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 
@@ -156,6 +162,7 @@
 
         body {
             font-family: 'Cairo', sans-serif;
+            font-synthesis: none;
             background-color: #f8fafc;
         }
         /* Custom Ticker Animation */
