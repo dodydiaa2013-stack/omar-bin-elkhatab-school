@@ -1,6 +1,52 @@
 ﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+    <!-- Preview safety: allow read-only GETs, block writes to the production Apps Script endpoint. -->
+    <script>
+    (() => {
+        const isSchoolBackend = (value) => {
+            try { return new URL(value, location.href).hostname === 'script.google.com'; }
+            catch (_) { return false; }
+        };
+        const isWrite = (method) => !['GET', 'HEAD', 'OPTIONS'].includes(String(method || 'GET').toUpperCase());
+        window.__SCHOOL_PREVIEW_MODE__ = true;
+        document.addEventListener('submit', (event) => {
+            const form = event.target;
+            if (form instanceof HTMLFormElement && isSchoolBackend(form.action) && isWrite(form.method)) {
+                event.preventDefault(); event.stopImmediatePropagation();
+                alert('نسخة اختبار فقط: تم إيقاف الحفظ أو التعديل على بيانات الموقع الأصلي.');
+            }
+        }, true);
+        const nativeSubmit = HTMLFormElement.prototype.submit;
+        HTMLFormElement.prototype.submit = function() {
+            if (isSchoolBackend(this.action) && isWrite(this.method)) {
+                alert('نسخة اختبار فقط: تم إيقاف الحفظ أو التعديل على بيانات الموقع الأصلي.'); return;
+            }
+            return nativeSubmit.call(this);
+        };
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = (resource, options = {}) => {
+            const url = typeof resource === 'string' ? resource : (resource && resource.url) || '';
+            const method = options.method || (resource && resource.method) || 'GET';
+            if (isSchoolBackend(url) && isWrite(method)) return Promise.reject(new Error('Preview mode: production backend write blocked.'));
+            return nativeFetch(resource, options);
+        };
+        const nativeOpen = XMLHttpRequest.prototype.open;
+        const nativeSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+            this.__schoolPreviewBlocked = isSchoolBackend(url) && isWrite(method);
+            return nativeOpen.call(this, method, url, ...rest);
+        };
+        XMLHttpRequest.prototype.send = function(...args) {
+            if (this.__schoolPreviewBlocked) { console.warn('نسخة اختبار فقط: تم منع إرسال بيانات إلى الموقع الأصلي.'); return; }
+            return nativeSend.apply(this, args);
+        };
+        if (navigator.sendBeacon) {
+            const nativeBeacon = navigator.sendBeacon.bind(navigator);
+            navigator.sendBeacon = (url, data) => isSchoolBackend(url) ? false : nativeBeacon(url, data);
+        }
+    })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب ث بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
@@ -33,20 +79,22 @@
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="بطاقة مشاركة مدرسة عمر بن الخطاب ث بنين">
     <link rel="canonical" href="https://dodydiaa2013-stack.github.io/omar-bin-elkhatab-school/">
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <!-- تحميل خط أيقونات Font Awesome مبكرًا لتقليل اختفائها أثناء التحديث -->
-    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- ملفات الخطوط والأيقونات مستضافة محليًا لتجنب تأخر ظهور النصوص والأيقونات -->
+    <link rel="preload" href="./assets/fonts/cairo/cairo-arabic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="./assets/fontawesome/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preconnect" href="https://accounts.google.com" crossorigin>
     <title>مدرسة عمر بن الخطاب ث بنين - إدارة المستقبل التعليمية</title>
     <!-- Tailwind CSS v4 - Locally compiled stylesheet -->
     <link rel="stylesheet" href="./assets/tailwind.css">
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/fontawesome.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
-    <!-- Google Font Cairo -->
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800;900&display=optional" rel="stylesheet">
+    <!-- Font Awesome 6.4.0 - local files -->
+    <link rel="stylesheet" href="./assets/fontawesome/css/fontawesome.min.css">
+    <link rel="stylesheet" href="./assets/fontawesome/css/solid.min.css">
+    <!-- Cairo variable font - local files; preserve the existing font family and display behavior -->
+    <style>
+        @font-face { font-family: 'Cairo'; font-style: normal; font-weight: 200 900; font-display: optional; src: url('./assets/fonts/cairo/cairo-arabic-wght-normal.woff2') format('woff2'); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0898-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FEFC; }
+        @font-face { font-family: 'Cairo'; font-style: normal; font-weight: 200 900; font-display: optional; src: url('./assets/fonts/cairo/cairo-latin-wght-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+        @font-face { font-family: 'Cairo'; font-style: normal; font-weight: 200 900; font-display: optional; src: url('./assets/fonts/cairo/cairo-latin-ext-wght-normal.woff2') format('woff2'); unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+    </style>
 
     <style>
         @media (prefers-reduced-motion: reduce) {
@@ -154,6 +202,7 @@
             }
         }
 
+        html { scrollbar-gutter: stable; }
         body {
             font-family: 'Cairo', sans-serif;
             background-color: #f8fafc;
