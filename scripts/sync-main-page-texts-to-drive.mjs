@@ -62,8 +62,6 @@ if (!manualRun && !htmlChanged && !jsonChanged) {
 // Match the website's existing saveAllPageChanges() extraction exactly:
 // each editable element is saved as element.textContent.trim().
 const html = fs.readFileSync("index.html", "utf8");
-const htmlForParsing = html.charCodeAt(0) === 0xFEFF ? html.slice(1) : html;
-const dom = new JSDOM(htmlForParsing);
 function extractHtmlSnapshot(sourceHtml) {
   const sourceForParsing = sourceHtml.charCodeAt(0) === 0xFEFF
     ? sourceHtml.slice(1)
@@ -87,12 +85,6 @@ function extractHtmlSnapshot(sourceHtml) {
 }
 const htmlSnapshot = extractHtmlSnapshot(html);
 const expectedIds = htmlSnapshot.ids;
-if (!expectedIds.length || expectedIds.length > 500 ||
-    expectedIds.some(id => !id) ||
-    new Set(expectedIds).size !== expectedIds.length) {
-  fail("index.html contains an empty, duplicate, or unsupported page edit ID.");
-}
-const htmlChanges = htmlSnapshot.changes;
 const htmlById = htmlSnapshot.byId;
 
 // A CSS/layout-only edit to index.html must not roll back a newer JSON text snapshot.
