@@ -1,78 +1,51 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import vm from "node:vm";
+import { JSDOM } from "jsdom";
 
 const html = fs.readFileSync("index.html", "utf8");
 const payload = JSON.parse(fs.readFileSync("page-changes-production.json", "utf8"));
-const patch = fs.readFileSync("docs/page-text-integrity-apps-script-patch.md", "utf8");
+const syncScript = fs.readFileSync("scripts/sync-main-page-texts-to-drive.mjs", "utf8");
+const htmlDom = new JSDOM(html);
+const htmlIds = Array.from(htmlDom.window.document.querySelectorAll("[data-page-edit-id]"))
+  .map(element => element.getAttribute("data-page-edit-id"));
+const jsonIds = (payload.changes || []).map(item => item && item.id);
 
-const htmlIds = [...html.matchAll(/data-page-edit-id\s*=\s*["']([^"']+)["']/g)].map(match => match[1]);
-assert.equal(htmlIds.length, 111, "Expected the reviewed page to contain 111 edit IDs.");
-assert.equal(new Set(htmlIds).size, htmlIds.length, "HTML edit IDs must be unique.");
-assert.match(html, /baseUpdatedAt/, "Browser save must send a baseUpdatedAt version.");
-assert.match(html, /applyStats\.skippedEditing\s*>\s*0/, "Server response must not be accepted after skipped live-edit elements.");
 assert.equal(payload.success, true);
-assert.equal(payload.changes.length, 111);
-assert.equal(new Set(payload.changes.map(item => item.id)).size, 111);
+assert.equal(htmlIds.length, 111, "Expected exactly 111 editable elements in the reviewed page.");
+assert.equal(new Set(htmlIds).size, 111, "HTML IDs must be unique.");
+assert.equal(payload.changes.length, 111, "The JSON snapshot must contain all 111 page texts.");
+assert.equal(new Set(jsonIds).size, 111, "JSON IDs must be unique.");
+assert.deepEqual([...jsonIds].sort(), [...htmlIds].sort(),
+  "The JSON and HTML ID sets must match exactly.");
 
-const blocks = [...patch.matchAll(/```javascript\n([\s\S]*?)\n```/g)].map(match => match[1]);
-assert.ok(blocks.length >= 4, "Expected helper and three complete Apps Script function blocks.");
-for (const [index, source] of blocks.entries()) {
-  new vm.Script(source, { filename: `apps-script-patch-block-${index + 1}.js` });
+const tickerExpected = new Map([
+  ["auto-7b3e91c4a62d805f", "تابعوا الموقع لمعرفة موعد تسليم التابلت والأوراق المطلوبة."],
+  ["auto-c81f4a2d96b7305e", "يمكنكم الحصول على كود الطالب والدخول إلى منصة البرمجة من قسم الاستعلامات الطلابية."]
+]);
+for (const [id, expectedText] of tickerExpected) {
+  const entry = payload.changes.find(item => item.id === id);
+  assert.ok(entry, "Ticker ID is missing from JSON: " + id);
+  assert.equal(entry.text, expectedText, "Ticker text changed unexpectedly: " + id);
 }
 
-const helperContext = vm.createContext({});
-vm.runInContext(blocks[0], helperContext);
+assert.match(html, /data-page-edits-pending="true"/);
+assert.match(html, /function showPageChangesLoadError\(/);
+assert.match(html, /applyStats\.matched !== pageIds\.length/);
+assert.match(html, /applyStats\.missing !== 0/);
+assert.match(html, /applyStats\.invalid !== 0/);
+assert.match(html, /applyStats\.skippedEditing !== 0/);
+assert.doesNotMatch(html, /assignPageEditIds\(\);\s*applyCachedPageChanges\(\);/);
 
-function validateAgainstCanonical(changes, submittedIds) {
-  helperContext.validatePageChangesExpectedIds_(changes, submittedIds);
-  if (submittedIds.length !== htmlIds.length ||
-      htmlIds.some(id => !submittedIds.includes(id))) {
-    throw new Error("Submitted IDs differ from canonical HTML IDs.");
-  }
-  helperContext.validatePageChangesExpectedIds_(changes, htmlIds);
-}
+const saveStart = html.indexOf("function saveAllPageChanges() {");
+const saveEnd = html.indexOf("window.addEventListener('message', function(event)", saveStart);
+assert.ok(saveStart >= 0 && saveEnd > saveStart);
+const saveFunction = html.slice(saveStart, saveEnd);
+assert.match(saveFunction, /action:\s*'savePageChanges'/);
+assert.doesNotMatch(saveFunction, /baseUpdatedAt|expectedIds/);
 
-const goodChanges = payload.changes.map(item => ({ id: item.id, text: item.text }));
-assert.doesNotThrow(() => validateAgainstCanonical(goodChanges, htmlIds));
+assert.match(syncScript, /syncPageChangesFromGitHub/);
+assert.match(syncScript, /expectedIdsHash/);
+assert.match(syncScript, /createHmac\("sha256"/);
+assert.match(syncScript, /refs\/heads\/main/);
 
-assert.throws(
-  () => validateAgainstCanonical(goodChanges.slice(0, 109), htmlIds),
-  /لا تطابق|غير مكتملة/
-);
-
-const duplicateChanges = goodChanges.map(item => ({ ...item }));
-duplicateChanges[1].id = duplicateChanges[0].id;
-assert.throws(
-  () => validateAgainstCanonical(duplicateChanges, htmlIds),
-  /مكرر|لا تطابق/
-);
-
-const extraId = "auto-ffffffffffffffff";
-assert.throws(
-  () => validateAgainstCanonical(
-    [...goodChanges, { id: extraId, text: "extra" }],
-    [...htmlIds, extraId]
-  ),
-  /differ|تطابق/
-);
-
-const baseline = payload.updatedAt;
-assert.doesNotThrow(() =>
-  helperContext.assertPageChangesBaseUpdatedAt_(baseline, baseline)
-);
-assert.throws(
-  () => helperContext.assertPageChangesBaseUpdatedAt_(baseline, "2026-11-18T00:00:00.000Z"),
-  /نسخة قديمة/
-);
-
-// Simulate two tabs opened on the same base: after the first save advances
-// the version, the second tab's unchanged base must be rejected.
-const afterFirstSave = new Date(Date.parse(baseline) + 1).toISOString();
-assert.throws(
-  () => helperContext.assertPageChangesBaseUpdatedAt_(baseline, afterFirstSave),
-  /نسخة قديمة/
-);
-
-console.log("Page-text tests passed: 111 complete IDs; 109/missing, duplicate, extra, stale and concurrent stale snapshots rejected.");
-console.log("Apps Script patch JavaScript syntax passed for " + blocks.length + " code blocks.");
+console.log("Page text checks passed: 111 unique IDs, exact JSON coverage, both ticker texts, preserved site save contract, and no stale cache application.");
