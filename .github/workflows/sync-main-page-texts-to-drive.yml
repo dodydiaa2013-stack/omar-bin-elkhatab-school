@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - "index.html"
       - "page-changes-production.json"
   workflow_dispatch:
 
@@ -20,11 +21,11 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the exact approved main commit
+      - name: Check out the exact approved main commit and its parent history
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -32,7 +33,29 @@ jobs:
           node-version: 22
 
       - name: Install HTML parser
-        run: npm install --no-save jsdom@26
+        run: npm install --no-save --no-package-lock jsdom@26
+
+      - name: Determine changed source files
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            printf 'GITHUB_CHANGED_PATHS=__manual__\n' >> "$GITHUB_ENV"
+          else
+            if [ -z "${GITHUB_EVENT_BEFORE:-}" ] || [[ "$GITHUB_EVENT_BEFORE" =~ ^0+$ ]]; then
+              CHANGED="$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA")"
+            else
+              CHANGED="$(git diff --name-only "$GITHUB_EVENT_BEFORE" "$GITHUB_SHA")"
+            fi
+            {
+              echo 'GITHUB_CHANGED_PATHS<<__CHANGED_PATHS__'
+              printf '%s\n' "$CHANGED"
+              echo '__CHANGED_PATHS__'
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Validate source and synchronization client
         run: |
@@ -46,6 +69,7 @@ jobs:
           APPS_SCRIPT_SYNC_HMAC_SECRET: ${{ secrets.APPS_SCRIPT_SYNC_HMAC_SECRET }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           GITHUB_COMMIT_TIMESTAMP="$(git show -s --format=%cI "$GITHUB_SHA")"
