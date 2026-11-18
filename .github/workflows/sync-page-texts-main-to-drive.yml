@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "page-changes-production.json"
+      - "index.html"
 
 permissions:
   contents: read
@@ -21,8 +22,8 @@ jobs:
       - name: Check out the exact approved main commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
+          ref: main
+          fetch-depth: 0
 
       - name: Validate the exact page text snapshot and sign the request
         id: payload
@@ -30,6 +31,13 @@ jobs:
           HMAC_SECRET: ${{ secrets.PAGE_CHANGES_SYNC_HMAC_SECRET }}
         run: |
           set -euo pipefail
+          npm install --no-save jsdom@26
+          git fetch origin main
+          git checkout --detach origin/main
+          node scripts/sync-page-texts.mjs
+          git diff --exit-code -- index.html
+          MAIN_SHA="$(git rev-parse HEAD)"
+          echo "main_sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import crypto from "node:crypto";
@@ -65,7 +73,7 @@ jobs:
             repository: process.env.GITHUB_REPOSITORY,
             branch: "main",
             filePath: "page-changes-production.json",
-            commitSha: process.env.GITHUB_SHA,
+            commitSha: process.env.MAIN_SHA,
             sourceFileSha256: crypto.createHash("sha256").update(sourceText, "utf8").digest("hex"),
             data
           };
