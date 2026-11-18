@@ -2458,7 +2458,17 @@ async function saveAllPageChanges() {
         alert('تعذر الحفظ: أحد النصوص يتجاوز الحد المسموح.');
         return;
     }
-    const payload = JSON.stringify({ changes, expectedIds });
+    const baselineMeta = document.querySelector('meta[name="page-edits-updated-at"]');
+    const baseUpdatedAt = String(
+        (baselineMeta && baselineMeta.content) ||
+        window.pageChangesBaseUpdatedAt ||
+        ""
+    ).trim();
+    if (!Number.isFinite(Date.parse(baseUpdatedAt))) {
+        alert('تعذر الحفظ: لا يوجد تاريخ مرجعي موثوق للنسخة الحالية. حدّث الصفحة وحاول مرة أخرى.');
+        return;
+    }
+    const payload = JSON.stringify({ changes, expectedIds, baseUpdatedAt });
     if (payload.length > 90000) {
         alert('حجم التعديلات كبير. قلّل النصوص وحاول مرة أخرى.');
         return;
@@ -2514,7 +2524,15 @@ window.addEventListener('message', function(event) {
     const status = document.getElementById('googleSignInStatus');
     const result = data.result || {};
 
-    // لا نعلن النجاح إلا بعد تأكيد الحفظ في Drive والمزامنة مع GitHub.
+    // احتفظ بتاريخ أحدث نسخة مؤكدة في Drive حتى لا يصبح التبويب الحالي قديمًا.
+    if (result.driveSaved === true && Number.isFinite(Date.parse(result.updatedAt || ""))) {
+        const savedAt = new Date(Date.parse(result.updatedAt)).toISOString();
+        window.pageChangesBaseUpdatedAt = savedAt;
+        const baselineMeta = document.querySelector('meta[name="page-edits-updated-at"]');
+        if (baselineMeta) baselineMeta.content = savedAt;
+    }
+
+    // لا نعلن نجاح مزامنة GitHub إلا بعد تأكيد الحفظ في Drive والمزامنة.
     if (
         result.success === true &&
         result.driveSaved === true &&
@@ -2778,7 +2796,7 @@ function loadSavedPageChanges() {
         Date.now();
 
     script.onerror = () => {
-        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
+        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على النصوص الموجودة في نسخة HTML المنشورة.");
         document.documentElement.removeAttribute("data-page-edits-pending");
         script.remove();
     };
@@ -2857,12 +2875,14 @@ function receivePageChanges(data) {
 
     const applyStats = applyPageChangesList(normalizedChanges);
     if (applyStats.missing > 0 || applyStats.invalid > 0 ||
+        applyStats.skippedEditing > 0 ||
         applyStats.matched !== normalizedChanges.length) {
         console.error("[PageChanges] لم تُطبّق القائمة كاملة؛ لم يتم اعتمادها.", applyStats);
         return false;
     }
 
     meta.content = new Date(remoteTime).toISOString();
+    window.pageChangesBaseUpdatedAt = meta.content;
     const messages = document.querySelectorAll('#tickerText .ticker-message');
     messages.forEach((message, index) =>
         message.classList.toggle('active', index === currentNewsIndex)
