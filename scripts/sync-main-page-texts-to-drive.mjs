@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { JSDOM } from "jsdom";
 
 const endpoint = process.env.APPS_SCRIPT_SYNC_URL;
@@ -8,6 +9,7 @@ const commitSha = process.env.GITHUB_SHA || "";
 const ref = process.env.GITHUB_REF_NAME || "";
 const commitTimestamp = process.env.GITHUB_COMMIT_TIMESTAMP || "";
 const eventName = process.env.GITHUB_EVENT_NAME || "";
+const eventBefore = process.env.GITHUB_EVENT_BEFORE || "";
 const changedPaths = new Set(
   String(process.env.GITHUB_CHANGED_PATHS || "")
     .split(/\r?\n/)
@@ -62,22 +64,59 @@ if (!manualRun && !htmlChanged && !jsonChanged) {
 const html = fs.readFileSync("index.html", "utf8");
 const htmlForParsing = html.charCodeAt(0) === 0xFEFF ? html.slice(1) : html;
 const dom = new JSDOM(htmlForParsing);
-const editableElements = Array.from(
-  dom.window.document.querySelectorAll("[data-page-edit-id]")
-);
-const expectedIds = editableElements.map(element =>
-  (element.getAttribute("data-page-edit-id") || "").trim()
-);
+function extractHtmlSnapshot(sourceHtml) {
+  const sourceForParsing = sourceHtml.charCodeAt(0) === 0xFEFF
+    ? sourceHtml.slice(1)
+    : sourceHtml;
+  const sourceDom = new JSDOM(sourceForParsing);
+  const sourceElements = Array.from(
+    sourceDom.window.document.querySelectorAll("[data-page-edit-id]")
+  );
+  const ids = sourceElements.map(element =>
+    (element.getAttribute("data-page-edit-id") || "").trim()
+  );
+  if (!ids.length || ids.length > 500 || ids.some(id => !id) ||
+      new Set(ids).size !== ids.length) {
+    fail("index.html contains an empty, duplicate, or unsupported page edit ID.");
+  }
+  const changes = sourceElements.map((element, index) => ({
+    id: ids[index],
+    text: element.textContent.trim()
+  }));
+  return { ids, changes, byId: normalizeChanges(changes, "index.html editable text") };
+}
+const htmlSnapshot = extractHtmlSnapshot(html);
+const expectedIds = htmlSnapshot.ids;
 if (!expectedIds.length || expectedIds.length > 500 ||
     expectedIds.some(id => !id) ||
     new Set(expectedIds).size !== expectedIds.length) {
   fail("index.html contains an empty, duplicate, or unsupported page edit ID.");
 }
-const htmlChanges = editableElements.map((element, index) => ({
-  id: expectedIds[index],
-  text: element.textContent.trim()
-}));
-const htmlById = normalizeChanges(htmlChanges, "index.html editable text");
+const htmlChanges = htmlSnapshot.changes;
+const htmlById = htmlSnapshot.byId;
+
+// A CSS/layout-only edit to index.html must not roll back a newer JSON text snapshot.
+// Compare editable text against the index.html at the push base, not just the changed path.
+let htmlTextChanged = htmlChanged;
+if (htmlChanged && eventBefore && !/^0+$/.test(eventBefore)) {
+  let previousHtml;
+  try {
+    previousHtml = execFileSync("git", ["show", eventBefore + ":index.html"], {
+      encoding: "utf8",
+      maxBuffer: 10 * 1024 * 1024
+    });
+  } catch (error) {
+    fail("Could not read index.html from the push base; refusing to guess the text source.");
+  }
+  const previousSnapshot = extractHtmlSnapshot(previousHtml);
+  if (previousSnapshot.ids.length !== expectedIds.length ||
+      previousSnapshot.ids.some((id, index) => id !== expectedIds[index]) ||
+      !mapsEqual(previousSnapshot.byId, htmlById)) {
+    htmlTextChanged = true;
+  } else {
+    htmlTextChanged = false;
+  }
+}
 
 const repositoryPayload = JSON.parse(
   fs.readFileSync("page-changes-production.json", "utf8")
@@ -101,12 +140,12 @@ if (jsonById.size !== expectedIds.length ||
 // - both files: require exact text equality; reject conflicting edits.
 // - manual first sync: use JSON as the canonical repository snapshot.
 let selectedById;
-if (htmlChanged && jsonChanged) {
+if (htmlTextChanged && jsonChanged) {
   if (!mapsEqual(htmlById, jsonById)) {
     fail("index.html and page-changes-production.json changed together but their editable texts differ.");
   }
   selectedById = htmlById;
-} else if (htmlChanged && !jsonChanged) {
+} else if (htmlTextChanged && !jsonChanged) {
   selectedById = htmlById;
 } else {
   selectedById = jsonById;
@@ -165,6 +204,6 @@ if (!response.ok || !result || result.success !== true) {
 }
 console.log("Drive synchronization confirmed: " +
   String(result.status || "success") + "; IDs: " + changes.length +
-  "; source: " + (manualRun ? "manual-json" : htmlChanged && jsonChanged ? "html+json" : htmlChanged ? "index.html" : "json") +
+  "; source: " + (manualRun ? "manual-json" : htmlTextChanged && jsonChanged ? "html+json" : htmlTextChanged ? "index.html" : "json") +
   "; commit: " + commitSha + "; updatedAt: " +
   String(result.updatedAt || payload.updatedAt));
