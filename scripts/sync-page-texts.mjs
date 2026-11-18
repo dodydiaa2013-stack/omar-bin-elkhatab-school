@@ -198,6 +198,46 @@ for (const element of markedDocument.querySelectorAll("[data-page-edit-id]")) {
   }
 }
 
+const htmlIds = Array.from(targets.keys());
+const htmlIdSet = new Set(htmlIds);
+if (payload.changes.length !== htmlIds.length) {
+  throw new Error(
+    "Refusing to sync an incomplete page-text list: JSON has " +
+    payload.changes.length + " IDs; HTML has " + htmlIds.length + "."
+  );
+}
+if (payload.expectedIds !== undefined &&
+    (!Array.isArray(payload.expectedIds) ||
+     payload.expectedIds.length !== htmlIds.length ||
+     new Set(payload.expectedIds).size !== payload.expectedIds.length ||
+     payload.expectedIds.some(id => typeof id !== "string" || !htmlIdSet.has(id)))) {
+  throw new Error("The expectedIds list is present but does not exactly match the HTML edit IDs.");
+}
+const payloadTime = Date.parse(payload.updatedAt || "");
+if (!Number.isFinite(payloadTime)) {
+  throw new Error("The saved page-text payload has no valid updatedAt timestamp.");
+}
+const timestampMeta = document.querySelector('meta[name="page-edits-updated-at"]');
+const baselineTime = Date.parse(timestampMeta && timestampMeta.getAttribute("content") || "");
+if (!Number.isFinite(baselineTime)) {
+  throw new Error("The HTML page has no valid page-edits-updated-at baseline.");
+}
+if (payloadTime < baselineTime) {
+  throw new Error(
+    "Refusing to overwrite newer page text with an older payload. " +
+    "Payload: " + payload.updatedAt + "; HTML: " + timestampMeta.getAttribute("content")
+  );
+}
+if (payloadTime === baselineTime) {
+  const sameTimestampHasChanges = payload.changes.some(item => {
+    const target = targets.get(item.id);
+    return target && target.textContent.trim() !== item.text.trim();
+  });
+  if (sameTimestampHasChanges) {
+    throw new Error("The payload timestamp matches the HTML baseline but its text differs; refusing an ambiguous overwrite.");
+  }
+}
+
 const missing = [];
 const textEdits = [];
 function escapeHtml(value) {
@@ -240,6 +280,15 @@ if (missing.length) {
   );
 }
 
+const payloadIdSet = new Set(seen);
+const htmlIdsMissingFromPayload = htmlIds.filter(id => !payloadIdSet.has(id));
+if (htmlIdsMissingFromPayload.length) {
+  throw new Error(
+    "Refusing to write index.html because the JSON is missing HTML edit IDs: " +
+    htmlIdsMissingFromPayload.join(", ")
+  );
+}
+
 textEdits.sort((a, b) => b.start - a.start);
 let output = markedHtml;
 let previousTextStart = markedHtml.length + 1;
@@ -263,6 +312,21 @@ if (finalDom.window.document.body.querySelectorAll("script").length < 1) {
   throw new Error("The document body appears incomplete; refusing to write index.html.");
 }
 
+const updatedMeta = '<meta name="page-edits-updated-at" content="' +
+  new Date(payloadTime).toISOString() + '">';
+const metaPattern = /<meta name="page-edits-updated-at" content="[^"]*">/;
+if (!metaPattern.test(output)) {
+  throw new Error("Could not locate the page text timestamp meta tag in final HTML.");
+}
+output = output.replace(metaPattern, updatedMeta);
+
+const finalIds = Array.from(finalDom.window.document.querySelectorAll("[data-page-edit-id]"))
+  .map(element => element.getAttribute("data-page-edit-id"));
+if (finalIds.length !== htmlIds.length || new Set(finalIds).size !== finalIds.length) {
+  throw new Error("Final HTML edit ID integrity check failed.");
+}
+
 fs.writeFileSync(htmlPath, output, "utf8");
 console.log("Updated " + payload.changes.length + " text nodes in index.html.");
+console.log("Validated complete bidirectional ID coverage and monotonic update timestamp.");
 console.log("Preserved the original HTML source structure without DOM serialization.");
