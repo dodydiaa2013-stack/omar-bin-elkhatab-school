@@ -1,0 +1,48 @@
+name: Sync approved main page text to Google Drive
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "page-changes-production.json"
+      - "index.html"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-main-page-text-to-drive
+  cancel-in-progress: false
+
+jobs:
+  sync-main-to-drive:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact approved main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Send signed main snapshot to Apps Script
+        env:
+          APPS_SCRIPT_SYNC_URL: ${{ secrets.APPS_SCRIPT_SYNC_URL }}
+          APPS_SCRIPT_SYNC_HMAC_SECRET: ${{ secrets.APPS_SCRIPT_SYNC_HMAC_SECRET }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_COMMIT_TIMESTAMP: ${{ github.event.head_commit.timestamp || '' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GITHUB_COMMIT_TIMESTAMP}" ]; then
+            GITHUB_COMMIT_TIMESTAMP="$(git show -s --format=%cI "$GITHUB_SHA")"
+            export GITHUB_COMMIT_TIMESTAMP
+          fi
+          node scripts/sync-main-page-texts-to-drive.mjs
