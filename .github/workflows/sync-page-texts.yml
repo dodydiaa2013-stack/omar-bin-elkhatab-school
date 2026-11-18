@@ -61,8 +61,16 @@ jobs:
           git switch --create automation/page-text-sync
           git add page-changes-production.json index.html
 
+          # Locate an existing proposal before the no-diff branch so an old
+          # draft PR cannot remain open after its changes are no longer needed.
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number // empty')
+
           if git diff --cached --quiet; then
-            echo "No page text changes are needed."
+            if [ -n "$pr_number" ]; then
+              gh pr close "$pr_number" --repo "$GITHUB_REPOSITORY" \
+                --comment "Closed automatically: the latest verified Drive snapshot produces no changes against main."
+            fi
+            echo "No page text changes are needed; stale open proposal closed if present."
             exit 0
           fi
 
