@@ -334,9 +334,9 @@ No deployment or merge is performed by this patch. Apps Script deployment and in
 
 The workflow checks the exact files changed between the push's before-SHA and current SHA (not only the last commit). It then selects the snapshot as follows:
 
-- index.html only: extract the text from every [data-page-edit-id] element in DOM order using textContent.trim().
+- index.html with actual editable-text changes: extract the text from every [data-page-edit-id] element in DOM order using textContent.trim(). The workflow compares against the push-base HTML first, so CSS/layout-only HTML edits cannot overwrite newer JSON text with old markup.
 - page-changes-production.json only: use the JSON changes array, after validating exact ID coverage.
-- both files: compare every ID and text exactly; any conflict stops before the Apps Script request.
+- both files: if editable HTML text also changed, compare every ID and text exactly; any conflict stops before the Apps Script request. If index.html changed only for layout/CSS and its editable text is unchanged, JSON remains the source.
 - workflow_dispatch: use the JSON snapshot for the initial synchronization.
 
 The workflow path filter includes both supported files. It checks out full history only to compute the push diff, and still sends only the exact approved main commit. It never sends a pull-request or feature-branch snapshot to Drive.
