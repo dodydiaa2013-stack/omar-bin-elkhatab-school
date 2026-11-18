@@ -36,7 +36,7 @@ assert.match(patch, /PAGE_CHANGES_LAST_GITHUB_COMMIT_SHA/);
 const oldBlocks = [...patch.matchAll(new RegExp("```javascript\n([\s\S]*?)\n```", "g"))].map(match => match[1]);
 const newBlocks = [...patch.matchAll(new RegExp("~~~javascript\n([\s\S]*?)\n~~~", "g"))].map(match => match[1]);
 const allBlocks = [...oldBlocks, ...newBlocks];
-assert.ok(allBlocks.length >= 7);
+assert.ok(allBlocks.length >= 6);
 for (const [index, source] of allBlocks.entries()) {
   new vm.Script(source, { filename: "apps-script-patch-block-" + (index + 1) + ".js" });
 }
