@@ -1,6 +1,10 @@
 ﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+    <script>
+        // لا تعرض أي نص افتراضي أو مخزن محليًا قبل تأكيد نسخة Drive المعتمدة.
+        document.documentElement.setAttribute('data-page-edits-pending', '');
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب ث بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
@@ -64,6 +68,21 @@
             }
         }
         :focus-visible { outline: 3px solid #F59E0B; outline-offset: 3px; }
+
+        /* لا تعرض نسخة HTML أو الكاش القديمة قبل اكتمال التحقق من نصوص Drive. */
+        html[data-page-edits-pending] body,
+        html[data-page-edits-error] body { visibility: hidden !important; }
+        html[data-page-edits-pending]::after,
+        html[data-page-edits-error]::after {
+            position: fixed; inset: 0; z-index: 2147483647;
+            display: grid; place-items: center; padding: 1.25rem;
+            background: #f8fafc; color: #0B132B;
+            font-family: 'Cairo', sans-serif; font-size: 1rem;
+            font-weight: 700; line-height: 1.8; text-align: center;
+            white-space: normal;
+        }
+        html[data-page-edits-pending]::after { content: "جارٍ تحميل النصوص المعتمدة..."; }
+        html[data-page-edits-error]::after { content: "تعذر تحميل النصوص المعتمدة. يرجى تحديث الصفحة والمحاولة مرة أخرى."; }
 
         /* تثبيت أبعاد عارض الصور على الشاشات الكبيرة قبل حساب مقاس الصورة. */
         #schoolImageViewer > div {
@@ -1528,7 +1547,7 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
-    applyCachedPageChanges();
+    // لا نستخدم localStorage كمصدر عرض؛ ننتظر نسخة الخادم المعتمدة فقط.
 
     // أصبحت عناصر الصفحة جاهزة؛ طبّق الاستجابة المبكرة إن كانت وصلت بالفعل.
     window.__pageChangesDomReady = true;
@@ -1542,7 +1561,6 @@ window.addEventListener('DOMContentLoaded', () => {
         loadSavedPageChanges();
     }
 
-    document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
 });
 
@@ -2744,32 +2762,6 @@ function applyPageChangesList(changes) {
     return stats;
 }
 
-function applyCachedPageChanges() {
-    try {
-        const cached = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (!cached) {
-
-            return false;
-        }
-        const parsed = JSON.parse(cached);
-        if (!parsed || !Array.isArray(parsed.changes)) {
-
-            return false;
-        }
-
-        // نظّف القيم القديمة من الكاش نفسه، وليس من العرض فقط.
-        parsed.changes = normalizeFixedPageChanges(parsed.changes);
-        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify(parsed));
-        applyPageChangesList(parsed.changes);
-
-        return true;
-    } catch (error) {
-
-        console.warn("تعذر تطبيق النسخة المحلية من تعديلات النصوص.", error);
-        return false;
-    }
-}
-
 function cacheCurrentPageChanges() {
     try {
 
@@ -2789,97 +2781,104 @@ function cacheCurrentPageChanges() {
     }
 }
 
+function markPageChangesUnavailable(message) {
+    document.documentElement.removeAttribute("data-page-edits-pending");
+    document.documentElement.setAttribute("data-page-edits-error", "");
+    if (message) console.error("تعذر اعتماد نصوص الموقع:", message);
+}
+
+function markPageChangesReady() {
+    document.documentElement.removeAttribute("data-page-edits-error");
+    document.documentElement.removeAttribute("data-page-edits-pending");
+}
+
+function validatePageChangesSnapshot(changes) {
+    if (!Array.isArray(changes) || changes.length !== 111) {
+        throw new Error("يجب أن تحتوي استجابة الخادم على 111 نصًا بالضبط.");
+    }
+    const pageElements = Array.from(document.querySelectorAll("[data-page-edit-id]"));
+    const expectedIds = pageElements.map(element => element.getAttribute("data-page-edit-id"));
+    if (expectedIds.length !== 111 ||
+        expectedIds.some(id => typeof id !== "string" || !id.trim()) ||
+        new Set(expectedIds).size !== 111) {
+        throw new Error("معرفات عناصر الصفحة غير مكتملة أو مكررة.");
+    }
+    const byId = new Map();
+    changes.forEach(item => {
+        if (!item || typeof item.id !== "string" || !item.id.trim() ||
+            item.id !== item.id.trim() || typeof item.text !== "string" ||
+            item.text.length > 10000 || byId.has(item.id)) {
+            throw new Error("استجابة الخادم تحتوي على معرفات أو نصوص غير صالحة.");
+        }
+        byId.set(item.id, item.text);
+    });
+    if (byId.size !== expectedIds.length || expectedIds.some(id => !byId.has(id))) {
+        throw new Error("معرفات النصوص المحفوظة لا تطابق عناصر الصفحة بالكامل.");
+    }
+    return expectedIds.map(id => ({ id: id, text: byId.get(id) }));
+}
+
 function loadSavedPageChanges() {
     const scriptURL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
     const script = document.createElement("script");
-
     pageChangesResponseReceived = false;
-    script.src =
-        scriptURL +
-        "?action=pageChanges&callback=receivePageChanges&_=" +
-        Date.now();
-
+    script.src = scriptURL + "?action=pageChanges&callback=receivePageChanges&_" + Date.now();
     script.onerror = () => {
-        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
-        document.documentElement.removeAttribute("data-page-edits-pending");
+        markPageChangesUnavailable("تعذر الاتصال بخدمة تعديلات النصوص.");
         script.remove();
     };
-
     script.onload = () => {
-        // تحميل ملف JavaScript لا يعني بالضرورة أن callback أعاد بيانات صالحة.
         if (!pageChangesResponseReceived) {
-            console.error("وصل رد من خدمة التعديلات دون استدعاء receivePageChanges؛ لم يتم تأكيد تحميل التعديلات.");
+            markPageChangesUnavailable("لم تصل استجابة مؤكدة من خدمة تعديلات النصوص.");
         }
-        document.documentElement.removeAttribute("data-page-edits-pending");
         script.remove();
     };
-
     document.body.appendChild(script);
 }
 
 function receivePageChanges(data) {
     pageChangesResponseReceived = true;
-
-    // لا نحوّل خطأ قراءة الخادم أو الاستجابة غير السليمة إلى قائمة تعديلات فارغة.
     if (!data || data.success !== true || !Array.isArray(data.changes)) {
         const message = data && (data.message || data.error)
             ? (data.message || data.error)
             : "استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.";
-        console.error("تعذر استرجاع تعديلات نصوص الموقع:", message);
+        markPageChangesUnavailable(message);
         return false;
     }
-
-    // لا تستبدل نسخة محلية محفوظة بقائمة فارغة قبل التأكد من صحة رد الخادم.
+    let normalizedChanges;
     try {
-        const cachedRaw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (cachedRaw && data.changes.length === 0) {
-            const cached = JSON.parse(cachedRaw);
-            if (cached && Array.isArray(cached.changes) && cached.changes.length > 0) {
-                console.warn("وصلت قائمة تعديلات فارغة من الخادم مع وجود نسخة محلية محفوظة؛ تم الاحتفاظ بالنسخة المحلية.");
-                applyPageChangesList(cached.changes);
-                return true;
-            }
-        }
+        normalizedChanges = validatePageChangesSnapshot(data.changes);
     } catch (error) {
-        console.warn("تعذر فحص النسخة المحلية من تعديلات النصوص.", error);
+        markPageChangesUnavailable(error.message);
+        return false;
     }
-
-    const normalizedChanges = normalizeFixedPageChanges(data.changes);
     const applyStats = applyPageChangesList(normalizedChanges);
-
-    console.info("[PageChanges] نتيجة استرجاع التعديلات:", {
-        serverReceived: data.changes.length,
-        normalized: normalizedChanges.length,
+    if (applyStats.matched !== normalizedChanges.length ||
+        applyStats.missing > 0 || applyStats.invalid > 0) {
+        markPageChangesUnavailable("لم يتم تطبيق جميع النصوص المعتمدة على عناصر الصفحة.");
+        console.error("[PageChanges] تفاصيل التطبيق:", applyStats);
+        return false;
+    }
+    console.info("[PageChanges] تم اعتماد النصوص والتحقق من جميع المعرفات:", {
+        received: data.changes.length,
         matched: applyStats.matched,
         applied: applyStats.applied,
-        unchanged: applyStats.unchanged,
-        skippedEditing: applyStats.skippedEditing,
-        missing: applyStats.missing,
-        invalid: applyStats.invalid,
-        missingIds: applyStats.missingIds
+        unchanged: applyStats.unchanged
     });
-
-    if (applyStats.missing > 0 || applyStats.invalid > 0) {
-        console.warn("[PageChanges] توجد تعديلات لم تُطبّق على عناصر الصفحة. راجع المعرّفات المفقودة أو البيانات غير الصحيحة.");
-    }
-
     try {
-        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
-            changes: normalizedChanges
-        }));
+        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({ changes: normalizedChanges }));
     } catch (error) {
-        console.warn("تعذر حفظ نسخة محلية من تعديلات النصوص.", error);
+        console.warn("تعذر تحديث النسخة الاحتياطية المحلية من تعديلات النصوص.", error);
     }
-
     const messages = document.querySelectorAll('#tickerText .ticker-message');
     messages.forEach((message, index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
-
+    markPageChangesReady();
     return true;
 }
 
-        function exportUpdatedHTML() {
+function exportUpdatedHTML() {
     if (!isDeveloperLoggedIn) {
         alert('سجّل الدخول بحساب Google المصرح به أولاً.');
         return;
