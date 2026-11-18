@@ -2757,62 +2757,14 @@ function applyPageChangesList(changes) {
 }
 
 function applyCachedPageChanges() {
-    try {
-        const raw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (!raw) return false;
-        const cached = JSON.parse(raw);
-        if (!cached || !Array.isArray(cached.changes)) return false;
-
-        const cachedTime = Date.parse(cached.updatedAt || "");
-        const meta = document.querySelector('meta[name="page-edits-updated-at"]');
-        const htmlTime = Date.parse(meta && meta.content || "");
-        if (!Number.isFinite(cachedTime) || !Number.isFinite(htmlTime) || cachedTime < htmlTime) {
-            console.warn("[PageChanges] تم تجاهل كاش قديم أو غير مؤرخ.");
-            return false;
-        }
-
-        const normalized = normalizeFixedPageChanges(cached.changes);
-        const stats = applyPageChangesList(normalized);
-        if (stats.missing > 0 || stats.invalid > 0) {
-            console.warn("[PageChanges] الكاش غير متوافق بالكامل مع الصفحة؛ تم تجاهله.", stats);
-            return false;
-        }
-        return true;
-    } catch (error) {
-        console.warn("تعذر تطبيق النسخة المحلية من تعديلات النصوص.", error);
-        return false;
-    }
+    // لا نطبق كاش المتصفح: لا يملك مصدرًا موثوقًا لتاريخ الحفظ وقد يسبق نسخة HTML أو يتجاوزها.
+    // تظل نسخة HTML المنشورة مرجعًا آمنًا عند تعذر الوصول إلى الخادم.
+    return false;
 }
 
 function cacheCurrentPageChanges() {
-    try {
-        const changes = Array.from(document.querySelectorAll("[data-page-edit-id]"))
-            .map(element => ({
-                id: element.getAttribute("data-page-edit-id"),
-                text: element.textContent.trim()
-            }));
-        const expectedIds = changes.map(item => item.id);
-        if (
-            !changes.length ||
-            changes.some(item => !item.id || item.text.length > 10000) ||
-            new Set(expectedIds).size !== expectedIds.length
-        ) {
-            console.warn("[PageChanges] لم يتم تحديث الكاش بسبب قائمة غير مكتملة أو غير صالحة.");
-            return false;
-        }
-
-        // تُستدعى هذه الدالة بعد تأكيد نجاح الحفظ والمزامنة فقط.
-        const updatedAt = new Date().toISOString();
-        const meta = document.querySelector('meta[name="page-edits-updated-at"]');
-        if (meta) meta.content = updatedAt;
-        const payload = JSON.stringify({ changes, updatedAt });
-        if (payload.length > 90000) return false;
-        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, payload);
-        return true;
-    } catch (error) {
-        console.warn("تعذر تحديث النسخة المحلية من تعديلات النصوص.", error);
-        return false;
-    }
+    // لا نخزن نسخة محلية غير مؤرخة من رد الخادم؛ يمنع ذلك رجوع نصوص قديمة بعد إعادة التحميل.
+    return false;
 }
 
 function loadSavedPageChanges() {
@@ -2859,44 +2811,27 @@ function receivePageChanges(data) {
 
     const meta = document.querySelector('meta[name="page-edits-updated-at"]');
     const htmlTime = Date.parse(meta && meta.content || "");
-    let cacheTime = 0;
-    try {
-        const raw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        const cached = raw ? JSON.parse(raw) : null;
-        const parsedCacheTime = Date.parse(cached && cached.updatedAt || "");
-        if (Number.isFinite(parsedCacheTime)) cacheTime = parsedCacheTime;
-    } catch (error) {
-        console.warn("[PageChanges] تعذر قراءة تاريخ النسخة المحلية.", error);
+    if (!Number.isFinite(htmlTime)) {
+        console.error("[PageChanges] لا يوجد تاريخ مرجعي صالح داخل HTML؛ لم تُطبق بيانات الخادم.");
+        return false;
     }
-
-    const trustedFloor = Math.max(Number.isFinite(htmlTime) ? htmlTime : 0, cacheTime);
-    if (trustedFloor && remoteTime < trustedFloor) {
-        console.warn("[PageChanges] تم تجاهل نسخة خادم أقدم من نسخة الصفحة أو الكاش.", {
+    if (remoteTime < htmlTime) {
+        console.warn("[PageChanges] تم تجاهل نسخة خادم أقدم من النسخة المنشورة في HTML.", {
             remote: data.updatedAt,
-            html: meta && meta.content || null,
-            cacheTime: cacheTime ? new Date(cacheTime).toISOString() : null
+            html: meta.content
         });
         return false;
     }
 
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
     const applyStats = applyPageChangesList(normalizedChanges);
-
-    if (applyStats.missing > 0 || applyStats.invalid > 0) {
-        console.error("[PageChanges] لم تُطبّق القائمة كاملة؛ لن يتم اعتمادها أو تخزينها.", applyStats);
+    if (applyStats.missing > 0 || applyStats.invalid > 0 ||
+        applyStats.matched !== normalizedChanges.length) {
+        console.error("[PageChanges] لم تُطبّق القائمة كاملة؛ لم يتم اعتمادها.", applyStats);
         return false;
     }
 
-    if (meta) meta.content = new Date(remoteTime).toISOString();
-    try {
-        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
-            changes: normalizedChanges,
-            updatedAt: new Date(remoteTime).toISOString()
-        }));
-    } catch (error) {
-        console.warn("تعذر حفظ نسخة محلية من تعديلات النصوص.", error);
-    }
-
+    meta.content = new Date(remoteTime).toISOString();
     const messages = document.querySelectorAll('#tickerText .ticker-message');
     messages.forEach((message, index) =>
         message.classList.toggle('active', index === currentNewsIndex)
