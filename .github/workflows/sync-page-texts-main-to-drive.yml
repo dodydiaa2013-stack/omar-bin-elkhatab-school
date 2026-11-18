@@ -1,0 +1,105 @@
+name: Sync approved main page text to Google Drive
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "page-changes-production.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: page-text-main-to-drive
+  cancel-in-progress: false
+
+jobs:
+  sync-main-to-drive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact approved main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Validate the exact page text snapshot and sign the request
+        id: payload
+        env:
+          HMAC_SECRET: ${{ secrets.PAGE_CHANGES_SYNC_HMAC_SECRET }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import crypto from "node:crypto";
+
+          if (!process.env.HMAC_SECRET || process.env.HMAC_SECRET.length < 32) {
+            throw new Error("PAGE_CHANGES_SYNC_HMAC_SECRET is missing or too short.");
+          }
+
+          const data = JSON.parse(fs.readFileSync("page-changes-production.json", "utf8"));
+          const html = fs.readFileSync("index.html", "utf8");
+          const ids = [...html.matchAll(/data-page-edit-id\\s*=\\s*["']([^"']+)["']/g)].map(m => m[1]);
+          if (!data || data.success !== true || !Array.isArray(data.changes) ||
+              !Array.isArray(data.expectedIds) || !data.updatedAt) {
+            throw new Error("Approved main page-text JSON is missing required fields.");
+          }
+          if (ids.length !== 111 || new Set(ids).size !== ids.length) {
+            throw new Error("The checked-out main HTML does not contain exactly 111 unique page-edit IDs.");
+          }
+          const changeIds = data.changes.map(item => item && item.id);
+          if (changeIds.length !== ids.length || new Set(changeIds).size !== changeIds.length ||
+              ids.some(id => !changeIds.includes(id)) ||
+              data.expectedIds.length !== ids.length ||
+              new Set(data.expectedIds).size !== ids.length ||
+              ids.some((id, index) => data.expectedIds[index] !== id)) {
+            throw new Error("The approved JSON does not exactly cover the HTML page-edit IDs.");
+          }
+          if (data.changes.some(item => !item || typeof item.text !== "string" || item.text.length > 10000)) {
+            throw new Error("The approved JSON contains an invalid text entry.");
+          }
+
+          const sourceText = fs.readFileSync("page-changes-production.json", "utf8");
+          const envelope = {
+            repository: process.env.GITHUB_REPOSITORY,
+            branch: "main",
+            filePath: "page-changes-production.json",
+            commitSha: process.env.GITHUB_SHA,
+            sourceFileSha256: crypto.createHash("sha256").update(sourceText, "utf8").digest("hex"),
+            data
+          };
+          const payload = JSON.stringify(envelope);
+          const payloadHash = crypto.createHash("sha256").update(payload, "utf8").digest("hex");
+          const timestamp = new Date().toISOString();
+          const nonce = crypto.randomUUID();
+          const signature = crypto.createHmac("sha256", process.env.HMAC_SECRET)
+            .update(timestamp + "\\n" + nonce + "\\n" + payloadHash, "utf8")
+            .digest("hex");
+          const output = process.env.GITHUB_OUTPUT;
+          fs.appendFileSync(output, "payload_b64=" + Buffer.from(payload, "utf8").toString("base64") + "\\n");
+          fs.appendFileSync(output, "timestamp=" + timestamp + "\\n");
+          fs.appendFileSync(output, "nonce=" + nonce + "\\n");
+          fs.appendFileSync(output, "signature=" + signature + "\\n");
+          NODE
+
+      - name: Send the signed snapshot to Apps Script
+        env:
+          APPS_SCRIPT_URL: ${{ secrets.PAGE_CHANGES_SYNC_URL }}
+          PAYLOAD_B64: ${{ steps.payload.outputs.payload_b64 }}
+          SYNC_TIMESTAMP: ${{ steps.payload.outputs.timestamp }}
+          SYNC_NONCE: ${{ steps.payload.outputs.nonce }}
+          SYNC_SIGNATURE: ${{ steps.payload.outputs.signature }}
+        run: |
+          set -euo pipefail
+          test -n "$APPS_SCRIPT_URL"
+          PAYLOAD="$(printf '%s' "$PAYLOAD_B64" | base64 --decode)"
+          RESPONSE="$(curl --fail-with-body --silent --show-error --location --max-time 90 --request POST "$APPS_SCRIPT_URL" --data-urlencode "action=syncPageChangesFromGitHub" --data-urlencode "timestamp=$SYNC_TIMESTAMP" --data-urlencode "nonce=$SYNC_NONCE" --data-urlencode "signature=$SYNC_SIGNATURE" --data-urlencode "payload=$PAYLOAD")"
+          RESPONSE="$RESPONSE" node --input-type=module <<'NODE'
+          const response = JSON.parse(process.env.RESPONSE);
+          if (!response || response.success !== true) {
+            throw new Error("Apps Script did not confirm Drive synchronization: " +
+              (response && response.message ? response.message : "invalid response"));
+          }
+          console.log("Google Drive confirmed the approved main snapshot:", response.commitSha || "already applied");
+          NODE
