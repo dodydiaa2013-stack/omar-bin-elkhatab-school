@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { execFileSync } from "node:child_process";
 import { JSDOM } from "jsdom";
 
 const html = fs.readFileSync("index.html", "utf8");
