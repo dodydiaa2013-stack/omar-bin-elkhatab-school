@@ -23,8 +23,13 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check synchronization script syntax
-        run: node --check scripts/sync-page-texts.mjs
+      - name: Check synchronization and regression test syntax
+        run: |
+          node --check scripts/sync-page-texts.mjs
+          node --check scripts/test-page-text-integrity.mjs
+
+      - name: Run page text regression tests
+        run: node scripts/test-page-text-integrity.mjs
 
       - name: Verify exact page ID coverage and timestamp
         run: |
