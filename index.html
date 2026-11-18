@@ -1,8 +1,7 @@
 ﻿<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-page-edits-pending="true">
 <head>
     <meta charset="UTF-8">
-    <meta name="page-edits-updated-at" content="2026-11-18T10:28:43.172Z">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب ث بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
     <meta name="theme-color" content="#0B132B">
@@ -247,6 +246,7 @@
     // إذا وصلت الاستجابة قبل تجهيز عناصر الصفحة، احتفظ بها حتى تصبح جاهزة.
     (() => {
         const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+        document.documentElement.setAttribute("data-page-edits-pending", "true");
         window.__pageChangesDomReady = false;
         window.__earlyPageChangesReceived = false;
 
@@ -366,8 +366,61 @@
         gtag('js', new Date());
         gtag('config', 'G-7BPQPCY9C7');
     </script>
+    <style id="page-text-loading-guard">
+    /* لا تعرض النصوص الأساسية أو أي كاش قديم قبل تأكيد نسخة Drive كاملة. */
+    html[data-page-edits-pending="true"] body > :not(#page-text-loading-screen):not(noscript) {
+        visibility: hidden !important;
+    }
+    #page-text-loading-screen {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 14px;
+        padding: 24px;
+        text-align: center;
+        color: #0B132B;
+        background: #f8fafc;
+        font-family: 'Cairo', sans-serif;
+    }
+    html[data-page-edits-pending="true"] #page-text-loading-screen {
+        display: flex;
+        visibility: visible !important;
+    }
+    #page-text-loading-screen .page-text-loader {
+        width: 34px;
+        height: 34px;
+        border: 4px solid #cbd5e1;
+        border-top-color: #0B132B;
+        border-radius: 50%;
+        animation: pageTextSpin .8s linear infinite;
+    }
+    @keyframes pageTextSpin { to { transform: rotate(360deg); } }
+    #page-text-loading-screen button {
+        border: 0;
+        border-radius: 8px;
+        padding: 9px 18px;
+        color: #fff;
+        background: #0B132B;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        #page-text-loading-screen .page-text-loader { animation: none; }
+    }
+</style>
 </head>
 <body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+    <div id="page-text-loading-screen" role="status" aria-live="polite">
+        <div class="page-text-loader" aria-hidden="true"></div>
+        <strong id="page-text-loading-title">جارٍ تحميل آخر النصوص المعتمدة من Google Drive...</strong>
+        <p id="page-text-loading-detail">لن تظهر نسخة قديمة أثناء التحقق من التحديثات.</p>
+        <button id="page-text-retry-button" type="button" onclick="retryPageChangesLoad()" hidden>إعادة المحاولة</button>
+    </div>
 
     <noscript>
         <main id="javascript-disabled-message" lang="ar" dir="rtl" role="alert">
@@ -1529,21 +1582,20 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
-    applyCachedPageChanges();
 
-    // أصبحت عناصر الصفحة جاهزة؛ طبّق الاستجابة المبكرة إن كانت وصلت بالفعل.
+    // لا تطبق localStorage هنا؛ قد يحتوي على نصوص أقدم من نسخة Drive.
     window.__pageChangesDomReady = true;
     if (window.__earlyPageChangesReceived) {
         const earlyData = window.__earlyPageChangesData;
         window.__earlyPageChangesData = null;
         window.__earlyPageChangesReceived = false;
-        receivePageChanges(earlyData);
+        if (!receivePageChanges(earlyData)) {
+            showPageChangesLoadError("وصلت نسخة Drive لكنها لم تجتز فحص اكتمال المعرفات والنصوص.");
+        }
     } else if (window.__earlyPageChangesFailed) {
-        // خطة احتياطية عند فشل الطلب الذي بدأ من head.
         loadSavedPageChanges();
     }
 
-    document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
 });
 
@@ -2435,50 +2487,25 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-
     assignPageEditIds();
-    const editableElements = Array.from(document.querySelectorAll('[data-page-edit-id]'));
-    const expectedIds = editableElements.map(el =>
-        (el.getAttribute('data-page-edit-id') || '').trim()
+    const editableElements = Array.from(
+        document.querySelectorAll('[data-page-edit-id]')
     );
-
-    if (!expectedIds.length || expectedIds.some(id => !id) ||
-        new Set(expectedIds).size !== expectedIds.length) {
-        alert('تعذر الحفظ: توجد معرفات فارغة أو مكررة في الصفحة.');
-        return;
-    }
-
-    const changes = editableElements.map((el, index) => ({
-        id: expectedIds[index],
+    const changes = editableElements.map(el => ({
+        id: el.getAttribute('data-page-edit-id'),
         text: el.textContent.trim()
-    }));
-
-    if (changes.some(item => typeof item.text !== 'string' || item.text.length > 10000)) {
-        alert('تعذر الحفظ: أحد النصوص يتجاوز الحد المسموح.');
+    })).filter(item => item.id && item.text.length <= 10000);
+    if (!changes.length) {
+        alert('لا توجد نصوص قابلة للحفظ.');
         return;
     }
-
-    const baselineMeta = document.querySelector('meta[name="page-edits-updated-at"]');
-    const baseUpdatedAt = String(
-        (baselineMeta && baselineMeta.content) || window.pageChangesBaseUpdatedAt || ''
-    ).trim();
-
-    if (!Number.isFinite(Date.parse(baseUpdatedAt))) {
-        alert('تعذر الحفظ: لا يوجد تاريخ مرجعي موثوق للنسخة الحالية. حدّث الصفحة وحاول مرة أخرى.');
-        return;
-    }
-
-    const payload = JSON.stringify({ changes, expectedIds, baseUpdatedAt });
+    const payload = JSON.stringify({ changes });
     if (payload.length > 90000) {
         alert('حجم التعديلات كبير. قلّل النصوص وحاول مرة أخرى.');
         return;
     }
-
-    const nonce = (window.crypto && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+    const nonce = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
     pendingPageChangesNonce = nonce;
-
     let frame = document.getElementById('pageChangesUploadFrame');
     if (!frame) {
         frame = document.createElement('iframe');
@@ -2487,44 +2514,25 @@ async function saveAllPageChanges() {
         frame.style.display = 'none';
         document.body.appendChild(frame);
     }
-
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
     form.target = 'pageChangesUploadFrame';
     form.style.display = 'none';
-
-    const fields = {
-        action: 'savePageChanges',
-        googleUploadToken: googleUploadToken,
-        adminSessionToken: window.adminSessionToken,
-        nonce: nonce,
-        origin: location.origin,
-        changes: payload
-    };
-
-    Object.entries(fields).forEach(([name, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = value;
-        form.appendChild(input);
+    const fields = { action:'savePageChanges', googleUploadToken:googleUploadToken, adminSessionToken:window.adminSessionToken, nonce:nonce, origin:location.origin, changes:payload };
+    Object.entries(fields).forEach(([name,value]) => {
+        const input=document.createElement('input'); input.type='hidden'; input.name=name; input.value=value; form.appendChild(input);
     });
-
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
-
-    const status = document.getElementById('googleSignInStatus');
-    if (status) status.textContent = 'تم إرسال طلب الحفظ، في انتظار تأكيد الخادم...';
-
-    pageChangesTimeout = setTimeout(() => {
-        if (pendingPageChangesNonce === nonce) {
-            pendingPageChangesNonce = null;
-            if (status) status.textContent = 'لم يصل تأكيد الحفظ. تحقق من الصفحة قبل إعادة المحاولة.';
+    document.body.appendChild(form); form.submit(); form.remove();
+    const status=document.getElementById('googleSignInStatus');
+    if(status) status.textContent='تم إرسال طلب الحفظ، في انتظار تأكيد الخادم...';
+    pageChangesTimeout=setTimeout(() => {
+        if(pendingPageChangesNonce===nonce) {
+            pendingPageChangesNonce=null;
+            if(status) status.textContent='لم يصل تأكيد الحفظ. تحقق من الصفحة قبل إعادة المحاولة.';
             alert('لم يصل تأكيد من الخادم؛ لم يتم تأكيد حفظ التعديلات.');
         }
-    }, 20000);
+    },20000);
 }
 
 window.addEventListener('message', function(event) {
@@ -2546,14 +2554,6 @@ window.addEventListener('message', function(event) {
 
     const status = document.getElementById('googleSignInStatus');
     const result = data.result || {};
-
-    // حدّث المرجع المحلي فقط بعد تأكيد أن Drive حفظ النسخة بالفعل.
-    if (result.driveSaved === true && Number.isFinite(Date.parse(result.updatedAt || ''))) {
-        const savedAt = new Date(Date.parse(result.updatedAt)).toISOString();
-        window.pageChangesBaseUpdatedAt = savedAt;
-        const baselineMeta = document.querySelector('meta[name="page-edits-updated-at"]');
-        if (baselineMeta) baselineMeta.content = savedAt;
-    }
 
     // لا نعلن النجاح إلا بعد تأكيد الحفظ في Drive والمزامنة مع GitHub.
     if (
@@ -2798,38 +2798,109 @@ function applyPageChangesList(changes) {
 }
 
 function applyCachedPageChanges() {
-    // لا نطبق كاش المتصفح غير المؤرخ؛ نسخة HTML هي المرجع الآمن عند تعذر Drive.
-    return false;
+    try {
+        const cached = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
+        if (!cached) {
+
+            return false;
+        }
+        const parsed = JSON.parse(cached);
+        if (!parsed || !Array.isArray(parsed.changes)) {
+
+            return false;
+        }
+
+        // نظّف القيم القديمة من الكاش نفسه، وليس من العرض فقط.
+        parsed.changes = normalizeFixedPageChanges(parsed.changes);
+        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify(parsed));
+        applyPageChangesList(parsed.changes);
+
+        return true;
+    } catch (error) {
+
+        console.warn("تعذر تطبيق النسخة المحلية من تعديلات النصوص.", error);
+        return false;
+    }
 }
 
 function cacheCurrentPageChanges() {
-    // لا نخزن نسخة محلية قديمة يمكن أن تتجاوز نسخة أحدث من Drive.
-    return false;
+    try {
+
+        const changes = Array.from(document.querySelectorAll("[data-page-edit-id]"))
+            .map(element => ({
+                id: element.getAttribute("data-page-edit-id"),
+                text: element.textContent.trim()
+            }))
+            .filter(item => item.id && item.text.length <= 10000);
+
+        const payload = JSON.stringify({ changes: changes });
+        if (payload.length <= 90000) {
+            localStorage.setItem(PAGE_CHANGES_CACHE_KEY, payload);
+        }
+    } catch (error) {
+        console.warn("تعذر تحديث النسخة المحلية من تعديلات النصوص.", error);
+    }
+}
+
+function showPageChangesLoadError(message) {
+    const title = document.getElementById("page-text-loading-title");
+    const detail = document.getElementById("page-text-loading-detail");
+    const spinner = document.querySelector("#page-text-loading-screen .page-text-loader");
+    const retry = document.getElementById("page-text-retry-button");
+
+    if (title) title.textContent = "تعذر تأكيد أحدث نصوص الموقع";
+    if (detail) detail.textContent = message || "لم يتم عرض نسخة قديمة. تحقق من الاتصال ثم أعد المحاولة.";
+    if (spinner) spinner.style.display = "none";
+    if (retry) retry.hidden = false;
+    document.documentElement.setAttribute("data-page-edits-pending", "true");
+}
+
+function retryPageChangesLoad() {
+    const title = document.getElementById("page-text-loading-title");
+    const detail = document.getElementById("page-text-loading-detail");
+    const spinner = document.querySelector("#page-text-loading-screen .page-text-loader");
+    const retry = document.getElementById("page-text-retry-button");
+
+    if (title) title.textContent = "جارٍ تحميل آخر النصوص المعتمدة من Google Drive...";
+    if (detail) detail.textContent = "لن تظهر نسخة قديمة أثناء التحقق من التحديثات.";
+    if (spinner) spinner.style.display = "";
+    if (retry) retry.hidden = true;
+    pageChangesResponseReceived = false;
+    loadSavedPageChanges();
 }
 
 function loadSavedPageChanges() {
     const scriptURL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
     const script = document.createElement("script");
+    let settled = false;
 
+    document.documentElement.setAttribute("data-page-edits-pending", "true");
     pageChangesResponseReceived = false;
-    script.src =
-        scriptURL +
-        "?action=pageChanges&callback=receivePageChanges&_=" +
-        Date.now();
 
-    script.onerror = () => {
-        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
-        document.documentElement.removeAttribute("data-page-edits-pending");
+    const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         script.remove();
     };
 
+    const timeout = setTimeout(() => {
+        finish();
+        showPageChangesLoadError("انتهت مهلة الاتصال بخدمة النصوص. لم يتم عرض النصوص القديمة.");
+    }, 20000);
+
+    script.src = scriptURL + "?action=pageChanges&callback=receivePageChanges&v=" + Date.now();
+    script.onerror = () => {
+        finish();
+        showPageChangesLoadError("تعذر الاتصال بخدمة Google Drive. تحقق من الاتصال ثم أعد المحاولة.");
+    };
     script.onload = () => {
-        // تحميل ملف JavaScript لا يعني بالضرورة أن callback أعاد بيانات صالحة.
         if (!pageChangesResponseReceived) {
-            console.error("وصل رد من خدمة التعديلات دون استدعاء receivePageChanges؛ لم يتم تأكيد تحميل التعديلات.");
+            finish();
+            showPageChangesLoadError("وصل رد غير مكتمل من الخادم؛ لم يتم تأكيد تحميل النصوص.");
+            return;
         }
-        document.documentElement.removeAttribute("data-page-edits-pending");
-        script.remove();
+        finish();
     };
 
     document.body.appendChild(script);
@@ -2839,97 +2910,94 @@ function receivePageChanges(data) {
     pageChangesResponseReceived = true;
 
     if (!data || data.success !== true || !Array.isArray(data.changes)) {
-        console.error('[PageChanges] استجابة الخادم غير صالحة؛ لم يتم تطبيق أي تعديل.');
+        showPageChangesLoadError(
+            data && (data.message || data.error)
+                ? String(data.message || data.error)
+                : "استجابة الخادم لا تحتوي على قائمة نصوص صحيحة."
+        );
         return false;
     }
 
-    const remoteTime = Date.parse(data.updatedAt || '');
-    if (!Number.isFinite(remoteTime)) {
-        console.error('[PageChanges] تم رفض الاستجابة لعدم وجود updatedAt صالح.');
-        return false;
-    }
-
-    const pageElements = Array.from(document.querySelectorAll('[data-page-edit-id]'));
-    const pageIds = pageElements.map(element =>
-        (element.getAttribute('data-page-edit-id') || '').trim()
+    const elements = Array.from(document.querySelectorAll("[data-page-edit-id]"));
+    const pageIds = elements.map(element =>
+        String(element.getAttribute("data-page-edit-id") || "").trim()
     );
-    const savedIds = data.changes.map(item => item && item.id);
+    const savedIds = data.changes.map(item =>
+        item && typeof item.id === "string" ? item.id.trim() : ""
+    );
 
-    if (!pageIds.length || pageIds.some(id => !id) ||
+    const invalidItems = data.changes.some(item =>
+        !item || typeof item.id !== "string" || !item.id.trim() ||
+        typeof item.text !== "string" || item.id.length > 200 ||
+        item.text.length > 10000
+    );
+
+    if (!elements.length || pageIds.some(id => !id) ||
         new Set(pageIds).size !== pageIds.length ||
+        invalidItems ||
         data.changes.length !== pageIds.length ||
-        savedIds.some(id => typeof id !== 'string' || !id.trim()) ||
+        savedIds.some(id => !id) ||
         new Set(savedIds).size !== savedIds.length ||
-        pageIds.some(id => !savedIds.includes(id)) ||
-        data.changes.some(item => !item || typeof item.text !== 'string' ||
-            item.text.length > 10000)) {
-        console.error('[PageChanges] تم رفض قائمة ناقصة أو مكررة أو غير مطابقة لمعرفات الصفحة.');
-        return false;
-    }
-
-    if (Array.isArray(data.expectedIds) &&
-        (data.expectedIds.length !== pageIds.length ||
-         new Set(data.expectedIds).size !== data.expectedIds.length ||
-         pageIds.some(id => !data.expectedIds.includes(id)))) {
-        console.error('[PageChanges] expectedIds لا تطابق معرفات الصفحة.');
-        return false;
-    }
-
-    const meta = document.querySelector('meta[name="page-edits-updated-at"]');
-    const htmlTime = Date.parse(meta && meta.content || '');
-    if (!Number.isFinite(htmlTime)) {
-        console.error('[PageChanges] لا يوجد تاريخ مرجعي صالح داخل HTML.');
-        return false;
-    }
-    if (remoteTime < htmlTime) {
-        console.warn('[PageChanges] تم تجاهل نسخة Drive أقدم من نسخة HTML المنشورة.', {
-            drive: data.updatedAt,
-            html: meta.content
+        pageIds.some(id => !savedIds.includes(id))) {
+        showPageChangesLoadError(
+            "قائمة Drive غير مكتملة أو تحتوي على معرفات مكررة أو لا تطابق عناصر الصفحة. لم يتم تطبيق أي نص."
+        );
+        console.error("[PageChanges] Rejected incomplete or mismatched Drive snapshot.", {
+            pageCount: pageIds.length,
+            savedCount: data.changes.length
         });
         return false;
     }
 
+    if (!data.updatedAt || !Number.isFinite(Date.parse(data.updatedAt))) {
+        showPageChangesLoadError(
+            "ملف Drive لا يحتوي على تاريخ تحديث صالح. لم يتم عرض نسخة غير مؤكدة."
+        );
+        return false;
+    }
+
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
-    if (!Array.isArray(normalizedChanges) || normalizedChanges.length !== pageIds.length) {
-        console.error('[PageChanges] فشل تطبيع القائمة كاملة؛ لم يتم تطبيقها.');
-        return false;
-    }
-
-    if (remoteTime === htmlTime) {
-        const currentTextById = new Map(pageElements.map(element => [
-            element.getAttribute('data-page-edit-id'),
-            element.textContent.trim()
-        ]));
-        if (normalizedChanges.some(item =>
-            currentTextById.has(item.id) &&
-            currentTextById.get(item.id) !== item.text.trim()
-        )) {
-            console.error('[PageChanges] نصوص مختلفة تحمل التاريخ المرجعي نفسه؛ تم رفضها.');
-            return false;
-        }
-    }
-
-    // لا نبدأ تطبيقًا جزئيًا إذا كان المسؤول يحرر أي عنصر.
-    if (isLiveEditing && pageElements.some(element => element.isContentEditable)) {
-        console.warn('[PageChanges] تم تأجيل التطبيق لأن الصفحة ما زالت في وضع التحرير.');
-        return false;
-    }
-
     const applyStats = applyPageChangesList(normalizedChanges);
-    if (!applyStats || applyStats.missing > 0 || applyStats.invalid > 0 ||
-        applyStats.skippedEditing > 0 ||
-        applyStats.matched !== normalizedChanges.length) {
-        console.error('[PageChanges] لم يتم تأكيد تطبيق القائمة كاملة.', applyStats);
+
+    console.info("[PageChanges] نتيجة استرجاع التعديلات:", {
+        serverReceived: data.changes.length,
+        matched: applyStats.matched,
+        applied: applyStats.applied,
+        unchanged: applyStats.unchanged,
+        skippedEditing: applyStats.skippedEditing,
+        missing: applyStats.missing,
+        invalid: applyStats.invalid,
+        missingIds: applyStats.missingIds
+    });
+
+    if (applyStats.matched !== pageIds.length ||
+        applyStats.missing !== 0 ||
+        applyStats.invalid !== 0 ||
+        applyStats.skippedEditing !== 0) {
+        showPageChangesLoadError(
+            "لم يتم تطبيق جميع النصوص من Drive بصورة مؤكدة. لم يتم عرض نسخة قديمة."
+        );
         return false;
     }
 
-    meta.content = new Date(remoteTime).toISOString();
-    window.pageChangesBaseUpdatedAt = meta.content;
+    try {
+        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
+            changes: normalizedChanges,
+            updatedAt: data.updatedAt
+        }));
+    } catch (error) {
+        console.warn("تعذر تحديث النسخة المحلية الاحتياطية من النصوص.", error);
+    }
 
-    const messages = document.querySelectorAll('#tickerText .ticker-message');
+    const messages = document.querySelectorAll("#tickerText .ticker-message");
     messages.forEach((message, index) =>
-        message.classList.toggle('active', index === currentNewsIndex)
+        message.classList.toggle("active", index === currentNewsIndex)
     );
+
+    const loadingScreen = document.getElementById("page-text-loading-screen");
+    if (loadingScreen) loadingScreen.style.display = "none";
+    document.documentElement.removeAttribute("data-page-edits-pending");
+    window.pageChangesDriveUpdatedAt = data.updatedAt;
 
     return true;
 }
