@@ -81,7 +81,7 @@ function getCanonicalPageEditIdsFromGitHub_() {
   const html = response.getContentText("UTF-8");
   const ids = [];
   const seen = new Set();
-  const pattern = /data-page-edit-id\\s*=\\s*["']([^"']+)["']/g;
+  const pattern = /data-page-edit-id\s*=\s*["']([^"']+)["']/g;
   let match;
 
   while ((match = pattern.exec(html)) !== null) {
@@ -403,7 +403,7 @@ function syncPageChangesToGitHub_(savedPayload) {
 
   function safeMessage(value) {
     return String(value || "")
-      .replace(/Bearer\\s+\\S+/gi, "Bearer [REDACTED]")
+      .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]")
       .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[REDACTED]")
       .replace(/github_pat_[A-Za-z0-9_]+/g, "[REDACTED]")
       .substring(0, 300);
@@ -518,7 +518,7 @@ function syncPageChangesToGitHub_(savedPayload) {
     }
 
     const remoteText = Utilities.newBlob(
-      Utilities.base64Decode(String(remote.content).replace(/\\s/g, ""))
+      Utilities.base64Decode(String(remote.content).replace(/\s/g, ""))
     ).getDataAsString("UTF-8");
     const remotePayload = JSON.parse(remoteText);
 
