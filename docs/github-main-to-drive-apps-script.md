@@ -1,6 +1,6 @@
 # GitHub main to Google Drive page-text synchronization
 
-This patch adds the reverse synchronization path without changing the existing website save or Refresh flows. When only index.html changes, editable text is extracted from each [data-page-edit-id] element using the exact same element.textContent.trim() rule as the current saveAllPageChanges(). When only page-changes-production.json changes, that JSON is the source. If both change in one push, their ID-to-text maps must match exactly or the workflow refuses to write to Drive. A manual initial sync uses the JSON snapshot.
+This patch adds the reverse synchronization path without changing the existing website save or Refresh flows. When editable text in index.html changes, text is extracted from each [data-page-edit-id] element using the exact same element.textContent.trim() rule as the current saveAllPageChanges(). CSS/layout-only changes do not select HTML text as the source. When only page-changes-production.json changes, that JSON is the source. If both change in one push, their ID-to-text maps must match exactly or the workflow refuses to write to Drive. A manual initial sync uses the JSON snapshot.
 
 ## Data contract
 
@@ -15,9 +15,9 @@ The selected snapshot must contain exactly the unique IDs declared by index.html
 - auto-7b3e91c4a62d805f
 - auto-c81f4a2d96b7305e
 
-## 1. Extend doPost without replacing existing actions
+## 1. Update doPost while preserving all current actions
 
-Keep every current action and its existing parameter handling. Add JSON-body parsing before the action declaration, then add one new route inside the existing try.
+The complete function below is based on the doPost(e) supplied in the current project discussion. Before deployment, compare it once against the latest live Apps Script editor version to catch any newer action added after that copy.
 
 ~~~~javascript
 function doPost(e) {
@@ -101,7 +101,7 @@ function doPost(e) {
 }
 ~~~~
 
-Insert the route into the current doPost and retain its existing remaining actions and catch block. Do not replace the current function with this shortened excerpt.
+استبدل دالة doPost الحالية بهذه النسخة الكاملة بعد مطابقتها مع النسخة الحية الأخيرة. جميع مسارات الحفظ والرفع والحذف والألبومات الحالية محفوظة؛ أُضيف فقط تحليل JSON ومسار المزامنة الجديد.
 
 ## 2. Append the Apps Script helpers
 
