@@ -45,7 +45,9 @@ assert.match(saveFunction, /text:\s*el\.textContent\.trim\(\)/);
 assert.match(saveFunction, /action:'savePageChanges'/);
 assert.doesNotMatch(saveFunction, /baseUpdatedAt|expectedIds/);
 
-assert.match(syncScript, /htmlChanged && jsonChanged/);
+assert.match(syncScript, /htmlTextChanged && jsonChanged/);
+assert.match(syncScript, /git", \["show", eventBefore \+ ":index.html"\]/);
+assert.match(syncScript, /CSS\/layout-only edit/);
 assert.match(syncScript, /selectedById = htmlById/);
 assert.match(syncScript, /selectedById = jsonById/);
 assert.match(syncScript, /element\.textContent\.trim\(\)/);
@@ -54,6 +56,7 @@ assert.match(syncScript, /refs\/heads\/main/);
 assert.match(workflow, /"index\.html"/);
 assert.match(workflow, /"page-changes-production\.json"/);
 assert.match(workflow, /GITHUB_EVENT_BEFORE/);
+assert.match(workflow, /GITHUB_EVENT_BEFORE: \\?\$\{\{ github\.event\.before \}\}/);
 
 // This PR must not rewrite the existing refresh implementation.
 const mainHtml = execFileSync("git", ["show", "origin/main:index.html"], { encoding: "utf8" });
