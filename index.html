@@ -2873,6 +2873,17 @@ function receivePageChanges(data) {
         return false;
     }
 
+    // لا تبدأ تطبيقًا جزئيًا إذا كان المسؤول يحرر أي عنصر وقت وصول الرد.
+    if (isLiveEditing && normalizedChanges.some(item => {
+        const element = document.querySelector(
+            '[data-page-edit-id="' + CSS.escape(item.id) + '"]'
+        );
+        return element && element.isContentEditable;
+    })) {
+        console.warn("[PageChanges] تم تأجيل تطبيق النسخة لأن بعض العناصر ما زالت قيد التحرير.");
+        return false;
+    }
+
     const applyStats = applyPageChangesList(normalizedChanges);
     if (applyStats.missing > 0 || applyStats.invalid > 0 ||
         applyStats.skippedEditing > 0 ||
