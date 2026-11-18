@@ -10,7 +10,7 @@ const htmlIds = [...html.matchAll(/data-page-edit-id\s*=\s*["']([^"']+)["']/g)].
 assert.equal(htmlIds.length, 111, "Expected the reviewed page to contain 111 edit IDs.");
 assert.equal(new Set(htmlIds).size, htmlIds.length, "HTML edit IDs must be unique.");
 assert.match(html, /baseUpdatedAt/, "Browser save must send a baseUpdatedAt version.");
-assert.match(html, /applyStats\\.skippedEditing\\s*>\\s*0/, "Server response must not be accepted after skipped live-edit elements.");
+assert.match(html, /applyStats\.skippedEditing\s*>\s*0/, "Server response must not be accepted after skipped live-edit elements.");
 assert.equal(payload.success, true);
 assert.equal(payload.changes.length, 111);
 assert.equal(new Set(payload.changes.map(item => item.id)).size, 111);
