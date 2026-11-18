@@ -206,13 +206,11 @@ if (payload.changes.length !== htmlIds.length) {
     payload.changes.length + " IDs; HTML has " + htmlIds.length + "."
   );
 }
-if (payload.expectedIds !== undefined) {
-  if (!Array.isArray(payload.expectedIds) ||
-      payload.expectedIds.length !== htmlIds.length ||
-      new Set(payload.expectedIds).size !== payload.expectedIds.length ||
-      payload.expectedIds.some(id => typeof id !== "string" || !htmlIdSet.has(id))) {
-    throw new Error("The expectedIds list does not exactly match the HTML edit IDs.");
-  }
+if (!Array.isArray(payload.expectedIds) ||
+    payload.expectedIds.length !== htmlIds.length ||
+    new Set(payload.expectedIds).size !== payload.expectedIds.length ||
+    payload.expectedIds.some(id => typeof id !== "string" || !htmlIdSet.has(id))) {
+  throw new Error("The expectedIds list is missing or does not exactly match the HTML edit IDs.");
 }
 const payloadTime = Date.parse(payload.updatedAt || "");
 if (!Number.isFinite(payloadTime)) {
