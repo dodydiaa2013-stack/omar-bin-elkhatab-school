@@ -229,6 +229,15 @@ if (payloadTime < baselineTime) {
     "Payload: " + payload.updatedAt + "; HTML: " + timestampMeta.getAttribute("content")
   );
 }
+if (payloadTime === baselineTime) {
+  const sameTimestampHasChanges = payload.changes.some(item => {
+    const target = targets.get(item.id);
+    return target && target.textContent.trim() !== item.text.trim();
+  });
+  if (sameTimestampHasChanges) {
+    throw new Error("The payload timestamp matches the HTML baseline but its text differs; refusing an ambiguous overwrite.");
+  }
+}
 
 const missing = [];
 const textEdits = [];
