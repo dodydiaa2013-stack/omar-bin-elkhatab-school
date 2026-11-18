@@ -1,6 +1,6 @@
 # GitHub main to Google Drive page-text synchronization
 
-This patch adds the reverse synchronization path without changing the existing website save flow.
+This patch adds the reverse synchronization path without changing the existing website save flow. All editable text changes made in the repository must be committed to page-changes-production.json; index.html remains the source of the ID list and structural fallback.
 
 ## Data contract
 
@@ -24,7 +24,9 @@ function doPost(e) {
   const p = (e && e.parameter) ? e.parameter : {};
   let jsonBody = {};
 
-  if (e && e.postData && e.postData.contents) {
+  const postType = String(e && e.postData && e.postData.type || "").toLowerCase();
+  if (postType.indexOf("application/json") !== -1 &&
+      e && e.postData && e.postData.contents) {
     try {
       jsonBody = JSON.parse(e.postData.contents);
     } catch (error) {
