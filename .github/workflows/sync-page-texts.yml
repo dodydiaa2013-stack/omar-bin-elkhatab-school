@@ -1,6 +1,6 @@
-name: Sync saved page text and publish automatically
+name: Validate saved page text and open review PR
 # Apps Script writes only to the dedicated input branch.
-# This workflow builds from main, validates the result, then proposes and merges
+# This workflow builds from main, validates the result, then proposes
 # the text-only update. Repository branch protection remains in force.
 on:
   push:
@@ -76,6 +76,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --base main \
               --head automation/page-text-sync \
+              --draft \
               --title "Publish saved school page text" \
               --body "## Automatic page-text publication
 
@@ -86,7 +87,6 @@ jobs:
             pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
           fi
 
-          # Convert any existing draft PR to ready, then merge only if GitHub
-          # confirms all repository protection requirements are satisfied.
-          gh pr ready "$pr_number"
-          gh pr merge "$pr_number" --squash --delete-branch
+          # Keep publication pending for a human review; never auto-merge
+          # or publish page text from this synchronization workflow.
+          echo "Validated page-text update is awaiting manual review: PR #$pr_number"
