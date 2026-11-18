@@ -1,19 +1,22 @@
 # Apps Script companion patch: page text integrity
 
-**Apply this patch to the deployed Apps Script project only after reviewing the current live Code.gs.**
-This patch is intentionally separate from the website branch because Apps Script is not stored in this repository and cannot be deployed from this workflow.
+**هذه الدوال مخصصة للاستبدال في مشروع Apps Script فقط بعد مطابقتها مع آخر نسخة منشورة من Code.gs.** لا ينفذ هذا الملف أي تعديل على Apps Script أو Drive تلقائيًا.
 
-## What this patch changes
+## التوافق مع Code.gs المراجع
 
-- Requires the browser to send both `changes` and the complete `expectedIds` list.
-- Compares both lists against the edit IDs currently present in `main/index.html`.
-- Creates a timestamped backup in the same Drive folder before replacing the JSON.
-- Verifies every ID and text after writing; restores the original content if verification fails.
-- Syncs only the verified Drive snapshot to `automation/page-text-sync-input`.
-- Reports Drive success separately from GitHub sync success.
-- Does not merge or publish the resulting pull request.
+تمت مطابقة أسماء نقاط الربط مع ملف Code.gs المرفوع بتاريخ 16 نوفمبر 2026:
+- `getPageChangesFile()`
+- `pageChangesPostMessage(p, result)`
+- `verifyAdminToken(token)`
+- `verifyAdminSession(token)`
+- `PAGE_CHANGES_FOLDER` و `PAGE_CHANGES_FILE`
+- `PAGE_CHANGES_PRODUCTION_FILE_ID`
 
-## 1. Add these helper functions
+يستخدم الحفظ `googleUploadToken` كما ترسله صفحة الموقع، مع دعم `token` للتوافق السابق.
+
+**شرط التفعيل:** يجب أن تكون نسخة HTML المنشورة تحتوي على `meta[name="page-edits-updated-at"]`، وأن ترسل `baseUpdatedAt`. فرع الإصلاح يضيف ذلك. لا تنشر هذه الدوال قبل نشر نسخة HTML المتوافقة أو قبل التأكد من وجود هذا المرجع في الصفحة الحية.
+
+## 1. أضف الدوال المساعدة التالية
 
 ```javascript
 function validatePageChangesExpectedIds_(changes, expectedIds) {
@@ -25,7 +28,8 @@ function validatePageChangesExpectedIds_(changes, expectedIds) {
 
   const expected = new Set();
   expectedIds.forEach(function(id) {
-    if (typeof id !== "string" || !id.trim() || id.length > 200 || expected.has(id)) {
+    if (typeof id !== "string" || !id.trim() ||
+        id.length > 200 || expected.has(id)) {
       throw new Error("قائمة المعرفات المرجعية تحتوي على قيمة فارغة أو مكررة.");
     }
     expected.add(id);
@@ -34,8 +38,9 @@ function validatePageChangesExpectedIds_(changes, expectedIds) {
   const seen = new Set();
   changes.forEach(function(item) {
     if (!item || typeof item.id !== "string" ||
-        typeof item.text !== "string" || item.id.length > 200 ||
-        item.text.length > 10000 || seen.has(item.id)) {
+        typeof item.text !== "string" || !item.id.trim() ||
+        item.id.length > 200 || item.text.length > 10000 ||
+        seen.has(item.id)) {
       throw new Error("قائمة النصوص تحتوي على عنصر غير صالح أو معرف مكرر.");
     }
     seen.add(item.id);
@@ -64,7 +69,7 @@ function getCanonicalPageEditIdsFromGitHub_() {
   const html = response.getContentText("UTF-8");
   const ids = [];
   const seen = new Set();
-  const pattern = /data-page-edit-id\s*=\s*["']([^"']+)["']/g;
+  const pattern = /data-page-edit-id\\s*=\\s*["']([^"']+)["']/g;
   let match;
 
   while ((match = pattern.exec(html)) !== null) {
@@ -91,6 +96,7 @@ function createPageChangesBackup_(file, originalContent) {
   const backupName = "page-changes-production.backup-" + stamp + ".json";
   const parents = file.getParents();
   const folder = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
+
   return folder.createFile(
     backupName,
     originalContent,
@@ -99,16 +105,22 @@ function createPageChangesBackup_(file, originalContent) {
 }
 ```
 
-## 2. Replace getSavedPageChanges completely
+## 2. استبدل getSavedPageChanges() بالكامل
+
+تُبقي هذه الدالة التوافق مع ملف Drive القديم الذي قد لا يحتوي `expectedIds`، لكنها لا تعتبر الملف الفارغ أو التالف قائمة تعديلات فارغة.
 
 ```javascript
 function getSavedPageChanges() {
   try {
     const file = getPageChangesFile();
-    if (file.isTrashed()) throw new Error("ملف التعديلات موجود في سلة المهملات.");
+    if (file.isTrashed()) {
+      throw new Error("ملف التعديلات موجود في سلة المهملات.");
+    }
 
     const raw = file.getBlob().getDataAsString("UTF-8");
-    if (!raw || !raw.trim()) throw new Error("ملف التعديلات فارغ.");
+    if (!raw || !raw.trim()) {
+      throw new Error("ملف التعديلات فارغ.");
+    }
 
     const data = JSON.parse(raw);
     if (!data || data.success !== true || !Array.isArray(data.changes)) {
@@ -126,11 +138,15 @@ function getSavedPageChanges() {
       seen.add(item.id);
     });
 
+    if (!data.updatedAt || !Number.isFinite(Date.parse(data.updatedAt))) {
+      throw new Error("تاريخ النسخة المحفوظة غير صالح.");
+    }
+
     return {
       success: true,
       changes: data.changes,
       expectedIds: Array.isArray(data.expectedIds) ? data.expectedIds : null,
-      updatedAt: data.updatedAt || null
+      updatedAt: data.updatedAt
     };
   } catch (error) {
     console.error("خطأ استرجاع تعديلات الموقع: " + error.message);
@@ -142,7 +158,9 @@ function getSavedPageChanges() {
 }
 ```
 
-## 3. Replace savePageChanges completely
+## 3. استبدل savePageChanges(p) بالكامل
+
+الحفظ يقارن `baseUpdatedAt` بأحدث نسخة في Drive **داخل ScriptLock وقبل إنشاء النسخة الجديدة**. كما ينشئ Backup قبل الكتابة، ويتحقق من الاستعادة بإعادة قراءة الملف ومقارنة المحتوى حرفيًا.
 
 ```javascript
 function savePageChanges(p) {
@@ -163,50 +181,51 @@ function savePageChanges(p) {
   }
 
   if (!data || !Array.isArray(data.changes) ||
-      !Array.isArray(data.expectedIds)) {
-    throw new Error("لم تصل قائمة النصوص وقائمة المعرفات المرجعية معًا.");
+      !Array.isArray(data.expectedIds) ||
+      typeof data.baseUpdatedAt !== "string" ||
+      !Number.isFinite(Date.parse(data.baseUpdatedAt))) {
+    throw new Error("لم تصل بيانات الحفظ المرجعية كاملة أو أن تاريخ النسخة غير صالح.");
   }
 
+  const canonicalIds = getCanonicalPageEditIdsFromGitHub_();
   const expectedIds = validatePageChangesExpectedIds_(
     data.changes,
     data.expectedIds
   );
-  const canonicalIds = getCanonicalPageEditIdsFromGitHub_();
-  validatePageChangesExpectedIds_(
-    data.changes,
-    canonicalIds
-  );
 
   if (expectedIds.length !== canonicalIds.length ||
       canonicalIds.some(function(id) { return !expectedIds.includes(id); })) {
-    throw new Error("معرفات المتصفح لا تطابق النسخة المرجعية الحالية للموقع.");
+    throw new Error("معرفات المتصفح لا تطابق جميع معرفات النسخة المرجعية الحالية للموقع.");
   }
+
+  validatePageChangesExpectedIds_(data.changes, canonicalIds);
+
+  const allowedManualIds = [
+    "school-title", "school-administration", "home-title",
+    "home-vision-text", "home-mission-text", "results-card-title",
+    "results-card-description", "support-card-title",
+    "support-card-description", "schedules-card-title",
+    "schedules-card-description", "tablet-title", "tablet-description",
+    "server-title", "tablet-support-title", "schedules-title",
+    "schedules-description", "alerts-title", "alerts-description",
+    "republic-header", "academic-year", "header-manager", "home-intro",
+    "footer-leadership", "footer-school-name", "quick-links-title",
+    "quick-results-link", "quick-tablet-link", "quick-schedules-link",
+    "quick-gallery-link", "quick-student-queries-link",
+    "quick-leaders-link", "support-section-title", "footer-manager",
+    "support-responsibles-title", "support-diaa-name", "support-mona-name",
+    "motto-tablet-title", "motto-tablet-description", "motto-dev-title",
+    "motto-dev-description", "student-queries-title",
+    "student-queries-description", "student-query-one-title",
+    "student-query-two-title", "server-tip-1", "server-tip-2",
+    "server-tip-3", "server-tip-4", "tablet-support-tip-1",
+    "tablet-support-tip-2", "tablet-support-tip-3", "tablet-support-tip-4",
+    "ticker-message-1", "ticker-message-2", "ticker-message-3",
+    "ticker-message-4"
+  ];
 
   const cleanChanges = data.changes.map(function(item) {
     const isAutoId = /^auto-[0-9a-f]{16}$/.test(item.id);
-    const allowedManualIds = [
-      "school-title", "school-administration", "home-title",
-      "home-vision-text", "home-mission-text", "results-card-title",
-      "results-card-description", "support-card-title",
-      "support-card-description", "schedules-card-title",
-      "schedules-card-description", "tablet-title", "tablet-description",
-      "server-title", "tablet-support-title", "schedules-title",
-      "schedules-description", "alerts-title", "alerts-description",
-      "republic-header", "academic-year", "header-manager", "home-intro",
-      "footer-leadership", "footer-school-name", "quick-links-title",
-      "quick-results-link", "quick-tablet-link", "quick-schedules-link",
-      "quick-gallery-link", "quick-student-queries-link",
-      "quick-leaders-link", "support-section-title", "footer-manager",
-      "support-responsibles-title", "support-diaa-name", "support-mona-name",
-      "motto-tablet-title", "motto-tablet-description", "motto-dev-title",
-      "motto-dev-description", "student-queries-title",
-      "student-queries-description", "student-query-one-title",
-      "student-query-two-title", "server-tip-1", "server-tip-2",
-      "server-tip-3", "server-tip-4", "tablet-support-tip-1",
-      "tablet-support-tip-2", "tablet-support-tip-3", "tablet-support-tip-4",
-      "ticker-message-1", "ticker-message-2", "ticker-message-3",
-      "ticker-message-4"
-    ];
     if (!isAutoId && !allowedManualIds.includes(item.id)) {
       throw new Error("يوجد معرّف عنصر غير مسموح بتعديله.");
     }
@@ -216,10 +235,10 @@ function savePageChanges(p) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
 
-  let savedPayload;
-  let file;
-  let originalContent = "";
+  let savedPayload = null;
   let backupFile = null;
+  let file = null;
+  let originalContent = "";
 
   try {
     file = getPageChangesFile();
@@ -228,7 +247,33 @@ function savePageChanges(p) {
       throw new Error("تعذر أخذ نسخة سليمة من الملف السابق؛ أوقفنا الحفظ.");
     }
 
+    let previous;
+    try {
+      previous = JSON.parse(originalContent);
+    } catch (error) {
+      throw new Error("ملف Drive الحالي غير صالح JSON؛ لم نكتب فوقه.");
+    }
+
+    if (!previous || previous.success !== true ||
+        !Array.isArray(previous.changes) ||
+        !previous.updatedAt ||
+        !Number.isFinite(Date.parse(previous.updatedAt))) {
+      throw new Error("النسخة الحالية في Drive لا تحتوي تاريخًا مرجعيًا صالحًا؛ أوقفنا الحفظ الآمن.");
+    }
+
+    if (String(data.baseUpdatedAt) !== String(previous.updatedAt)) {
+      throw new Error(
+        "هذا التبويب يعمل على نسخة قديمة. حدّث الصفحة ثم أعد التعديل والحفظ. " +
+        "التاريخ الحالي في Drive: " + previous.updatedAt
+      );
+    }
+
+    validatePageChangesExpectedIds_(previous.changes, canonicalIds);
+
     backupFile = createPageChangesBackup_(file, originalContent);
+    if (!backupFile) {
+      throw new Error("تعذر إنشاء النسخة الاحتياطية؛ لم يتم تعديل ملف Drive.");
+    }
 
     savedPayload = {
       success: true,
@@ -246,13 +291,11 @@ function savePageChanges(p) {
         throw new Error("تعذر إعادة قراءة الملف بعد الحفظ.");
       }
 
-      validatePageChangesExpectedIds_(
-        verification.changes,
-        canonicalIds
-      );
+      validatePageChangesExpectedIds_(verification.changes, canonicalIds);
 
-      if (verification.changes.length !== cleanChanges.length) {
-        throw new Error("عدد النصوص بعد الحفظ لا يطابق العدد المرسل.");
+      if (verification.updatedAt !== savedPayload.updatedAt ||
+          JSON.stringify(verification.expectedIds) !== JSON.stringify(canonicalIds)) {
+        throw new Error("بيانات النسخة المقروءة لا تطابق بيانات النسخة الجديدة.");
       }
 
       const verified = new Map(
@@ -263,35 +306,56 @@ function savePageChanges(p) {
           throw new Error("فشل التحقق من تطابق النصوص بعد الحفظ.");
         }
       });
-
-      if (verification.updatedAt !== savedPayload.updatedAt) {
-        throw new Error("تاريخ النسخة المقروءة لا يطابق النسخة التي تم حفظها.");
-      }
     } catch (writeError) {
+      let restored = false;
+      let restoreDetails = "";
+
       try {
         file.setContent(originalContent);
+        const restoredContent = file.getBlob().getDataAsString("UTF-8");
+        restored = restoredContent === originalContent;
+        if (!restored) {
+          restoreDetails = "أُعيدت الكتابة لكن المحتوى المقروء لا يطابق النسخة الأصلية.";
+        }
       } catch (restoreError) {
-        console.error(
-          "فشل استرجاع المحتوى السابق. احتفظ بنسخة Drive الاحتياطية: " +
+        restoreDetails = restoreError && restoreError.message
+          ? restoreError.message
+          : "حدث خطأ غير معروف أثناء الاستعادة.";
+      }
+
+      if (!restored) {
+        throw new Error(
+          "فشل التحقق من الحفظ وفشلت استعادة الملف السابق. " +
+          "لا تحاول الحفظ مرة أخرى قبل مراجعة Drive. النسخة الاحتياطية: " +
           (backupFile ? backupFile.getName() : "غير متاحة") +
-          ". سبب الاستعادة: " + restoreError.message
+          ". تفاصيل الاستعادة: " + restoreDetails
         );
       }
-      throw writeError;
+
+      throw new Error(
+        "فشل التحقق من الحفظ، لكن تمت استعادة المحتوى السابق والتحقق منه. " +
+        "النسخة الاحتياطية: " + backupFile.getName() +
+        ". السبب: " + (writeError.message || "خطأ غير معروف")
+      );
     }
   } finally {
     lock.releaseLock();
   }
 
+  // المزامنة بعد نجاح التحقق في Drive. الدالة التالية تستخدم القفل أيضًا
+  // وتعيد قراءة أحدث نسخة قبل إرسالها إلى GitHub.
   const githubResult = syncPageChangesToGitHub_(savedPayload);
+
   if (githubResult && githubResult.success === true) {
     return pageChangesPostMessage(p, {
       success: true,
       driveSaved: true,
       githubSynced: true,
+      htmlUpdatePending: true,
+      updatedAt: savedPayload.updatedAt,
+      backupName: backupFile.getName(),
       message: "تم حفظ النصوص والتحقق منها وإرسالها إلى GitHub للمراجعة.",
-      count: cleanChanges.length,
-      backupName: backupFile ? backupFile.getName() : ""
+      count: cleanChanges.length
     });
   }
 
@@ -300,68 +364,108 @@ function savePageChanges(p) {
     partialSuccess: true,
     driveSaved: true,
     githubSynced: false,
+    htmlUpdatePending: false,
+    updatedAt: savedPayload.updatedAt,
+    backupName: backupFile.getName(),
     message: "تم حفظ النصوص في Drive والتحقق منها، لكن تعذرت مزامنتها مع GitHub. " +
       (githubResult && githubResult.message ? githubResult.message : ""),
-    count: cleanChanges.length,
-    backupName: backupFile ? backupFile.getName() : ""
+    count: cleanChanges.length
   });
 }
 ```
 
-## 4. Add the GitHub sync function
+## 4. استبدل syncPageChangesToGitHub_(savedPayload) بالكامل
 
-Set these Script Properties before enabling sync:
-- `GITHUB_PAGE_SYNC_TOKEN`: a fine-grained token with Contents: Read and write for this repository.
-- `GITHUB_PAGE_SYNC_BRANCH`: exactly `automation/page-text-sync-input`.
+**هذه النسخة تحافظ على ScriptLock طوال قراءة Drive وقراءة GitHub والكتابة وإعادة القراءة والتحقق.** لا يتم إرسال نسخة قديمة إذا تغيرت بيانات Drive بين الحفظ وبدء المزامنة.
 
 ```javascript
 function syncPageChangesToGitHub_(savedPayload) {
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+  let stage = "validate";
+
+  function safeMessage(value) {
+    return String(value || "")
+      .replace(/Bearer\\s+\\S+/gi, "Bearer [REDACTED]")
+      .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "[REDACTED]")
+      .replace(/github_pat_[A-Za-z0-9_]+/g, "[REDACTED]")
+      .substring(0, 300);
+  }
+
   try {
+    if (!savedPayload || !Array.isArray(savedPayload.changes) ||
+        !Array.isArray(savedPayload.expectedIds) ||
+        !savedPayload.updatedAt) {
+      throw new Error("بيانات المزامنة غير مكتملة.");
+    }
+
+    stage = "acquire-lock";
+    lock.waitLock(20000);
+    lockAcquired = true;
+
+    stage = "read-drive";
     const latest = getSavedPageChanges();
-    if (!latest || latest.success !== true || !Array.isArray(latest.changes)) {
+    if (!latest || latest.success !== true ||
+        !Array.isArray(latest.changes) || !latest.updatedAt) {
       throw new Error("تعذر قراءة أحدث نسخة من Drive.");
     }
 
-    const canonicalIds = getCanonicalPageEditIdsFromGitHub_();
-    validatePageChangesExpectedIds_(latest.changes, canonicalIds);
-
-    if (savedPayload.updatedAt !== latest.updatedAt ||
-        JSON.stringify(savedPayload.changes) !== JSON.stringify(latest.changes)) {
-      throw new Error("تغير ملف Drive بعد التحقق؛ أوقفنا إرسال نسخة قديمة.");
+    if (latest.updatedAt !== savedPayload.updatedAt ||
+        JSON.stringify(latest.changes) !== JSON.stringify(savedPayload.changes)) {
+      throw new Error("توجد نسخة أحدث في Drive؛ أوقفنا إرسال نسخة قديمة إلى GitHub.");
     }
 
-    const props = PropertiesService.getScriptProperties();
-    const token = props.getProperty("GITHUB_PAGE_SYNC_TOKEN");
-    const branch = props.getProperty("GITHUB_PAGE_SYNC_BRANCH");
+    stage = "validate-ids";
+    const canonicalIds = getCanonicalPageEditIdsFromGitHub_();
+    validatePageChangesExpectedIds_(latest.changes, canonicalIds);
+    if (JSON.stringify(savedPayload.expectedIds) !== JSON.stringify(canonicalIds)) {
+      throw new Error("قائمة المعرفات المرجعية لا تطابق الصفحة الحالية في GitHub.");
+    }
+
+    stage = "read-settings";
+    const properties = PropertiesService.getScriptProperties();
+    const token = properties.getProperty("GITHUB_PAGE_SYNC_TOKEN");
+    const branch = properties.getProperty("GITHUB_PAGE_SYNC_BRANCH");
     if (!token || branch !== "automation/page-text-sync-input") {
       throw new Error("إعدادات GitHub غير مكتملة أو فرع الاستقبال غير صحيح.");
     }
 
     const repository = "dodydiaa2013-stack/omar-bin-elkhatab-school";
-    const path = "page-changes-production.json";
-    const api = "https://api.github.com/repos/" + repository + "/contents/" + path;
+    const filePath = "page-changes-production.json";
+    const apiUrl = "https://api.github.com/repos/" + repository + "/contents/" + filePath;
     const headers = {
       Authorization: "Bearer " + token,
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28"
     };
 
-    const getOptions = { method: "get", headers: headers, muteHttpExceptions: true };
-    const current = UrlFetchApp.fetch(api + "?ref=" + encodeURIComponent(branch), getOptions);
-    let sha = "";
+    stage = "read-github";
+    const getOptions = {
+      method: "get",
+      headers: headers,
+      muteHttpExceptions: true
+    };
+    const current = UrlFetchApp.fetch(
+      apiUrl + "?ref=" + encodeURIComponent(branch),
+      getOptions
+    );
+
+    let currentSha = "";
     if (current.getResponseCode() === 200) {
-      sha = JSON.parse(current.getContentText()).sha || "";
-      if (!sha) throw new Error("لم يُرجع GitHub SHA للملف الحالي.");
+      currentSha = JSON.parse(current.getContentText()).sha || "";
+      if (!currentSha) throw new Error("لم يُرجع GitHub SHA للملف الحالي.");
     } else if (current.getResponseCode() !== 404) {
       throw new Error("فشلت قراءة ملف GitHub. HTTP " + current.getResponseCode());
     }
 
-    const content = JSON.stringify({
+    stage = "write-github";
+    const payloadToSync = {
       success: true,
       changes: latest.changes,
       expectedIds: canonicalIds,
       updatedAt: latest.updatedAt
-    }, null, 2) + "\n";
+    };
+    const content = JSON.stringify(payloadToSync, null, 2) + "\n";
     const body = {
       message: "Sync verified school page text",
       content: Utilities.base64Encode(
@@ -369,9 +473,9 @@ function syncPageChangesToGitHub_(savedPayload) {
       ),
       branch: branch
     };
-    if (sha) body.sha = sha;
+    if (currentSha) body.sha = currentSha;
 
-    const put = UrlFetchApp.fetch(api, {
+    const put = UrlFetchApp.fetch(apiUrl, {
       method: "put",
       contentType: "application/json",
       headers: headers,
@@ -382,39 +486,53 @@ function syncPageChangesToGitHub_(savedPayload) {
       throw new Error("رفض GitHub تحديث الملف. HTTP " + put.getResponseCode());
     }
 
-    const verify = UrlFetchApp.fetch(api + "?ref=" + encodeURIComponent(branch), getOptions);
+    stage = "verify-github";
+    const verify = UrlFetchApp.fetch(
+      apiUrl + "?ref=" + encodeURIComponent(branch),
+      getOptions
+    );
     if (verify.getResponseCode() !== 200) {
-      throw new Error("تعذرت إعادة قراءة ملف GitHub بعد الكتابة.");
+      throw new Error("تعذرت إعادة قراءة ملف GitHub بعد الكتابة. HTTP " + verify.getResponseCode());
     }
+
     const remote = JSON.parse(verify.getContentText());
+    if (remote.encoding !== "base64" || !remote.content) {
+      throw new Error("لم يُرجع GitHub محتوى الملف بالشكل المتوقع.");
+    }
+
     const remoteText = Utilities.newBlob(
-      Utilities.base64Decode(String(remote.content || "").replace(/\s/g, ""))
+      Utilities.base64Decode(String(remote.content).replace(/\\s/g, ""))
     ).getDataAsString("UTF-8");
     const remotePayload = JSON.parse(remoteText);
 
-    if (remotePayload.updatedAt !== latest.updatedAt ||
-        JSON.stringify(remotePayload.changes) !== JSON.stringify(latest.changes) ||
-        JSON.stringify(remotePayload.expectedIds) !== JSON.stringify(canonicalIds)) {
+    if (JSON.stringify(remotePayload) !== JSON.stringify(payloadToSync)) {
       throw new Error("محتوى GitHub لا يطابق النسخة المحفوظة في Drive.");
     }
 
     return { success: true };
   } catch (error) {
-    console.error("فشل مزامنة نصوص الصفحة مع GitHub: " + error.message);
-    return { success: false, message: error.message };
+    const message = safeMessage(error && error.message ? error.message : error);
+    console.error("[PageTextGitHubSync] " + stage + ": " + message);
+    return {
+      success: false,
+      message: "تعذرت المزامنة في المرحلة " + stage + ". " + message
+    };
+  } finally {
+    if (lockAcquired) lock.releaseLock();
   }
 }
 ```
 
-## Deployment and test order
+## ترتيب التطبيق والاختبار
 
-1. Review the deployed Apps Script project and confirm it still has `getPageChangesFile`, `pageChangesPostMessage`, `verifyAdminToken`, and `verifyAdminSession`.
-2. Add the helpers and replace the two complete functions above.
-3. Configure the GitHub Script Properties, if they are not already present.
-4. Deploy a new Apps Script version.
-5. Test a full page save (current `main` has 111 edit IDs). Confirm Drive backup, Drive verification, and GitHub input-branch verification.
-6. Test a 109-item payload, one missing ID, a duplicate ID, and a changed text. All incomplete/duplicate cases must be rejected before Drive is modified.
-7. Confirm the workflow opens a **draft PR only**. It must not merge or publish.
-8. Do not overwrite the existing 109-item JSON export. It is retained as evidence and is rejected as incomplete until a full verified save is made.
+1. راجع آخر نسخة منشورة من Apps Script، وتأكد من مطابقة الدوال المساعدة ونقاط الربط المذكورة أعلى الملف.
+2. انشر أولًا نسخة HTML التي تحتوي على `page-edits-updated-at` و`baseUpdatedAt`، أو تحقق من وجودهما بالفعل في الصفحة الحية.
+3. أضف الدوال المساعدة، ثم استبدل الدوال الثلاث كاملة: `getSavedPageChanges` و`savePageChanges` و`syncPageChangesToGitHub_`.
+4. لا تغيّر `getPageChangesFile()` أو `pageChangesPostMessage()` أو التحقق الثنائي من المسؤول.
+5. تأكد من إعداد Script Properties: `GITHUB_PAGE_SYNC_TOKEN` و`GITHUB_PAGE_SYNC_BRANCH=automation/page-text-sync-input`.
+6. اختبر نسخة كاملة من 111 معرفًا، ثم 109 معرفات، ومعرفًا مكررًا، ومعرفًا زائدًا، و`baseUpdatedAt` قديمًا. حالات الرفض يجب ألا تغير ملف Drive.
+7. اختبر حفظين متزامنين من تبويبين؛ يجب رفض التبويب القديم دون استبدال النص الأحدث.
+8. اختبر فشل الكتابة والاستعادة؛ يجب إعادة قراءة الملف ومقارنة محتواه، وإظهار اسم Backup عند تعذر الاستعادة.
+9. تحقق من مزامنة GitHub وفتح Draft PR فقط. لا يوجد دمج أو نشر تلقائي.
 
-**Important:** this patch is for the Apps Script project, not for `index.html`. Do not paste it into the website repository or deploy it without reviewing the currently deployed Apps Script version first.
+**حدود التحقق:** فحوص GitHub Actions لا تشغّل Apps Script ولا تختبر Drive. يجب إجراء اختبار runtime على مشروع Apps Script بعد موافقة منفصلة، مع الاحتفاظ بالنسخة الاحتياطية.
