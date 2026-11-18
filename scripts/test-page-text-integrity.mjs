@@ -62,26 +62,30 @@ assert.match(workflow, /"page-changes-production\.json"/);
 assert.match(workflow, /GITHUB_EVENT_BEFORE/);
 assert.match(workflow, /GITHUB_EVENT_BEFORE: \\?\$\{\{ github\.event\.before \}\}/);
 
-// This PR must not rewrite the existing refresh implementation.
-const mainHtml = execFileSync("git", ["show", "origin/main:index.html"], { encoding: "utf8" });
-function extractFunction(source, startMarker, endMarker) {
-  const start = source.indexOf(startMarker);
-  assert.ok(start >= 0, "Missing function marker: " + startMarker);
-  const end = source.indexOf(endMarker, start + startMarker.length);
-  assert.ok(end > start, "Missing end marker for: " + startMarker);
-  return source.slice(start, end);
-}
-for (const [startMarker, endMarker] of [
-  ["window.addEventListener('DOMContentLoaded', () => {", "function initLocalStorage()"],
-  ["function loadSavedPageChanges() {", "function receivePageChanges(data) {"],
-  ["function receivePageChanges(data) {", "function exportUpdatedHTML()"],
-  ["function applyCachedPageChanges() {", "function cacheCurrentPageChanges()"]
-]) {
-  assert.equal(
-    extractFunction(html, startMarker, endMarker),
-    extractFunction(mainHtml, startMarker, endMarker),
-    "Existing refresh/cache behavior was changed: " + startMarker
-  );
-}
+// The page must never render cached or default text before the verified Drive response.
+assert.match(html, /setAttribute\(['"]data-page-edits-pending['"],\s*['"]['"]\)/);
+assert.match(html, /html\[data-page-edits-pending\] body/);
+assert.match(html, /html\[data-page-edits-error\] body/);
+assert.match(html, /جارٍ تحميل النصوص المعتمدة/);
+assert.match(html, /تعذر تحميل النصوص المعتمدة/);
+assert.doesNotMatch(html, /applyCachedPageChanges/);
+assert.doesNotMatch(html, /وصلت قائمة تعديلات فارغة من الخادم/);
+assert.match(html, /function validatePageChangesSnapshot\(changes\)/);
+assert.match(html, /changes\.length !== 111/);
+assert.match(html, /new Set\(expectedIds\)\.size !== 111/);
+assert.match(html, /byId\.size !== expectedIds\.length/);
+assert.match(html, /expectedIds\.some\(id => !byId\.has\(id\)\)/);
+assert.match(html, /markPageChangesUnavailable\(/);
+assert.match(html, /markPageChangesReady\(\)/);
+assert.ok(
+  html.indexOf("validatePageChangesSnapshot(data.changes)") <
+    html.indexOf("applyPageChangesList(normalizedChanges)"),
+  "The complete snapshot must be validated before any text is applied."
+);
+assert.equal(
+  (html.match(/removeAttribute\(["']data-page-edits-pending["']\)/g) || []).length,
+  2,
+  "Only the success and explicit failure handlers may end the pending state."
+);
 
-console.log("Page-text sync checks passed: 111 unique IDs, both ticker texts, same extraction as site save, index.html + JSON source routing, and unchanged refresh functions.");
+console.log("Page-text integrity checks passed: 111 unique IDs, ticker text, unchanged save contract, no stale cache rendering, strict full-snapshot validation, and fail-closed loading.");
