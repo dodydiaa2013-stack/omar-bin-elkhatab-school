@@ -34,7 +34,9 @@ if (!endpoint || !secret || !commitSha || !/^[a-f0-9]{40}$/i.test(commitSha) ||
 }
 
 const html = fs.readFileSync("index.html", "utf8");
-const dom = new JSDOM(html);
+// The repository HTML starts with a UTF-8 BOM; strip it for DOM parsing only.
+const htmlForParsing = html.charCodeAt(0) === 0xFEFF ? html.slice(1) : html;
+const dom = new JSDOM(htmlForParsing);
 const expectedIds = Array.from(
   dom.window.document.querySelectorAll("[data-page-edit-id]")
 ).map(element => (element.getAttribute("data-page-edit-id") || "").trim());
