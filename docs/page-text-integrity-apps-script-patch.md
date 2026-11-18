@@ -561,7 +561,7 @@ function syncPageChangesToGitHub_(savedPayload) {
 
 أضف هذا الشرط داخل try في doPost(e)، قبل savePageChanges:
 
-~~~javascript
+~~~text
 if (action === "syncPageChangesFromGitHub") {
   return syncPageChangesFromGitHub_(p);
 }
