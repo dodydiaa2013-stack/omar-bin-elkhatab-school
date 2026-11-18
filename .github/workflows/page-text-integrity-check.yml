@@ -28,5 +28,11 @@ jobs:
           node --check scripts/sync-page-texts.mjs
           node --check scripts/test-page-text-integrity.mjs
 
+      - name: Verify the approved JSON already matches the HTML
+        run: |
+          npm install --no-save jsdom@26
+          node scripts/sync-page-texts.mjs
+          git diff --exit-code -- index.html
+
       - name: Run page text regression tests
         run: node scripts/test-page-text-integrity.mjs
