@@ -8,7 +8,7 @@ const syncScript = fs.readFileSync("scripts/sync-page-texts.mjs", "utf8");
 const patch = fs.readFileSync("docs/page-text-integrity-apps-script-patch.md", "utf8");
 const workflow = fs.readFileSync(".github/workflows/sync-page-texts-main-to-drive.yml", "utf8");
 
-const htmlIds = [...html.matchAll(/data-page-edit-id\\s*=\\s*["']([^"']+)["']/g)].map(match => match[1]);
+const htmlIds = [...html.matchAll(/data-page-edit-id\s*=\s*["']([^"']+)["']/g)].map(match => match[1]);
 const savedIds = payload.changes.map(item => item.id);
 const meta = html.match(/<meta name="page-edits-updated-at" content="([^"]+)">/);
 
@@ -25,16 +25,16 @@ assert.ok(payload.changes.some(item => item.text.includes("TEST-1811")));
 
 assert.match(syncScript, /htmlIdsMissingFromPayload/);
 assert.match(syncScript, /payloadTime < baselineTime/);
-assert.match(syncScript, /payload\\.expectedIds !== undefined/);
+assert.match(syncScript, /payload\.expectedIds !== undefined/);
 assert.match(html, /pageChangesLoadSucceeded/);
-assert.match(html, /if \\(!pageChangesLoadSucceeded\\)/);
-assert.match(workflow, /branches:\\s*\\n\\s*- main/);
+assert.match(html, /if \(!pageChangesLoadSucceeded\)/);
+assert.match(workflow, /branches:\s*\\n\s*- main/);
 assert.match(workflow, /PAGE_CHANGES_SYNC_HMAC_SECRET/);
 assert.match(patch, /syncPageChangesFromGitHub_/);
 assert.match(patch, /PAGE_CHANGES_LAST_GITHUB_COMMIT_SHA/);
 
-const oldBlocks = [...patch.matchAll(/\x60\x60\x60javascript\\n([\\s\\S]*?)\\n\x60\x60\x60/ g)].map(match => match[1]);
-const newBlocks = [...patch.matchAll(/~~~javascript\\n([\\s\\S]*?)\\n~~~/g)].map(match => match[1]);
+const oldBlocks = [...patch.matchAll(/\x60\x60\x60javascript\\n([\s\\S]*?)\\n\x60\x60\x60/ g)].map(match => match[1]);
+const newBlocks = [...patch.matchAll(/~~~javascript\\n([\s\\S]*?)\\n~~~/g)].map(match => match[1]);
 const allBlocks = [...oldBlocks, ...newBlocks];
 assert.ok(allBlocks.length >= 7);
 for (const [index, source] of allBlocks.entries()) {
