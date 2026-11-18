@@ -40,7 +40,7 @@ jobs:
 
           const data = JSON.parse(fs.readFileSync("page-changes-production.json", "utf8"));
           const html = fs.readFileSync("index.html", "utf8");
-          const ids = [...html.matchAll(/data-page-edit-id\\s*=\\s*["']([^"']+)["']/g)].map(m => m[1]);
+          const ids = [...html.matchAll(/data-page-edit-id\s*=\s*["']([^"']+)["']/g)].map(m => m[1]);
           if (!data || data.success !== true || !Array.isArray(data.changes) ||
               !Array.isArray(data.expectedIds) || !data.updatedAt) {
             throw new Error("Approved main page-text JSON is missing required fields.");
@@ -74,13 +74,13 @@ jobs:
           const timestamp = new Date().toISOString();
           const nonce = crypto.randomUUID();
           const signature = crypto.createHmac("sha256", process.env.HMAC_SECRET)
-            .update(timestamp + "\\n" + nonce + "\\n" + payloadHash, "utf8")
+            .update(timestamp + "\n" + nonce + "\n" + payloadHash, "utf8")
             .digest("hex");
           const output = process.env.GITHUB_OUTPUT;
-          fs.appendFileSync(output, "payload_b64=" + Buffer.from(payload, "utf8").toString("base64") + "\\n");
-          fs.appendFileSync(output, "timestamp=" + timestamp + "\\n");
-          fs.appendFileSync(output, "nonce=" + nonce + "\\n");
-          fs.appendFileSync(output, "signature=" + signature + "\\n");
+          fs.appendFileSync(output, "payload_b64=" + Buffer.from(payload, "utf8").toString("base64") + "\n");
+          fs.appendFileSync(output, "timestamp=" + timestamp + "\n");
+          fs.appendFileSync(output, "nonce=" + nonce + "\n");
+          fs.appendFileSync(output, "signature=" + signature + "\n");
           NODE
 
       - name: Send the signed snapshot to Apps Script
