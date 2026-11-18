@@ -2824,6 +2824,19 @@ function receivePageChanges(data) {
     }
 
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
+    if (remoteTime === htmlTime) {
+        const currentTextById = new Map(
+            Array.from(document.querySelectorAll("[data-page-edit-id]"))
+                .map(element => [element.getAttribute("data-page-edit-id"), element.textContent.trim()])
+        );
+        const sameTimestampHasChanges = normalizedChanges.some(item =>
+            currentTextById.has(item.id) && currentTextById.get(item.id) !== item.text.trim()
+        );
+        if (sameTimestampHasChanges) {
+            console.warn("[PageChanges] تم رفض نصوص مختلفة تحمل تاريخ النسخة المرجعية نفسه.");
+            return false;
+        }
+    }
     const pageIds = Array.from(document.querySelectorAll("[data-page-edit-id]"))
         .map(element => element.getAttribute("data-page-edit-id"));
     const savedIds = normalizedChanges.map(item => item && item.id);
