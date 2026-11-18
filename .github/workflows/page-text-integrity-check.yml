@@ -15,8 +15,10 @@ jobs:
   verify-page-text-integrity:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source
+      - name: Check out source and main baseline
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -25,6 +27,9 @@ jobs:
 
       - name: Install HTML parser
         run: npm install --no-save jsdom@26
+
+      - name: Fetch main baseline for refresh-preservation tests
+        run: git fetch origin main
 
       - name: Check JavaScript syntax
         run: |
