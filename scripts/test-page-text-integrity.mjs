@@ -29,7 +29,7 @@ assert.match(syncScript, /payload\.expectedIds !== undefined/);
 assert.match(html, /pageChangesLoadSucceeded/);
 assert.match(html, /if \(!pageChangesLoadSucceeded\)/);
 assert.match(workflow, /- main/);
-assert.match(workflow, /- main/);
+assert.match(workflow, /PAGE_CHANGES_SYNC_HMAC_SECRET/);
 assert.match(patch, /syncPageChangesFromGitHub_/);
 assert.match(patch, /PAGE_CHANGES_LAST_GITHUB_COMMIT_SHA/);
 
