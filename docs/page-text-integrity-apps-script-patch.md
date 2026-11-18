@@ -64,7 +64,7 @@ function getCanonicalPageEditIdsFromGitHub_() {
   const html = response.getContentText("UTF-8");
   const ids = [];
   const seen = new Set();
-  const pattern = /data-page-edit-id\\s*=\\s*["']([^"']+)["']/g;
+  const pattern = /data-page-edit-id\s*=\s*["']([^"']+)["']/g;
   let match;
 
   while ((match = pattern.exec(html)) !== null) {
@@ -388,7 +388,7 @@ function syncPageChangesToGitHub_(savedPayload) {
     }
     const remote = JSON.parse(verify.getContentText());
     const remoteText = Utilities.newBlob(
-      Utilities.base64Decode(String(remote.content || "").replace(/\\s/g, ""))
+      Utilities.base64Decode(String(remote.content || "").replace(/\s/g, ""))
     ).getDataAsString("UTF-8");
     const remotePayload = JSON.parse(remoteText);
 
