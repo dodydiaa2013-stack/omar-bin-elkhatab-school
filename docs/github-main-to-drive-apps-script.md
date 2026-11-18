@@ -44,8 +44,61 @@ function doPost(e) {
       return jsonOutput(syncPageChangesFromGitHub_(jsonBody));
     }
 
-    // Keep every existing action below this point exactly as it is today.
-    // Do not remove or rewrite adminLogin, savePageChanges, uploads, deletes, or albums.
+    if (action === "adminLogin") return adminLogin(p);
+    if (action === "adminLogout") return adminLogout(p);
+    if (action === "requestPasswordRecovery") return requestPasswordRecovery(p);
+    if (action === "verifyPasswordRecoveryCode") return verifyPasswordRecoveryCode(p);
+    if (action === "resetAdminPassword") return resetAdminPassword(p);
+    if (action === "verifyDeveloperGoogle") return verifyDeveloperGoogle(p);
+    if (action === "savePageChanges") return savePageChanges(p);
+    if (action === "uploadGalleryImage") return uploadGalleryImage(p);
+    if (action === "replaceGalleryImage") return replaceGalleryImage(p);
+    if (action === "delete") return deleteGalleryImage(p);
+    if (action === "uploadSchedule") return uploadScheduleImage(p);
+    if (action === "deleteSchedule") return deleteScheduleImage(p);
+    if (action === "bulkDeleteSchedules") return bulkDeleteSchedules(p);
+    if (action === "createPhotoAlbum") return createPhotoAlbum(p);
+    if (action === "updatePhotoAlbum") return updatePhotoAlbum(p);
+    if (action === "uploadPhotoAlbumImage") return uploadPhotoAlbumImage(p);
+    if (action === "updatePhotoAlbumCover") return updatePhotoAlbumCover(p);
+    if (action === "replacePhotoAlbumImage") return replacePhotoAlbumImage(p);
+    if (action === "savePhotoContentOrder") return savePhotoContentOrder(p);
+    if (action === "bulkDeletePhotoContent") return bulkDeletePhotoContent(p);
+    if (action === "deletePhotoAlbumImage") return deletePhotoAlbumImage(p);
+    if (action === "deletePhotoAlbum") return deletePhotoAlbum(p);
+
+    return jsonOutput({
+      success: false,
+      message: "العملية المطلوبة غير معروفة أو غير مدعومة."
+    });
+  } catch (error) {
+    const message = error.message || "تعذر تنفيذ العملية";
+
+    if (action === "syncPageChangesFromGitHub") {
+      return jsonOutput({ success: false, message: message });
+    }
+    if (action === "adminLogout") return adminLogoutPostMessage(p, { success: false, message });
+    if (action === "verifyDeveloperGoogle") return developerGooglePostMessage(p, { success: false, message });
+    if (action === "savePageChanges") return pageChangesPostMessage(p, { success: false, message });
+    if (action === "uploadSchedule") return scheduleUploadPostMessage(p, { success: false, message });
+    if (action === "uploadGalleryImage") return galleryUploadPostMessage(p, { success: false, message });
+    if ([
+      "createPhotoAlbum",
+      "updatePhotoAlbum",
+      "uploadPhotoAlbumImage",
+      "updatePhotoAlbumCover",
+      "replacePhotoAlbumImage",
+      "deletePhotoAlbumImage",
+      "deletePhotoAlbum",
+      "savePhotoContentOrder",
+      "bulkDeletePhotoContent"
+    ].includes(action)) {
+      return photoAlbumPostMessage(p, { success: false, message: message });
+    }
+
+    return jsonOutput({ success: false, message: message });
+  }
+}
 ~~~~
 
 Insert the route into the current doPost and retain its existing remaining actions and catch block. Do not replace the current function with this shortened excerpt.
@@ -185,9 +238,19 @@ function syncPageChangesFromGitHub_(p) {
   lock.waitLock(20000);
 
   try {
-    const cache = CacheService.getScriptCache();
-    const nonceKey = "GITHUB_MAIN_DRIVE_NONCE_" + nonce;
-    if (cache.get(nonceKey)) throw new Error("تم رفض طلب مزامنة مكرر.");
+    const noncePrefix = "GITHUB_MAIN_DRIVE_NONCE_";
+    const now = Date.now();
+    const storedProperties = properties.getProperties();
+    Object.keys(storedProperties).forEach(function(key) {
+      if (key.indexOf(noncePrefix) === 0 &&
+          now - Number(storedProperties[key] || "0") > 10 * 60 * 1000) {
+        properties.deleteProperty(key);
+      }
+    });
+    const nonceKey = noncePrefix + nonce;
+    if (properties.getProperty(nonceKey)) {
+      throw new Error("تم رفض طلب مزامنة مكرر.");
+    }
 
     const lastCommitTime = Number(
       properties.getProperty("GITHUB_MAIN_TO_DRIVE_LAST_COMMIT_TIME") || "0"
@@ -207,6 +270,11 @@ function syncPageChangesFromGitHub_(p) {
     }
     const currentMap = pageTextChangesMap_(current.changes);
 
+    if (commitSha === lastCommitSha && lastCommitSha &&
+        !pageTextMapsEqual_(incomingMap, currentMap)) {
+      throw new Error("تم رفض إعادة استخدام Commit SHA نفسه بمحتوى مختلف.");
+    }
+
     // Idempotency: site-save may already have sent this exact snapshot to GitHub.
     if (pageTextMapsEqual_(incomingMap, currentMap)) {
       if (commitTime >= lastCommitTime) {
@@ -215,7 +283,7 @@ function syncPageChangesFromGitHub_(p) {
           GITHUB_MAIN_TO_DRIVE_LAST_COMMIT_SHA: commitSha
         });
       }
-      cache.put(nonceKey, "1", 600);
+      properties.setProperty(nonceKey, String(Date.now()));
       return {
         success: true,
         status: "already-current",
@@ -273,7 +341,7 @@ function syncPageChangesFromGitHub_(p) {
       GITHUB_MAIN_TO_DRIVE_LAST_COMMIT_TIME: String(commitTime),
       GITHUB_MAIN_TO_DRIVE_LAST_COMMIT_SHA: commitSha
     });
-    cache.put(nonceKey, "1", 600);
+    properties.setProperty(nonceKey, String(Date.now()));
 
     return {
       success: true,
