@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <meta name="page-edits-updated-at" content="2026-11-16T19:53:22.900Z">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب ث بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
     <meta name="theme-color" content="#0B132B">
@@ -2438,15 +2439,26 @@ async function saveAllPageChanges() {
     const editableElements = Array.from(
         document.querySelectorAll('[data-page-edit-id]')
     );
-    const changes = editableElements.map(el => ({
-        id: el.getAttribute('data-page-edit-id'),
-        text: el.textContent.trim()
-    })).filter(item => item.id && item.text.length <= 10000);
-    if (!changes.length) {
-        alert('لا توجد نصوص قابلة للحفظ.');
+    const expectedIds = editableElements.map(el =>
+        (el.getAttribute('data-page-edit-id') || '').trim()
+    );
+    if (
+        !expectedIds.length ||
+        expectedIds.some(id => !id) ||
+        new Set(expectedIds).size !== expectedIds.length
+    ) {
+        alert('تعذر الحفظ: توجد معرفات فارغة أو مكررة في الصفحة.');
         return;
     }
-    const payload = JSON.stringify({ changes });
+    const changes = editableElements.map((el, index) => ({
+        id: expectedIds[index],
+        text: el.textContent.trim()
+    }));
+    if (changes.some(item => typeof item.text !== 'string' || item.text.length > 10000)) {
+        alert('تعذر الحفظ: أحد النصوص يتجاوز الحد المسموح.');
+        return;
+    }
+    const payload = JSON.stringify({ changes, expectedIds });
     if (payload.length > 90000) {
         alert('حجم التعديلات كبير. قلّل النصوص وحاول مرة أخرى.');
         return;
@@ -2746,25 +2758,27 @@ function applyPageChangesList(changes) {
 
 function applyCachedPageChanges() {
     try {
-        const cached = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (!cached) {
+        const raw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
+        if (!raw) return false;
+        const cached = JSON.parse(raw);
+        if (!cached || !Array.isArray(cached.changes)) return false;
 
+        const cachedTime = Date.parse(cached.updatedAt || "");
+        const meta = document.querySelector('meta[name="page-edits-updated-at"]');
+        const htmlTime = Date.parse(meta && meta.content || "");
+        if (!Number.isFinite(cachedTime) || !Number.isFinite(htmlTime) || cachedTime < htmlTime) {
+            console.warn("[PageChanges] تم تجاهل كاش قديم أو غير مؤرخ.");
             return false;
         }
-        const parsed = JSON.parse(cached);
-        if (!parsed || !Array.isArray(parsed.changes)) {
 
+        const normalized = normalizeFixedPageChanges(cached.changes);
+        const stats = applyPageChangesList(normalized);
+        if (stats.missing > 0 || stats.invalid > 0) {
+            console.warn("[PageChanges] الكاش غير متوافق بالكامل مع الصفحة؛ تم تجاهله.", stats);
             return false;
         }
-
-        // نظّف القيم القديمة من الكاش نفسه، وليس من العرض فقط.
-        parsed.changes = normalizeFixedPageChanges(parsed.changes);
-        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify(parsed));
-        applyPageChangesList(parsed.changes);
-
         return true;
     } catch (error) {
-
         console.warn("تعذر تطبيق النسخة المحلية من تعديلات النصوص.", error);
         return false;
     }
@@ -2772,20 +2786,32 @@ function applyCachedPageChanges() {
 
 function cacheCurrentPageChanges() {
     try {
-
         const changes = Array.from(document.querySelectorAll("[data-page-edit-id]"))
             .map(element => ({
                 id: element.getAttribute("data-page-edit-id"),
                 text: element.textContent.trim()
-            }))
-            .filter(item => item.id && item.text.length <= 10000);
-
-        const payload = JSON.stringify({ changes: changes });
-        if (payload.length <= 90000) {
-            localStorage.setItem(PAGE_CHANGES_CACHE_KEY, payload);
+            }));
+        const expectedIds = changes.map(item => item.id);
+        if (
+            !changes.length ||
+            changes.some(item => !item.id || item.text.length > 10000) ||
+            new Set(expectedIds).size !== expectedIds.length
+        ) {
+            console.warn("[PageChanges] لم يتم تحديث الكاش بسبب قائمة غير مكتملة أو غير صالحة.");
+            return false;
         }
+
+        // تُستدعى هذه الدالة بعد تأكيد نجاح الحفظ والمزامنة فقط.
+        const updatedAt = new Date().toISOString();
+        const meta = document.querySelector('meta[name="page-edits-updated-at"]');
+        if (meta) meta.content = updatedAt;
+        const payload = JSON.stringify({ changes, updatedAt });
+        if (payload.length > 90000) return false;
+        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, payload);
+        return true;
     } catch (error) {
         console.warn("تعذر تحديث النسخة المحلية من تعديلات النصوص.", error);
+        return false;
     }
 }
 
@@ -2820,52 +2846,52 @@ function loadSavedPageChanges() {
 function receivePageChanges(data) {
     pageChangesResponseReceived = true;
 
-    // لا نحوّل خطأ قراءة الخادم أو الاستجابة غير السليمة إلى قائمة تعديلات فارغة.
     if (!data || data.success !== true || !Array.isArray(data.changes)) {
-        const message = data && (data.message || data.error)
-            ? (data.message || data.error)
-            : "استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.";
-        console.error("تعذر استرجاع تعديلات نصوص الموقع:", message);
+        console.error("تعذر استرجاع تعديلات نصوص الموقع:", data && (data.message || data.error) || "استجابة غير صالحة.");
         return false;
     }
 
-    // لا تستبدل نسخة محلية محفوظة بقائمة فارغة قبل التأكد من صحة رد الخادم.
+    const remoteTime = Date.parse(data.updatedAt || "");
+    if (!Number.isFinite(remoteTime)) {
+        console.error("[PageChanges] تم رفض استجابة الخادم لعدم وجود updatedAt صالح.");
+        return false;
+    }
+
+    const meta = document.querySelector('meta[name="page-edits-updated-at"]');
+    const htmlTime = Date.parse(meta && meta.content || "");
+    let cacheTime = 0;
     try {
-        const cachedRaw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (cachedRaw && data.changes.length === 0) {
-            const cached = JSON.parse(cachedRaw);
-            if (cached && Array.isArray(cached.changes) && cached.changes.length > 0) {
-                console.warn("وصلت قائمة تعديلات فارغة من الخادم مع وجود نسخة محلية محفوظة؛ تم الاحتفاظ بالنسخة المحلية.");
-                applyPageChangesList(cached.changes);
-                return true;
-            }
-        }
+        const raw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
+        const cached = raw ? JSON.parse(raw) : null;
+        const parsedCacheTime = Date.parse(cached && cached.updatedAt || "");
+        if (Number.isFinite(parsedCacheTime)) cacheTime = parsedCacheTime;
     } catch (error) {
-        console.warn("تعذر فحص النسخة المحلية من تعديلات النصوص.", error);
+        console.warn("[PageChanges] تعذر قراءة تاريخ النسخة المحلية.", error);
+    }
+
+    const trustedFloor = Math.max(Number.isFinite(htmlTime) ? htmlTime : 0, cacheTime);
+    if (trustedFloor && remoteTime < trustedFloor) {
+        console.warn("[PageChanges] تم تجاهل نسخة خادم أقدم من نسخة الصفحة أو الكاش.", {
+            remote: data.updatedAt,
+            html: meta && meta.content || null,
+            cacheTime: cacheTime ? new Date(cacheTime).toISOString() : null
+        });
+        return false;
     }
 
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
     const applyStats = applyPageChangesList(normalizedChanges);
 
-    console.info("[PageChanges] نتيجة استرجاع التعديلات:", {
-        serverReceived: data.changes.length,
-        normalized: normalizedChanges.length,
-        matched: applyStats.matched,
-        applied: applyStats.applied,
-        unchanged: applyStats.unchanged,
-        skippedEditing: applyStats.skippedEditing,
-        missing: applyStats.missing,
-        invalid: applyStats.invalid,
-        missingIds: applyStats.missingIds
-    });
-
     if (applyStats.missing > 0 || applyStats.invalid > 0) {
-        console.warn("[PageChanges] توجد تعديلات لم تُطبّق على عناصر الصفحة. راجع المعرّفات المفقودة أو البيانات غير الصحيحة.");
+        console.error("[PageChanges] لم تُطبّق القائمة كاملة؛ لن يتم اعتمادها أو تخزينها.", applyStats);
+        return false;
     }
 
+    if (meta) meta.content = new Date(remoteTime).toISOString();
     try {
         localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
-            changes: normalizedChanges
+            changes: normalizedChanges,
+            updatedAt: new Date(remoteTime).toISOString()
         }));
     } catch (error) {
         console.warn("تعذر حفظ نسخة محلية من تعديلات النصوص.", error);
@@ -2875,7 +2901,6 @@ function receivePageChanges(data) {
     messages.forEach((message, index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
-
     return true;
 }
 
