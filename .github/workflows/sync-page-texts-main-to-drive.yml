@@ -36,8 +36,7 @@ jobs:
           git checkout --detach origin/main
           node scripts/sync-page-texts.mjs
           git diff --exit-code -- index.html
-          MAIN_SHA="$(git rev-parse HEAD)"
-          echo "main_sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
+          export MAIN_SHA="$(git rev-parse HEAD)"
           node --input-type=module <<'NODE'
           import fs from "node:fs";
           import crypto from "node:crypto";
