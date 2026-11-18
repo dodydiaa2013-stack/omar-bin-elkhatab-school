@@ -28,6 +28,9 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Preserve main text baseline
+        run: git show main:page-changes-production.json > /tmp/main-page-changes-production.json
+
       - name: Fetch and validate latest saved changes
         run: |
           set -euo pipefail
@@ -35,15 +38,60 @@ jobs:
           git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.json
           node -e "const p=require('./page-changes-production.json'); if(!p || p.success!==true || !Array.isArray(p.changes) || p.changes.some(x=>!x || typeof x.id!=='string' || typeof x.text!=='string')) process.exit(1);"
 
+      - name: Compare actual IDs and text, ignoring timestamp-only changes
+        id: semantic
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const base = JSON.parse(fs.readFileSync("/tmp/main-page-changes-production.json", "utf8"));
+          const latest = JSON.parse(fs.readFileSync("page-changes-production.json", "utf8"));
+          const normalize = payload => {
+            if (!payload || payload.success !== true || !Array.isArray(payload.changes)) {
+              throw new Error("Invalid page text payload.");
+            }
+            const map = new Map();
+            for (const item of payload.changes) {
+              if (!item || typeof item.id !== "string" || typeof item.text !== "string" ||
+                  !item.id.trim() || map.has(item.id)) {
+                throw new Error("Invalid or duplicate page text ID.");
+              }
+              map.set(item.id, item.text);
+            }
+            return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+          };
+          const changed = JSON.stringify(normalize(base)) !== JSON.stringify(normalize(latest));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "changed=" + String(changed) + "\\n");
+          console.log(changed
+            ? "Page text or ID set changed; continue to build the review proposal."
+            : "Page text and ID set are unchanged; timestamp-only changes will not create a stale PR.");
+          NODE
+
+      - name: Close stale publication PR when text is unchanged
+        if: steps.semantic.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$pr_number" ]; then
+            gh pr close "$pr_number" --repo "$GITHUB_REPOSITORY" \\
+              --comment "Closed automatically: the latest verified Drive snapshot has the same page text and IDs as main. Timestamp-only changes are ignored."
+          fi
+          echo "No semantic page text changes; no publication PR is needed."
+
       - name: Set up Node.js
+        if: steps.semantic.outputs.changed == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Install HTML parser
+        if: steps.semantic.outputs.changed == 'true'
         run: npm install --no-save jsdom@26
 
       - name: Apply and validate saved text changes
+        if: steps.semantic.outputs.changed == 'true'
         run: |
           set -euo pipefail
           node scripts/sync-page-texts.mjs
@@ -51,6 +99,7 @@ jobs:
           node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); if(!h.includes('data-page-edit-id=')) process.exit(1);"
 
       - name: Create or update the publication pull request
+        if: steps.semantic.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
