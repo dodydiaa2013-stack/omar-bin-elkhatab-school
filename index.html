@@ -2824,6 +2824,24 @@ function receivePageChanges(data) {
     }
 
     const normalizedChanges = normalizeFixedPageChanges(data.changes);
+    const pageIds = Array.from(document.querySelectorAll("[data-page-edit-id]"))
+        .map(element => element.getAttribute("data-page-edit-id"));
+    const savedIds = normalizedChanges.map(item => item && item.id);
+    const savedIdSet = new Set(savedIds);
+    if (
+        !pageIds.length ||
+        new Set(pageIds).size !== pageIds.length ||
+        savedIds.length !== pageIds.length ||
+        savedIdSet.size !== savedIds.length ||
+        pageIds.some(id => !savedIdSet.has(id))
+    ) {
+        console.error("[PageChanges] تم رفض قائمة خادم غير مكتملة أو لا تطابق جميع معرفات الصفحة.", {
+            pageIds: pageIds.length,
+            savedIds: savedIds.length
+        });
+        return false;
+    }
+
     const applyStats = applyPageChangesList(normalizedChanges);
     if (applyStats.missing > 0 || applyStats.invalid > 0 ||
         applyStats.matched !== normalizedChanges.length) {
