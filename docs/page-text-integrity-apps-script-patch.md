@@ -105,7 +105,8 @@ function createPageChangesBackup_(file, originalContent) {
     "UTC",
     "yyyyMMdd'T'HHmmss'Z'"
   );
-  const backupName = "page-changes-production.backup-" + stamp + ".json";
+  const backupName = "page-changes-production.backup-" +
+    stamp + "-" + Utilities.getUuid().slice(0, 8) + ".json";
   const parents = file.getParents();
   const folder = parents.hasNext() ? parents.next() : DriveApp.getRootFolder();
 
