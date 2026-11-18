@@ -142,6 +142,10 @@ function getSavedPageChanges() {
       throw new Error("تاريخ النسخة المحفوظة غير صالح.");
     }
 
+    if (data.expectedIds !== undefined) {
+      validatePageChangesExpectedIds_(data.changes, data.expectedIds);
+    }
+
     return {
       success: true,
       changes: data.changes,
@@ -279,7 +283,10 @@ function savePageChanges(p) {
       success: true,
       changes: cleanChanges,
       expectedIds: canonicalIds,
-      updatedAt: new Date().toISOString()
+      // اجعل التاريخ متزايدًا حتى لو حدث حفظان في المللي ثانية نفسها.
+      updatedAt: new Date(
+        Math.max(Date.now(), Date.parse(previous.updatedAt) + 1)
+      ).toISOString()
     };
 
     try {
