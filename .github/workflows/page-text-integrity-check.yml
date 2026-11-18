@@ -28,9 +28,6 @@ jobs:
       - name: Install HTML parser
         run: npm install --no-save jsdom@26
 
-      - name: Fetch main baseline for refresh-preservation tests
-        run: git fetch origin main
-
       - name: Check JavaScript syntax
         run: |
           set -euo pipefail
@@ -38,5 +35,5 @@ jobs:
           node --check scripts/sync-main-page-texts-to-drive.mjs
           node --check scripts/test-page-text-integrity.mjs
 
-      - name: Verify page text IDs, ticker messages, and refresh guard
+      - name: Verify page text IDs, ticker messages, save contract, and stale-cache guard
         run: node scripts/test-page-text-integrity.mjs
