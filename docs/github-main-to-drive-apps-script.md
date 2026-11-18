@@ -1,6 +1,6 @@
 # GitHub main to Google Drive page-text synchronization
 
-This patch adds the reverse synchronization path without changing the existing website save or Refresh flows. When editable text in index.html changes, text is extracted from each [data-page-edit-id] element using the exact same element.textContent.trim() rule as the current saveAllPageChanges(). CSS/layout-only changes do not select HTML text as the source. When only page-changes-production.json changes, that JSON is the source. If both change in one push, their ID-to-text maps must match exactly or the workflow refuses to write to Drive. A manual initial sync uses the JSON snapshot.
+This patch adds the reverse synchronization path without changing the existing website save or Refresh flows. For an HTML-only text edit, it overlays only IDs whose text differs from the push-base HTML onto the approved JSON snapshot, preserving untouched JSON values. CSS/layout-only changes do not select HTML text as the source. When only page-changes-production.json changes, that JSON is the source. If both files change and HTML text changed, their full ID-to-text maps must match exactly or the workflow refuses to write to Drive. A manual initial sync uses the JSON snapshot.
 
 ## Data contract
 
@@ -402,7 +402,7 @@ No deployment or merge is performed by this patch. Apps Script deployment and in
 
 The workflow checks the exact files changed between the push's before-SHA and current SHA (not only the last commit). It then selects the snapshot as follows:
 
-- index.html with actual editable-text changes: extract the text from every [data-page-edit-id] element in DOM order using textContent.trim(). The workflow compares against the push-base HTML first, so CSS/layout-only HTML edits cannot overwrite newer JSON text with old markup.
+- index.html with actual editable-text changes and no JSON change: compare against push-base HTML, then overlay only changed IDs onto the approved JSON map; all untouched IDs retain their JSON values.
 - page-changes-production.json only: use the JSON changes array, after validating exact ID coverage.
 - both files: if editable HTML text also changed, compare every ID and text exactly; any conflict stops before the Apps Script request. If index.html changed only for layout/CSS and its editable text is unchanged, JSON remains the source.
 - workflow_dispatch: use the JSON snapshot for the initial synchronization.
