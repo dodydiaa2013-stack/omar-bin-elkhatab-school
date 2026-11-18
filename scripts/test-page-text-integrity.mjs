@@ -6,14 +6,14 @@ const html = fs.readFileSync("index.html", "utf8");
 const payload = JSON.parse(fs.readFileSync("page-changes-production.json", "utf8"));
 const patch = fs.readFileSync("docs/page-text-integrity-apps-script-patch.md", "utf8");
 
-const htmlIds = [...html.matchAll(/data-page-edit-id\\s*=\\s*["']([^"']+)["']/g)].map(match => match[1]);
+const htmlIds = [...html.matchAll(/data-page-edit-id\s*=\s*["']([^"']+)["']/g)].map(match => match[1]);
 assert.equal(htmlIds.length, 111, "Expected the reviewed page to contain 111 edit IDs.");
 assert.equal(new Set(htmlIds).size, htmlIds.length, "HTML edit IDs must be unique.");
 assert.equal(payload.success, true);
 assert.equal(payload.changes.length, 111);
 assert.equal(new Set(payload.changes.map(item => item.id)).size, 111);
 
-const blocks = [...patch.matchAll(/```javascript\\n([\\s\\S]*?)\\n```/g)].map(match => match[1]);
+const blocks = [...patch.matchAll(/```javascript\n([\s\S]*?)\n```/g)].map(match => match[1]);
 assert.ok(blocks.length >= 4, "Expected helper and three complete Apps Script function blocks.");
 for (const [index, source] of blocks.entries()) {
   new vm.Script(source, { filename: `apps-script-patch-block-${index + 1}.js` });
