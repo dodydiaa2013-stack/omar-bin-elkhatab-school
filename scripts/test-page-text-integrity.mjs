@@ -66,8 +66,8 @@ function extractFunction(source, startMarker, endMarker) {
 }
 for (const [startMarker, endMarker] of [
   ["window.addEventListener('DOMContentLoaded', () => {", "function initLocalStorage()"],
-  ["function receivePageChanges(data) {", "function loadSavedPageChanges()"],
-  ["function loadSavedPageChanges() {", "function exportUpdatedHTML()"],
+  ["function loadSavedPageChanges() {", "function receivePageChanges(data) {"],
+  ["function receivePageChanges(data) {", "function exportUpdatedHTML()"],
   ["function applyCachedPageChanges() {", "function cacheCurrentPageChanges()"]
 ]) {
   assert.equal(
