@@ -90,6 +90,7 @@ const htmlById = htmlSnapshot.byId;
 // A CSS/layout-only edit to index.html must not roll back a newer JSON text snapshot.
 // Compare editable text against the index.html at the push base, not just the changed path.
 let htmlTextChanged = htmlChanged;
+let previousHtmlById = null;
 if (htmlChanged && eventBefore && !/^0+$/.test(eventBefore)) {
   let previousHtml;
   try {
@@ -102,12 +103,13 @@ if (htmlChanged && eventBefore && !/^0+$/.test(eventBefore)) {
   }
   const previousSnapshot = extractHtmlSnapshot(previousHtml);
   if (previousSnapshot.ids.length !== expectedIds.length ||
-      previousSnapshot.ids.some((id, index) => id !== expectedIds[index]) ||
-      !mapsEqual(previousSnapshot.byId, htmlById)) {
-    htmlTextChanged = true;
-  } else {
-    htmlTextChanged = false;
+      previousSnapshot.ids.some((id, index) => id !== expectedIds[index])) {
+    fail("The editable page IDs changed in index.html; reconcile the ID migration before syncing.");
   }
+  previousHtmlById = previousSnapshot.byId;
+  htmlTextChanged = !mapsEqual(previousSnapshot.byId, htmlById);
+} else if (htmlChanged) {
+  fail("Cannot safely isolate changed HTML text without the push-base index.html; refusing to overwrite the Drive snapshot.");
 }
 
 const repositoryPayload = JSON.parse(
@@ -138,7 +140,17 @@ if (htmlTextChanged && jsonChanged) {
   }
   selectedById = htmlById;
 } else if (htmlTextChanged && !jsonChanged) {
-  selectedById = htmlById;
+  // Apply only the IDs whose HTML text changed in this push.
+  // Keep every untouched value from the approved main JSON snapshot.
+  if (!previousHtmlById) {
+    fail("Missing push-base HTML snapshot; refusing a full-page text replacement.");
+  }
+  selectedById = new Map(jsonById);
+  for (const id of expectedIds) {
+    if (previousHtmlById.get(id) !== htmlById.get(id)) {
+      selectedById.set(id, htmlById.get(id));
+    }
+  }
 } else {
   selectedById = jsonById;
 }
