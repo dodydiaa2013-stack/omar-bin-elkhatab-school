@@ -61,7 +61,7 @@ jobs:
             return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
           };
           const changed = JSON.stringify(normalize(base)) !== JSON.stringify(normalize(latest));
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, "changed=" + String(changed) + "\\n");
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, "changed=" + String(changed) + "\n");
           console.log(changed
             ? "Page text or ID set changed; continue to build the review proposal."
             : "Page text and ID set are unchanged; timestamp-only changes will not create a stale PR.");
