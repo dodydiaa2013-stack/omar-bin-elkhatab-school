@@ -5,7 +5,8 @@ import { JSDOM } from "jsdom";
 const html = fs.readFileSync("index.html", "utf8");
 const payload = JSON.parse(fs.readFileSync("page-changes-production.json", "utf8"));
 const syncScript = fs.readFileSync("scripts/sync-main-page-texts-to-drive.mjs", "utf8");
-const htmlDom = new JSDOM(html);
+const htmlForParsing = html.charCodeAt(0) === 0xFEFF ? html.slice(1) : html;
+const htmlDom = new JSDOM(htmlForParsing);
 const htmlIds = Array.from(htmlDom.window.document.querySelectorAll("[data-page-edit-id]"))
   .map(element => element.getAttribute("data-page-edit-id"));
 const jsonIds = (payload.changes || []).map(item => item && item.id);
