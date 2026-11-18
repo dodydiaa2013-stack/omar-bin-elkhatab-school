@@ -1,16 +1,16 @@
 # GitHub main to Google Drive page-text synchronization
 
-This patch adds the reverse synchronization path without changing the existing website save flow. All editable text changes made in the repository must be committed to page-changes-production.json; index.html remains the source of the ID list and structural fallback.
+This patch adds the reverse synchronization path without changing the existing website save or Refresh flows. When only index.html changes, editable text is extracted from each [data-page-edit-id] element using the exact same element.textContent.trim() rule as the current saveAllPageChanges(). When only page-changes-production.json changes, that JSON is the source. If both change in one push, their ID-to-text maps must match exactly or the workflow refuses to write to Drive. A manual initial sync uses the JSON snapshot.
 
 ## Data contract
 
 - page-changes-production.json on main is the canonical repository source for editable page text.
 - index.html supplies the canonical set of data-page-edit-id values.
-- The workflow runs only after a push to main that changes page-changes-production.json, or by manual dispatch for the initial synchronization.
+- The workflow runs only after a push to main that changes index.html or page-changes-production.json, or by manual dispatch for the initial synchronization.
 - Pull requests and non-main branches never write to Drive.
 - The browser's existing savePageChanges request and the current Drive-to-GitHub workflow remain unchanged.
 
-The repository snapshot must contain the same unique IDs in HTML and JSON. These two ticker IDs are preserved and tested:
+The selected snapshot must contain exactly the unique IDs declared by index.html. The current reviewed snapshot contains 111 IDs. These two ticker IDs are preserved and tested:
 
 - auto-7b3e91c4a62d805f
 - auto-c81f4a2d96b7305e
@@ -316,14 +316,7 @@ The first overwrite creates a timestamped backup beside the existing Drive JSON.
 
 ## 5. Refresh behavior
 
-The website starts in a pending state. Its content remains hidden until the Drive JSON:
-- returns successfully,
-- contains the complete unique ID set,
-- matches all page edit IDs,
-- has a valid updatedAt,
-- and is applied without missing, invalid, or skipped elements.
-
-The unversioned localStorage cache is no longer applied on page load. It may still be refreshed after a confirmed server response, but it cannot replace Drive on Refresh. If Drive is unavailable or invalid, the page shows a retry message instead of displaying stale text.
+This PR must not replace, redesign, or independently alter the existing Refresh mechanism. The current index.html implementation remains byte-for-byte unchanged in the relevant DOMContentLoaded, receivePageChanges, loadSavedPageChanges, and applyCachedPageChanges functions. The sync change is server-side/repository-side only. The tests compare these functions against origin/main so later edits in this PR cannot silently change the established refresh behavior.
 
 ## 6. Intentionally unchanged
 
@@ -331,6 +324,21 @@ The unversioned localStorage cache is no longer applied on page load. It may sti
 - Admin password + authorized Google verification.
 - Existing savePageChanges(p) Apps Script handler.
 - Existing Drive-to-GitHub synchronization branch and workflow.
-- Website layout, section structure, and all 111 page edit IDs.
+- Website layout, section structure, the existing Refresh implementation, and all 111 page edit IDs.
+- The text extraction contract used by the website: element.textContent.trim().
 
 No deployment or merge is performed by this patch. Apps Script deployment and initial workflow dispatch require the repository owner to configure the secret and deploy the updated Apps Script version.
+
+
+## 7. Source selection and change detection
+
+The workflow checks the exact files changed between the push's before-SHA and current SHA (not only the last commit). It then selects the snapshot as follows:
+
+- index.html only: extract the text from every [data-page-edit-id] element in DOM order using textContent.trim().
+- page-changes-production.json only: use the JSON changes array, after validating exact ID coverage.
+- both files: compare every ID and text exactly; any conflict stops before the Apps Script request.
+- workflow_dispatch: use the JSON snapshot for the initial synchronization.
+
+The workflow path filter includes both supported files. It checks out full history only to compute the push diff, and still sends only the exact approved main commit. It never sends a pull-request or feature-branch snapshot to Drive.
+
+The PR deliberately restores index.html to the current main version. It does not modify the existing Refresh functions or the current website save flow. Future direct text edits to index.html on main will be picked up by the workflow after this change is merged.
