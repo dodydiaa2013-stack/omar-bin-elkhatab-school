@@ -1,0 +1,71 @@
+name: Page text integrity checks
+
+on:
+  push:
+    branches:
+      - "fix/page-text-integrity-guarded"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify-page-text-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check synchronization and regression test syntax
+        run: |
+          node --check scripts/sync-page-texts.mjs
+          node --check scripts/test-page-text-integrity.mjs
+
+      - name: Run page text regression tests
+        run: node scripts/test-page-text-integrity.mjs
+
+      - name: Verify exact page ID coverage and timestamp
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const html = fs.readFileSync("index.html", "utf8");
+          const payload = JSON.parse(fs.readFileSync("page-changes-production.json", "utf8"));
+          const htmlIds = [...html.matchAll(/data-page-edit-id\s*=\s*["']([^"']+)["']/g)].map(m => m[1]);
+          const savedIds = (payload.changes || []).map(item => item && item.id);
+          const uniqueHtml = new Set(htmlIds);
+          const uniqueSaved = new Set(savedIds);
+          const meta = html.match(/<meta name="page-edits-updated-at" content="([^"]+)">/);
+          const htmlTime = meta ? Date.parse(meta[1]) : NaN;
+          const savedTime = Date.parse(payload.updatedAt || "");
+
+          if (payload.success !== true || !Array.isArray(payload.changes)) {
+            throw new Error("Invalid page changes JSON structure.");
+          }
+          if (!htmlIds.length || uniqueHtml.size !== htmlIds.length) {
+            throw new Error("HTML contains no edit IDs or duplicate edit IDs.");
+          }
+          if (savedIds.length !== htmlIds.length || uniqueSaved.size !== savedIds.length) {
+            throw new Error("Saved JSON is incomplete or contains duplicate IDs.");
+          }
+          if (htmlIds.some(id => !uniqueSaved.has(id)) || savedIds.some(id => !uniqueHtml.has(id))) {
+            throw new Error("HTML and saved JSON do not have exact bidirectional ID coverage.");
+          }
+          if (Array.isArray(payload.expectedIds) &&
+              (payload.expectedIds.length !== htmlIds.length ||
+               new Set(payload.expectedIds).size !== htmlIds.length ||
+               htmlIds.some(id => !payload.expectedIds.includes(id)))) {
+            throw new Error("expectedIds does not exactly match HTML.");
+          }
+          if (!Number.isFinite(htmlTime) || !Number.isFinite(savedTime) || savedTime < htmlTime) {
+            throw new Error("Missing or stale page-text timestamp.");
+          }
+          console.log("Page text integrity passed:", htmlIds.length, "IDs.");
+          NODE
