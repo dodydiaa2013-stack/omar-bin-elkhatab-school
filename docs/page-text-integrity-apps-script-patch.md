@@ -54,6 +54,18 @@ function validatePageChangesExpectedIds_(changes, expectedIds) {
   return expectedIds.slice();
 }
 
+function assertPageChangesBaseUpdatedAt_(baseUpdatedAt, latestUpdatedAt) {
+  if (!baseUpdatedAt || !latestUpdatedAt ||
+      !Number.isFinite(Date.parse(baseUpdatedAt)) ||
+      !Number.isFinite(Date.parse(latestUpdatedAt)) ||
+      String(baseUpdatedAt) !== String(latestUpdatedAt)) {
+    throw new Error(
+      "هذا التبويب يعمل على نسخة قديمة. حدّث الصفحة ثم أعد التعديل والحفظ."
+    );
+  }
+  return true;
+}
+
 function getCanonicalPageEditIdsFromGitHub_() {
   const url = "https://raw.githubusercontent.com/dodydiaa2013-stack/omar-bin-elkhatab-school/main/index.html";
   const response = UrlFetchApp.fetch(url, {
@@ -265,12 +277,10 @@ function savePageChanges(p) {
       throw new Error("النسخة الحالية في Drive لا تحتوي تاريخًا مرجعيًا صالحًا؛ أوقفنا الحفظ الآمن.");
     }
 
-    if (String(data.baseUpdatedAt) !== String(previous.updatedAt)) {
-      throw new Error(
-        "هذا التبويب يعمل على نسخة قديمة. حدّث الصفحة ثم أعد التعديل والحفظ. " +
-        "التاريخ الحالي في Drive: " + previous.updatedAt
-      );
-    }
+    assertPageChangesBaseUpdatedAt_(
+      data.baseUpdatedAt,
+      previous.updatedAt
+    );
 
     validatePageChangesExpectedIds_(previous.changes, canonicalIds);
 
