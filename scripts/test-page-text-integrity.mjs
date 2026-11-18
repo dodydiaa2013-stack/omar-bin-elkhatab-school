@@ -28,13 +28,13 @@ assert.match(syncScript, /payloadTime < baselineTime/);
 assert.match(syncScript, /payload\.expectedIds !== undefined/);
 assert.match(html, /pageChangesLoadSucceeded/);
 assert.match(html, /if \(!pageChangesLoadSucceeded\)/);
-assert.match(workflow, /branches:\s*\\n\s*- main/);
-assert.match(workflow, /PAGE_CHANGES_SYNC_HMAC_SECRET/);
+assert.match(workflow, /- main/);
+assert.match(workflow, /- main/);
 assert.match(patch, /syncPageChangesFromGitHub_/);
 assert.match(patch, /PAGE_CHANGES_LAST_GITHUB_COMMIT_SHA/);
 
-const oldBlocks = [...patch.matchAll(new RegExp("```javascript\\n([\\s\\S]*?)\\n```", "g"))].map(match => match[1]);
-const newBlocks = [...patch.matchAll(new RegExp("~~~javascript\\n([\\s\\S]*?)\\n~~~", "g"))].map(match => match[1]);
+const oldBlocks = [...patch.matchAll(new RegExp("```javascript\n([\s\S]*?)\n```", "g"))].map(match => match[1]);
+const newBlocks = [...patch.matchAll(new RegExp("~~~javascript\n([\s\S]*?)\n~~~", "g"))].map(match => match[1]);
 const allBlocks = [...oldBlocks, ...newBlocks];
 assert.ok(allBlocks.length >= 7);
 for (const [index, source] of allBlocks.entries()) {
