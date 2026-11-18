@@ -1,0 +1,32 @@
+name: Page text integrity checks
+
+on:
+  push:
+    branches:
+      - "fix/page-text-integrity-unified"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify-page-text-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check scripts/sync-page-texts.mjs
+          node --check scripts/test-page-text-integrity.mjs
+
+      - name: Run page text regression tests
+        run: node scripts/test-page-text-integrity.mjs
