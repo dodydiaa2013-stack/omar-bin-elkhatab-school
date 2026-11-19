@@ -2764,7 +2764,7 @@ function cacheCurrentPageChanges(changesSnapshot) {
 }
 
 function loadSavedPageChanges() {
-    if (pageChangesRequestInFlight || document.visibilityState === "hidden") return;
+    if (pageChangesRequestInFlight) return;
     const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
     const script = document.createElement("script");
     pageChangesRequestInFlight = true;
