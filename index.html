@@ -2468,6 +2468,7 @@ async function saveAllPageChanges() {
         alert('حجم التعديلات كبير. قلّل النصوص وحاول مرة أخرى.');
         return;
     }
+    pendingPageChangesSnapshot = changes.map(item => ({ id: item.id, text: item.text }));
     const nonce = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
     pendingPageChangesNonce = nonce;
     let frame = document.getElementById('pageChangesUploadFrame');
@@ -2524,7 +2525,8 @@ window.addEventListener('message', function(event) {
         result.driveSaved === true &&
         result.githubSynced === true
     ) {
-        cacheCurrentPageChanges();
+        cacheCurrentPageChanges(pendingPageChangesSnapshot);
+        pendingPageChangesSnapshot = null;
 
         const saveSuccessMessage =
             'تم الحفظ بنجاح ✅ تم حفظ التعديلات والتحقق من إرسالها إلى GitHub.';
@@ -2565,6 +2567,7 @@ window.addEventListener('message', function(event) {
     }
 
     // فشل الحفظ أو لم تصل استجابة مؤكدة بالصيغة المتوقعة.
+    pendingPageChangesSnapshot = null;
     const message =
         result.message ||
         result.error ||
@@ -2599,6 +2602,7 @@ function assignPageEditIds() {
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
 let pageChangesRequestInFlight = false;
 let pageChangesRequestTimeout = null;
+let pendingPageChangesSnapshot = null;
 window.__productionPageChangesBackendReady = false;
 window.__productionPageChangesUsingLocalFallback = false;
 let pageChangesResponseReceived = false;
@@ -2731,10 +2735,10 @@ function applyPageChangesList(changes) {
     return stats;
 }
 
-function cacheCurrentPageChanges() {
+function cacheCurrentPageChanges(changesSnapshot) {
     try {
 
-        const changes = Array.from(document.querySelectorAll("[data-page-edit-id]"))
+        const changes = Array.isArray(changesSnapshot) ? changesSnapshot : Array.from(document.querySelectorAll("[data-page-edit-id]"))
             .map(element => ({
                 id: element.getAttribute("data-page-edit-id"),
                 text: element.textContent.trim()
