@@ -2535,14 +2535,21 @@ window.addEventListener('message', function(event) {
     ) {
         cacheCurrentPageChanges();
 
-        if (status) status.textContent = '';
+        const saveSuccessMessage =
+            'تم الحفظ بنجاح ✅ تم حفظ التعديلات والتحقق من إرسالها إلى GitHub.';
+        const publishMessage =
+            'تحديث نسخة الموقع جارٍ، وستظهر التعديلات بعد اكتمال النشر.';
+
+        if (status) {
+            status.textContent = saveSuccessMessage + ' ' + publishMessage;
+            status.classList.remove('hidden');
+            status.setAttribute('role', 'status');
+            status.setAttribute('aria-live', 'polite');
+        }
 
         if (isLiveEditing) toggleLiveEditing();
 
-        alert(
-            'تم حفظ التعديلات بنجاح وإرسالها إلى GitHub. ' +
-            'تحديث نسخة الموقع جارٍ.'
-        );
+        alert(saveSuccessMessage + '\n' + publishMessage);
 
         return;
     }
