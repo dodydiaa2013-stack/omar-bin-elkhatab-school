@@ -2585,115 +2585,24 @@ window.addEventListener('message', function(event) {
 });
 
 function assignPageEditIds() {
-    // نُبقي المعرّفات اليدوية الحالية كما هي، وننشئ معرّفات ثابتة
-    // لباقي عناصر النص الثابتة القابلة للتحرير.
-    const excludedRoots = [
-        '#devControlBar',
-        '#loginBtn',
-        '#adminBadge',
-        '#adminModal',
-        '#scheduleModal',
-        '#passwordRecoveryPanel',
-        '#tabletTeacherUpload',
-        '#tabletImageUploadControls',
-        '#tabletImageManagement',
-        '#tabletGallery',
-        '#googleSignInStatus',
-        '#scheduleOperationStatus',
-        '#scheduleTeacherControl',
-        '#scheduleBulkManagement',
-        '#scheduleBulkSelectionStatus',
-        '#schedulesGrid',
-        '#alertsTeacherControl',
-        '#photoAlbumsStatus',
-        '#photoAlbumsManagement',
-        '#albumsSelectionStatus',
-        '#photoAlbumsGrid',
-        '#photoAlbumViewer',
-        '#photoAlbumImagesGrid',
-        '#photoAlbumEditor',
-        '#photoAlbumUploadProgress',
-        '#photoAlbumUploadStatus',
-        '#photoAlbumUploadProgressText',
-        '#photoAlbumUploadResults',
-        '#albumImagesManagement',
-        '#albumImagesSelectionStatus',
-        '#scheduleClassFiles',
-        '#adminErrorMsg',
-        '#recoveryMessage',
-        '#schoolImageViewer',
-        '[data-page-no-auto-edit="true"]'
-    ].join(',');
-
-    function makeStableId(element, textNodeIndex) {
-        const path = [];
-        let current = element;
-        while (current && current !== document.body) {
-            let position = 1;
-            let previous = current.previousElementSibling;
-            while (previous) {
-                if (previous.tagName === current.tagName) position++;
-                previous = previous.previousElementSibling;
-            }
-            path.unshift(current.tagName.toLowerCase() + position);
-            current = current.parentElement;
-        }
-
-        const value = path.join('/') +
-            (textNodeIndex === undefined ? '' : '/text-' + textNodeIndex);
-        let hashA = 2166136261;
-        let hashB = 2246822519;
-        for (let i = 0; i < value.length; i++) {
-            const code = value.charCodeAt(i);
-            hashA = Math.imul(hashA ^ code, 16777619);
-            hashB = Math.imul(hashB ^ code, 3266489917);
-        }
-        const hex = (number) => (number >>> 0).toString(16).padStart(8, '0');
-        return 'auto-' + hex(hashA) + hex(hashB);
-    }
-
-    const usedIds = new Set(
-        Array.from(document.querySelectorAll('[data-page-edit-id]'))
-            .map(element => element.getAttribute('data-page-edit-id'))
-            .filter(Boolean)
-    );
-
-    const candidates = Array.from(document.body.querySelectorAll('*'));
-    candidates.forEach(element => {
-        if (element.hasAttribute('data-page-edit-id')) return;
-        if (element.parentElement &&
-            element.parentElement.closest('[data-page-edit-id]')) return;
-        if (element.closest(excludedRoots)) return;
-
-        const tag = element.tagName;
-        if ([
-            'SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'PATH', 'CANVAS',
-            'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'IFRAME'
-        ].includes(tag)) return;
-
-        if (element.children.length === 0) {
-            if (!element.textContent || !element.textContent.trim()) return;
-
-            const id = makeStableId(element);
-            if (usedIds.has(id)) return;
-
-            element.setAttribute('data-page-edit-id', id);
-            usedIds.add(id);
-            return;
-        }
-
-        Array.from(element.childNodes).forEach((node, index) => {
-            if (node.nodeType !== Node.TEXT_NODE || !node.nodeValue.trim()) return;
-            const id = makeStableId(element, index);
-            if (usedIds.has(id)) return;
-
-            const span = document.createElement('span');
-            span.setAttribute('data-page-edit-id', id);
-            span.textContent = node.nodeValue;
-            element.replaceChild(span, node);
-            usedIds.add(id);
-        });
+    // المعرّفات الحالية مثبتة صراحةً في HTML؛ لا نولّدها من ترتيب DOM.
+    const elements = Array.from(document.querySelectorAll('[data-page-edit-id]'));
+    const seen = new Set();
+    const duplicates = new Set();
+    let invalid = false;
+    elements.forEach(element => {
+        const id = (element.getAttribute('data-page-edit-id') || '').trim();
+        if (!id) { invalid = true; return; }
+        if (seen.has(id)) duplicates.add(id);
+        seen.add(id);
     });
+    if (invalid || duplicates.size) {
+        console.error('[PageChanges] معرّفات ناقصة أو مكررة:', { invalid, duplicates: Array.from(duplicates) });
+        window.__pageEditIdsReady = false;
+        return false;
+    }
+    window.__pageEditIdsReady = true;
+    return true;
 }
 
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
@@ -2704,75 +2613,88 @@ function normalizeFixedPageChanges(changes) {
     return Array.isArray(changes) ? changes : [];
 }
 
-function applyPageChangesList(changes) {
-    const stats = {
-        received: Array.isArray(changes) ? changes.length : 0,
-        matched: 0,
-        applied: 0,
-        unchanged: 0,
-        skippedEditing: 0,
-        missing: 0,
-        invalid: 0,
-        missingIds: []
+function updateTextPreservingMarkup(element, savedText) {
+    if (!element.children.length) { element.textContent = savedText; return true; }
+    const protectedChildren = Array.from(element.children).filter(child => (child.textContent || '').length > 0);
+    const nodes = Array.from(element.childNodes);
+    let cursor = 0;
+    for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        if (node.nodeType !== Node.ELEMENT_NODE || (node.textContent || '').length) continue;
+        let before = -1, after = nodes.length;
+        for (let j = i - 1; j >= 0; j--) if (nodes[j].nodeType === Node.ELEMENT_NODE && (nodes[j].textContent || '').length) { before = j; break; }
+        for (let j = i + 1; j < nodes.length; j++) if (nodes[j].nodeType === Node.ELEMENT_NODE && (nodes[j].textContent || '').length) { after = j; break; }
+        const hasBefore = nodes.slice(before + 1, i).some(n => n.nodeType === Node.TEXT_NODE && n.nodeValue);
+        const hasAfter = nodes.slice(i + 1, after).some(n => n.nodeType === Node.TEXT_NODE && n.nodeValue);
+        if (hasBefore && hasAfter) return false;
+    }
+    const segments = [];
+    for (const child of protectedChildren) {
+        const childText = child.textContent || '';
+        const at = savedText.indexOf(childText, cursor);
+        if (at < 0) return false;
+        segments.push(savedText.slice(cursor, at));
+        cursor = at + childText.length;
+    }
+    segments.push(savedText.slice(cursor));
+    let segmentIndex = 0, pending = [], used = false;
+    const flush = beforeNode => {
+        const value = used ? '' : (segments[segmentIndex] || '');
+        if (pending.length) {
+            pending[0].nodeValue = value;
+            pending.slice(1).forEach(n => { n.nodeValue = ''; });
+            used = true;
+        } else if (value && beforeNode) {
+            element.insertBefore(document.createTextNode(value), beforeNode);
+            used = true;
+        }
+        pending = [];
     };
+    for (const node of Array.from(element.childNodes)) {
+        if (node.nodeType === Node.TEXT_NODE) { pending.push(node); continue; }
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            if ((node.textContent || '').length) { flush(node); segmentIndex++; used = false; }
+            else if (pending.length) flush(node);
+        }
+    }
+    flush(null);
+    return true;
+}
 
+function applyPageChangesList(changes) {
+    const stats = { received: Array.isArray(changes) ? changes.length : 0, matched: 0, applied: 0, unchanged: 0, skippedEditing: 0, missing: 0, invalid: 0, missingIds: [] };
     if (!Array.isArray(changes)) return stats;
-
+    const depths = new Map();
     changes.forEach(item => {
-        if (!item || typeof item.id !== "string" || typeof item.text !== "string") {
-            stats.invalid++;
-            return;
-        }
-
-        const element = document.querySelector(
-            '[data-page-edit-id="' + CSS.escape(item.id) + '"]'
-        );
-
-        if (!element) {
-            stats.missing++;
-            if (stats.missingIds.length < 20) {
-                stats.missingIds.push(item.id);
-            }
-            return;
-        }
-
+        if (!item || typeof item.id !== 'string') return;
+        const found = document.querySelectorAll('[data-page-edit-id="' + CSS.escape(item.id) + '"]');
+        if (found.length !== 1) { depths.set(item.id, -1); return; }
+        let depth = 0; for (let node = found[0]; node; node = node.parentElement) depth++;
+        depths.set(item.id, depth);
+    });
+    const ordered = changes.slice().sort((a,b) => (depths.get(b && b.id) || -1) - (depths.get(a && a.id) || -1));
+    ordered.forEach(item => {
+        if (!item || typeof item.id !== 'string' || typeof item.text !== 'string' || !item.id.trim() || item.text.length > 10000) { stats.invalid++; return; }
+        const found = document.querySelectorAll('[data-page-edit-id="' + CSS.escape(item.id) + '"]');
+        if (found.length > 1) { stats.invalid++; return; }
+        const el = found[0];
+        if (!el) { stats.missing++; if (stats.missingIds.length < 20) stats.missingIds.push(item.id); return; }
         stats.matched++;
-
-        // لا تطبّق ردود الخادم فوق نص يحرره المسؤول حاليًا.
-        if (isLiveEditing && element.isContentEditable) {
-            stats.skippedEditing++;
-            return;
-        }
-
-        const savedText = item.id === "footer-leadership"
-            ? item.text.replace("مديرية التربية والتعليم بمحافظة القاهرة", "وزارة التربية والتعليم بمحافظة القاهرة")
-            : item.text;
-
-        if (element.textContent.trim() === savedText.trim()) {
-            stats.unchanged++;
-            return;
-        }
-
-        // حافظ على تنسيق اسم مدير المدرسة داخل التذييل.
-        if (item.id === "footer-manager") {
-            const managerName = element.querySelector("span");
-            const separator = savedText.indexOf(":");
-            if (managerName && separator !== -1) {
-                const prefix = savedText.slice(0, separator + 1) + " ";
-                const firstTextNode = Array.from(element.childNodes)
-                    .find(node => node.nodeType === Node.TEXT_NODE);
-                if (firstTextNode) firstTextNode.nodeValue = prefix;
-                else element.insertBefore(document.createTextNode(prefix), managerName);
-                managerName.textContent = savedText.slice(separator + 1).trim();
-                stats.applied++;
-                return;
+        if (isLiveEditing && el.isContentEditable) { stats.skippedEditing++; return; }
+        const value = item.id === 'footer-leadership' ? item.text.replace('مديرية التربية والتعليم بمحافظة القاهرة', 'وزارة التربية والتعليم بمحافظة القاهرة') : item.text;
+        if (el.textContent.trim() === value.trim()) { stats.unchanged++; return; }
+        if (item.id === 'footer-manager') {
+            const name = el.querySelector('span'), sep = value.indexOf(':');
+            if (name && sep !== -1) {
+                const prefix = value.slice(0, sep + 1) + ' ';
+                const first = Array.from(el.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+                if (first) first.nodeValue = prefix; else el.insertBefore(document.createTextNode(prefix), name);
+                name.textContent = value.slice(sep + 1).trim(); stats.applied++; return;
             }
         }
-
-        element.textContent = savedText;
+        if (!updateTextPreservingMarkup(el, value)) { stats.invalid++; return; }
         stats.applied++;
     });
-
     return stats;
 }
 
