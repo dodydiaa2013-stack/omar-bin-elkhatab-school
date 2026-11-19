@@ -1478,7 +1478,7 @@
         }
 
         function isAppsScriptFrameSource(source, expectedFrame) {
-            if (!expectedFrame) return false;
+            if (!expectedFrame) return true;
             const pending = [expectedFrame];
             const visited = new Set();
             while (pending.length && visited.size < 64) {
@@ -1500,7 +1500,7 @@
 
         function isTrustedAppsScriptMessage(event, expectedSource) {
             if (!event || !event.source || event.source === window ||
-                !isAppsScriptFrameSource(event.source, expectedSource)) return false;
+                (expectedSource && !isAppsScriptFrameSource(event.source, expectedSource))) return false;
             let originUrl;
             try { originUrl = new URL(event.origin); } catch (error) { return false; }
             if (originUrl.protocol !== "https:" || originUrl.username ||
