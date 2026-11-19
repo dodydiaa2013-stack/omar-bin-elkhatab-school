@@ -2644,7 +2644,7 @@ function applyCachedPageChangesFallback(reason) {
         const cached = JSON.parse(raw);
         if (!cached || !validatePageChangesForClient(cached.changes) || !cached.changes.length) return false;
         const stats = applyPageChangesList(cached.changes);
-        if (stats.matched === 0 || stats.missing > 0 || stats.invalid > 0) {
+        if (stats.matched === 0 || stats.missing > 0 || stats.invalid > 0 || stats.skippedEditing > 0) {
             console.warn('[PageChanges] النسخة المحلية لا تطابق الصفحة بالكامل؛ لم يتم اعتمادها.', stats);
             return false;
         }
@@ -2817,9 +2817,9 @@ function receivePageChanges(data) {
         unchanged: stats.unchanged, skippedEditing: stats.skippedEditing,
         missing: stats.missing, invalid: stats.invalid, missingIds: stats.missingIds
     });
-    if (stats.missing > 0 || stats.invalid > 0) {
+    if (stats.missing > 0 || stats.invalid > 0 || stats.skippedEditing > 0) {
         window.__productionPageChangesBackendReady = false;
-        console.warn('[PageChanges] لم تُطبّق كل التعديلات؛ لن نعتمد الاستجابة أو نحدّث الكاش.');
+        console.warn('[PageChanges] لم تُطبّق كل التعديلات أو توجد عناصر قيد التحرير؛ لن نعتمد الاستجابة أو نحدّث الكاش.');
         applyCachedPageChangesFallback('incomplete-server-apply');
         return false;
     }
