@@ -1537,10 +1537,12 @@ window.addEventListener('DOMContentLoaded', () => {
         window.__earlyPageChangesReceived = false;
         receivePageChanges(earlyData);
     } else if (window.__earlyPageChangesFailed) {
-        // خطة احتياطية عند فشل الطلب الذي بدأ من head.
         loadSavedPageChanges();
     }
-
+    if (window.__pageChangesFallbackPending) {
+        applyCachedPageChangesFallback(window.__pageChangesFallbackPending);
+        window.__pageChangesFallbackPending = '';
+    }
     document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
 });
@@ -2595,12 +2597,54 @@ function assignPageEditIds() {
 }
 
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
+let pageChangesRequestInFlight = false;
+let pageChangesRequestTimeout = null;
+window.__productionPageChangesBackendReady = false;
+window.__productionPageChangesUsingLocalFallback = false;
 let pageChangesResponseReceived = false;
 
 // اقبل التعديلات المحفوظة كما هي، بما فيها عناوين الاستعلامات ووصف قسم التابلت.
 function normalizeFixedPageChanges(changes) {
     return Array.isArray(changes) ? changes : [];
 }
+
+function validatePageChangesForClient(changes) {
+    if (!Array.isArray(changes) || changes.length > 500) return false;
+    const seen = new Set();
+    return changes.every(item => {
+        if (!item || typeof item.id !== 'string' || typeof item.text !== 'string' ||
+            !item.id.trim() || item.id.length > 200 || item.text.length > 10000 || seen.has(item.id)) return false;
+        seen.add(item.id); return true;
+    });
+}
+
+// الكاش نسخة عرض احتياطية فقط؛ لا يسمح بالحفظ منها قبل تأكيد الخادم.
+function applyCachedPageChangesFallback(reason) {
+    if (!window.__pageChangesDomReady) {
+        window.__pageChangesFallbackPending = reason || 'server-unavailable';
+        return false;
+    }
+    if (window.__productionPageChangesUsingLocalFallback) return true;
+    try {
+        const raw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
+        if (!raw) return false;
+        const cached = JSON.parse(raw);
+        if (!cached || !validatePageChangesForClient(cached.changes) || !cached.changes.length) return false;
+        const stats = applyPageChangesList(cached.changes);
+        if (stats.matched === 0 || stats.missing > 0 || stats.invalid > 0) {
+            console.warn('[PageChanges] النسخة المحلية لا تطابق الصفحة بالكامل؛ لم يتم اعتمادها.', stats);
+            return false;
+        }
+        window.__productionPageChangesUsingLocalFallback = true;
+        window.__productionPageChangesBackendReady = false;
+        console.warn('[PageChanges] عُرضت آخر نسخة محلية مؤقتًا؛ الحفظ معطل حتى تأكيد الخادم.', reason || '');
+        return true;
+    } catch (error) {
+        console.warn('[PageChanges] تعذر قراءة النسخة المحلية البديلة.', error);
+        return false;
+    }
+}
+window.applyCachedPageChangesFallback = applyCachedPageChangesFallback;
 
 function updateTextPreservingMarkup(element, savedText) {
     if (!element.children.length) { element.textContent = savedText; return true; }
@@ -2707,81 +2751,80 @@ function cacheCurrentPageChanges() {
 }
 
 function loadSavedPageChanges() {
-    const scriptURL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+    if (pageChangesRequestInFlight || document.visibilityState === "hidden") return;
+    const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
     const script = document.createElement("script");
-
+    pageChangesRequestInFlight = true;
     pageChangesResponseReceived = false;
-    script.src =
-        scriptURL +
-        "?action=pageChanges&callback=receivePageChanges&_=" +
-        Date.now();
-
+    let settled = false;
+    const finish = () => {
+        if (settled) return;
+        settled = true;
+        pageChangesRequestInFlight = false;
+        if (pageChangesRequestTimeout) { clearTimeout(pageChangesRequestTimeout); pageChangesRequestTimeout = null; }
+        script.remove();
+    };
+    script.src = endpoint + "?action=pageChanges&callback=receivePageChanges&_=" + Date.now();
     script.onerror = () => {
-        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
-        document.documentElement.removeAttribute("data-page-edits-pending");
-        script.remove();
+        console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستُستخدم النسخة المحلية للعرض إن كانت صالحة.');
+        applyCachedPageChangesFallback('script-error');
+        document.documentElement.removeAttribute('data-page-edits-pending');
+        finish();
     };
-
     script.onload = () => {
-        // تحميل ملف JavaScript لا يعني بالضرورة أن callback أعاد بيانات صالحة.
         if (!pageChangesResponseReceived) {
-            console.error("وصل رد من خدمة التعديلات دون استدعاء receivePageChanges؛ لم يتم تأكيد تحميل التعديلات.");
+            console.error('[PageChanges] تم تحميل الاستجابة دون تأكيد callback؛ سنحاول النسخة المحلية.');
+            applyCachedPageChangesFallback('callback-missing');
         }
-        document.documentElement.removeAttribute("data-page-edits-pending");
-        script.remove();
+        document.documentElement.removeAttribute('data-page-edits-pending');
+        finish();
     };
-
+    pageChangesRequestTimeout = setTimeout(() => {
+        console.warn('[PageChanges] انتهت مهلة تحميل تعديلات النصوص.');
+        applyCachedPageChangesFallback('request-timeout');
+        document.documentElement.removeAttribute('data-page-edits-pending');
+        finish();
+    }, 15000);
     document.body.appendChild(script);
 }
 
 function receivePageChanges(data) {
     pageChangesResponseReceived = true;
-
-    // لا نحوّل خطأ قراءة الخادم أو الاستجابة غير السليمة إلى قائمة تعديلات فارغة.
-    if (!data || data.success !== true || !Array.isArray(data.changes)) {
-        const message = data && (data.message || data.error)
-            ? (data.message || data.error)
-            : "استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.";
-        console.error("تعذر استرجاع تعديلات نصوص الموقع:", message);
+    if (!data || data.success !== true || !validatePageChangesForClient(data.changes)) {
+        window.__productionPageChangesBackendReady = false;
+        const message = data && (data.message || data.error) ? (data.message || data.error) : 'استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.';
+        console.error('[PageChanges] تعذر استرجاع تعديلات نصوص الموقع:', message);
+        applyCachedPageChangesFallback('invalid-server-response');
         return false;
     }
-
-    const normalizedChanges = normalizeFixedPageChanges(data.changes);
-    const applyStats = applyPageChangesList(normalizedChanges);
-
-    console.info("[PageChanges] نتيجة استرجاع التعديلات:", {
-        serverReceived: data.changes.length,
-        normalized: normalizedChanges.length,
-        matched: applyStats.matched,
-        applied: applyStats.applied,
-        unchanged: applyStats.unchanged,
-        skippedEditing: applyStats.skippedEditing,
-        missing: applyStats.missing,
-        invalid: applyStats.invalid,
-        missingIds: applyStats.missingIds
+    const normalized = normalizeFixedPageChanges(data.changes);
+    const stats = applyPageChangesList(normalized);
+    console.info('[PageChanges] نتيجة استرجاع التعديلات:', {
+        serverReceived: data.changes.length, matched: stats.matched, applied: stats.applied,
+        unchanged: stats.unchanged, skippedEditing: stats.skippedEditing,
+        missing: stats.missing, invalid: stats.invalid, missingIds: stats.missingIds
     });
-
-    if (applyStats.missing > 0 || applyStats.invalid > 0) {
-        console.warn("[PageChanges] توجد تعديلات لم تُطبّق على عناصر الصفحة. راجع المعرّفات المفقودة أو البيانات غير الصحيحة.");
+    if (stats.missing > 0 || stats.invalid > 0) {
+        window.__productionPageChangesBackendReady = false;
+        console.warn('[PageChanges] لم تُطبّق كل التعديلات؛ لن نعتمد الاستجابة أو نحدّث الكاش.');
+        applyCachedPageChangesFallback('incomplete-server-apply');
+        return false;
     }
-
+    window.__productionPageChangesBackendReady = true;
+    window.__productionPageChangesUsingLocalFallback = false;
+    window.__pageChangesFallbackPending = '';
     try {
-        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
-            changes: normalizedChanges
-        }));
+        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({ changes: normalized }));
     } catch (error) {
-        console.warn("تعذر حفظ نسخة محلية من تعديلات النصوص.", error);
+        console.warn('[PageChanges] تعذر حفظ نسخة محلية من استجابة الخادم.', error);
     }
-
-    const messages = document.querySelectorAll('#tickerText .ticker-message');
-    messages.forEach((message, index) =>
+    document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
-
     return true;
 }
 
-        function exportUpdatedHTML() {
+function exportUpdatedHTML() {
     if (!isDeveloperLoggedIn) {
         alert('سجّل الدخول بحساب Google المصرح به أولاً.');
         return;
