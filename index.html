@@ -267,7 +267,15 @@
             "?action=pageChanges&callback=receivePageChangesEarly&_=" +
             Date.now();
 
+        const earlyRequestTimeout = setTimeout(() => {
+            if (window.__earlyPageChangesReceived) return;
+            window.__earlyPageChangesFailed = true;
+            request.remove();
+            if (window.__pageChangesDomReady && typeof window.loadSavedPageChanges === "function") window.loadSavedPageChanges();
+        }, 15000);
+
         request.onload = () => {
+            clearTimeout(earlyRequestTimeout);
             // قد يكتمل تحميل السكربت دون استدعاء callback؛ لا تترك الصفحة دون خطة بديلة.
             if (!window.__earlyPageChangesReceived) {
                 window.__earlyPageChangesFailed = true;
@@ -279,6 +287,7 @@
         };
 
         request.onerror = () => {
+            clearTimeout(earlyRequestTimeout);
             window.__earlyPageChangesFailed = true;
             console.warn("تعذر تحميل تعديلات النصوص مبكرًا؛ سيتم استخدام مسار التحميل الاحتياطي.");
             if (window.__pageChangesDomReady &&
@@ -1537,10 +1546,12 @@ window.addEventListener('DOMContentLoaded', () => {
         window.__earlyPageChangesReceived = false;
         receivePageChanges(earlyData);
     } else if (window.__earlyPageChangesFailed) {
-        // خطة احتياطية عند فشل الطلب الذي بدأ من head.
         loadSavedPageChanges();
     }
-
+    if (window.__pageChangesFallbackPending) {
+        applyCachedPageChangesFallback(window.__pageChangesFallbackPending);
+        window.__pageChangesFallbackPending = '';
+    }
     document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
 });
@@ -2391,37 +2402,28 @@ window.addEventListener('DOMContentLoaded', () => {
 let pageChangesTimeout = null;
 
 function toggleLiveEditing() {
-    assignPageEditIds();
-    if (!hasDualAdminAuthorization()) {
-        alert("يجب تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به لاستخدام أدوات التعديل.");
-        return;
-    }
+    if (assignPageEditIds() !== true) { alert("تعذر تفعيل التحرير: توجد معرّفات نصوص ناقصة أو مكررة."); return; }
+    if (!hasDualAdminAuthorization()) { alert("يجب تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به لاستخدام أدوات التعديل."); return; }
     isLiveEditing = !isLiveEditing;
     document.querySelectorAll('[data-page-edit-id]').forEach(el => {
         if (isLiveEditing) {
-            // صرّح بإمكانية إدخال النص ولوحة المفاتيح على الهواتف، بما فيها Android.
-            el.setAttribute('contenteditable', 'true');
-            el.setAttribute('inputmode', 'text');
-            el.setAttribute('tabindex', '0');
-            el.setAttribute('autocapitalize', 'off');
-            el.classList.add('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+            el.setAttribute('contenteditable','true'); el.setAttribute('inputmode','text'); el.setAttribute('tabindex','0'); el.setAttribute('autocapitalize','off');
+            el.querySelectorAll('*').forEach(child => {
+                if (child.hasAttribute('data-page-edit-id')) return;
+                const managerName = el.getAttribute('data-page-edit-id') === 'footer-manager' && child.tagName === 'SPAN' && child.parentElement === el;
+                child.setAttribute('contenteditable', managerName ? 'true' : 'false');
+            });
+            el.classList.add('outline-dashed','outline-2','outline-navy','p-0.5');
         } else {
-            el.removeAttribute('contenteditable');
-            el.removeAttribute('inputmode');
-            el.removeAttribute('tabindex');
-            el.removeAttribute('autocapitalize');
-            el.classList.remove('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+            el.removeAttribute('contenteditable'); el.removeAttribute('inputmode'); el.removeAttribute('tabindex'); el.removeAttribute('autocapitalize');
+            el.querySelectorAll('[contenteditable]').forEach(child => child.removeAttribute('contenteditable'));
+            el.classList.remove('outline-dashed','outline-2','outline-navy','p-0.5');
         }
     });
     document.getElementById('tickerText').classList.toggle('ticker-editing', isLiveEditing);
     const btn = document.getElementById('editToggleBtn');
-    if (isLiveEditing) {
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> إنهاء التعديل';
-        btn.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
-    } else {
-        btn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي';
-        btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
-    }
+    if (isLiveEditing) { btn.innerHTML = '<i class="fa-solid fa-check"></i> إنهاء التعديل'; btn.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1"; }
+    else { btn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي'; btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1"; }
 }
 
 async function saveAllPageChanges() {
@@ -2433,7 +2435,8 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-    assignPageEditIds();
+    if (window.__productionPageChangesUsingLocalFallback || window.__productionPageChangesBackendReady !== true) { alert('الحفظ متوقف مؤقتًا: لم يتم تأكيد تحميل النصوص من الخادم. حدّث الصفحة وحاول بعد عودة الاتصال.'); return; }
+    if (assignPageEditIds() !== true) { alert('تعذر الحفظ: توجد معرّفات نصوص ناقصة أو مكررة.'); return; }
     const editableElements = Array.from(
         document.querySelectorAll('[data-page-edit-id]')
     );
@@ -2459,14 +2462,12 @@ async function saveAllPageChanges() {
         }
     });
 
-    const changes = Array.from(changesById.values());
-
     if (duplicateIds.size) {
-        console.warn(
-            'تم اكتشاف معرّفات نصوص مكررة واستبعاد تكرارها قبل الحفظ:',
-            Array.from(duplicateIds)
-        );
+        alert('تعذر الحفظ: توجد معرّفات نصوص مكررة. لم يتم استبعاد أي نص تلقائيًا.');
+        console.error('[PageChanges] duplicate IDs blocked:', Array.from(duplicateIds));
+        return;
     }
+    const changes = Array.from(changesById.values());
     if (!changes.length) {
         alert('لا توجد نصوص قابلة للحفظ.');
         return;
@@ -2476,6 +2477,7 @@ async function saveAllPageChanges() {
         alert('حجم التعديلات كبير. قلّل النصوص وحاول مرة أخرى.');
         return;
     }
+    pendingPageChangesSnapshot = changes.map(item => ({ id: item.id, text: item.text }));
     const nonce = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
     pendingPageChangesNonce = nonce;
     let frame = document.getElementById('pageChangesUploadFrame');
@@ -2500,9 +2502,8 @@ async function saveAllPageChanges() {
     if(status) status.textContent='تم إرسال طلب الحفظ، في انتظار تأكيد الخادم...';
     pageChangesTimeout=setTimeout(() => {
         if(pendingPageChangesNonce===nonce) {
-            pendingPageChangesNonce=null;
-            if(status) status.textContent='لم يصل تأكيد الحفظ. تحقق من الصفحة قبل إعادة المحاولة.';
-            alert('لم يصل تأكيد من الخادم؛ لم يتم تأكيد حفظ التعديلات.');
+            if(status) status.textContent='تأخر تأكيد الخادم. لا تعاود الحفظ الآن؛ قد يكون الحفظ اكتمل بالفعل، وسيُقبل الرد المتأخر إذا وصل.';
+            console.warn('[PageChanges] Save response timed out; nonce retained for a late server response.');
         }
     },20000);
 }
@@ -2533,23 +2534,19 @@ window.addEventListener('message', function(event) {
         result.driveSaved === true &&
         result.githubSynced === true
     ) {
-        cacheCurrentPageChanges();
+        cacheCurrentPageChanges(pendingPageChangesSnapshot);
+        pendingPageChangesSnapshot = null;
 
-        const saveSuccessMessage =
-            'تم الحفظ بنجاح ✅ تم حفظ التعديلات والتحقق من إرسالها إلى GitHub.';
-        const publishMessage =
-            'تحديث نسخة الموقع جارٍ، وستظهر التعديلات بعد اكتمال النشر.';
+        const saveSuccessMessage = 'تم الحفظ بنجاح.';
 
         if (status) {
-            status.textContent = saveSuccessMessage + ' ' + publishMessage;
+            status.textContent = saveSuccessMessage;
             status.classList.remove('hidden');
             status.setAttribute('role', 'status');
             status.setAttribute('aria-live', 'polite');
         }
 
         if (isLiveEditing) toggleLiveEditing();
-
-        alert(saveSuccessMessage + '\n' + publishMessage);
 
         return;
     }
@@ -2574,6 +2571,7 @@ window.addEventListener('message', function(event) {
     }
 
     // فشل الحفظ أو لم تصل استجابة مؤكدة بالصيغة المتوقعة.
+    pendingPageChangesSnapshot = null;
     const message =
         result.message ||
         result.error ||
@@ -2585,118 +2583,32 @@ window.addEventListener('message', function(event) {
 });
 
 function assignPageEditIds() {
-    // نُبقي المعرّفات اليدوية الحالية كما هي، وننشئ معرّفات ثابتة
-    // لباقي عناصر النص الثابتة القابلة للتحرير.
-    const excludedRoots = [
-        '#devControlBar',
-        '#loginBtn',
-        '#adminBadge',
-        '#adminModal',
-        '#scheduleModal',
-        '#passwordRecoveryPanel',
-        '#tabletTeacherUpload',
-        '#tabletImageUploadControls',
-        '#tabletImageManagement',
-        '#tabletGallery',
-        '#googleSignInStatus',
-        '#scheduleOperationStatus',
-        '#scheduleTeacherControl',
-        '#scheduleBulkManagement',
-        '#scheduleBulkSelectionStatus',
-        '#schedulesGrid',
-        '#alertsTeacherControl',
-        '#photoAlbumsStatus',
-        '#photoAlbumsManagement',
-        '#albumsSelectionStatus',
-        '#photoAlbumsGrid',
-        '#photoAlbumViewer',
-        '#photoAlbumImagesGrid',
-        '#photoAlbumEditor',
-        '#photoAlbumUploadProgress',
-        '#photoAlbumUploadStatus',
-        '#photoAlbumUploadProgressText',
-        '#photoAlbumUploadResults',
-        '#albumImagesManagement',
-        '#albumImagesSelectionStatus',
-        '#scheduleClassFiles',
-        '#adminErrorMsg',
-        '#recoveryMessage',
-        '#schoolImageViewer',
-        '[data-page-no-auto-edit="true"]'
-    ].join(',');
-
-    function makeStableId(element, textNodeIndex) {
-        const path = [];
-        let current = element;
-        while (current && current !== document.body) {
-            let position = 1;
-            let previous = current.previousElementSibling;
-            while (previous) {
-                if (previous.tagName === current.tagName) position++;
-                previous = previous.previousElementSibling;
-            }
-            path.unshift(current.tagName.toLowerCase() + position);
-            current = current.parentElement;
-        }
-
-        const value = path.join('/') +
-            (textNodeIndex === undefined ? '' : '/text-' + textNodeIndex);
-        let hashA = 2166136261;
-        let hashB = 2246822519;
-        for (let i = 0; i < value.length; i++) {
-            const code = value.charCodeAt(i);
-            hashA = Math.imul(hashA ^ code, 16777619);
-            hashB = Math.imul(hashB ^ code, 3266489917);
-        }
-        const hex = (number) => (number >>> 0).toString(16).padStart(8, '0');
-        return 'auto-' + hex(hashA) + hex(hashB);
-    }
-
-    const usedIds = new Set(
-        Array.from(document.querySelectorAll('[data-page-edit-id]'))
-            .map(element => element.getAttribute('data-page-edit-id'))
-            .filter(Boolean)
-    );
-
-    const candidates = Array.from(document.body.querySelectorAll('*'));
-    candidates.forEach(element => {
-        if (element.hasAttribute('data-page-edit-id')) return;
-        if (element.parentElement &&
-            element.parentElement.closest('[data-page-edit-id]')) return;
-        if (element.closest(excludedRoots)) return;
-
-        const tag = element.tagName;
-        if ([
-            'SCRIPT', 'STYLE', 'NOSCRIPT', 'SVG', 'PATH', 'CANVAS',
-            'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'IFRAME'
-        ].includes(tag)) return;
-
-        if (element.children.length === 0) {
-            if (!element.textContent || !element.textContent.trim()) return;
-
-            const id = makeStableId(element);
-            if (usedIds.has(id)) return;
-
-            element.setAttribute('data-page-edit-id', id);
-            usedIds.add(id);
-            return;
-        }
-
-        Array.from(element.childNodes).forEach((node, index) => {
-            if (node.nodeType !== Node.TEXT_NODE || !node.nodeValue.trim()) return;
-            const id = makeStableId(element, index);
-            if (usedIds.has(id)) return;
-
-            const span = document.createElement('span');
-            span.setAttribute('data-page-edit-id', id);
-            span.textContent = node.nodeValue;
-            element.replaceChild(span, node);
-            usedIds.add(id);
-        });
+    // المعرّفات الحالية مثبتة صراحةً في HTML؛ لا نولّدها من ترتيب DOM.
+    const elements = Array.from(document.querySelectorAll('[data-page-edit-id]'));
+    const seen = new Set();
+    const duplicates = new Set();
+    let invalid = false;
+    elements.forEach(element => {
+        const id = (element.getAttribute('data-page-edit-id') || '').trim();
+        if (!id) { invalid = true; return; }
+        if (seen.has(id)) duplicates.add(id);
+        seen.add(id);
     });
+    if (invalid || duplicates.size) {
+        console.error('[PageChanges] معرّفات ناقصة أو مكررة:', { invalid, duplicates: Array.from(duplicates) });
+        window.__pageEditIdsReady = false;
+        return false;
+    }
+    window.__pageEditIdsReady = true;
+    return true;
 }
 
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
+let pageChangesRequestInFlight = false;
+let pageChangesRequestTimeout = null;
+let pendingPageChangesSnapshot = null;
+window.__productionPageChangesBackendReady = false;
+window.__productionPageChangesUsingLocalFallback = false;
 let pageChangesResponseReceived = false;
 
 // اقبل التعديلات المحفوظة كما هي، بما فيها عناوين الاستعلامات ووصف قسم التابلت.
@@ -2704,82 +2616,139 @@ function normalizeFixedPageChanges(changes) {
     return Array.isArray(changes) ? changes : [];
 }
 
-function applyPageChangesList(changes) {
-    const stats = {
-        received: Array.isArray(changes) ? changes.length : 0,
-        matched: 0,
-        applied: 0,
-        unchanged: 0,
-        skippedEditing: 0,
-        missing: 0,
-        invalid: 0,
-        missingIds: []
+function validatePageChangesForClient(changes) {
+    if (!Array.isArray(changes) || window.__pageEditIdsReady !== true) return false;
+    const pageElements = Array.from(document.querySelectorAll('[data-page-edit-id]'));
+    if (changes.length !== pageElements.length) return false;
+    const expectedIds = new Set(pageElements.map(element => (element.getAttribute('data-page-edit-id') || '').trim()));
+    if (expectedIds.size !== pageElements.length || expectedIds.has('')) return false;
+    const seen = new Set();
+    return changes.every(item => {
+        if (!item || typeof item.id !== 'string' || typeof item.text !== 'string' ||
+            !item.id.trim() || item.id.length > 200 || item.text.length > 10000 ||
+            !expectedIds.has(item.id) || seen.has(item.id)) return false;
+        seen.add(item.id); return true;
+    }) && seen.size === expectedIds.size;
+}
+
+// الكاش نسخة عرض احتياطية فقط؛ لا يسمح بالحفظ منها قبل تأكيد الخادم.
+function applyCachedPageChangesFallback(reason) {
+    if (!window.__pageChangesDomReady) {
+        window.__pageChangesFallbackPending = reason || 'server-unavailable';
+        return false;
+    }
+    if (window.__productionPageChangesUsingLocalFallback) return true;
+    try {
+        const raw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
+        if (!raw) return false;
+        const cached = JSON.parse(raw);
+        if (!cached || !validatePageChangesForClient(cached.changes) || !cached.changes.length) return false;
+        const stats = applyPageChangesList(cached.changes);
+        if (stats.matched === 0 || stats.missing > 0 || stats.invalid > 0 || stats.skippedEditing > 0) {
+            console.warn('[PageChanges] النسخة المحلية لا تطابق الصفحة بالكامل؛ لم يتم اعتمادها.', stats);
+            return false;
+        }
+        window.__productionPageChangesUsingLocalFallback = true;
+        window.__productionPageChangesBackendReady = false;
+        console.warn('[PageChanges] عُرضت آخر نسخة محلية مؤقتًا؛ الحفظ معطل حتى تأكيد الخادم.', reason || '');
+        return true;
+    } catch (error) {
+        console.warn('[PageChanges] تعذر قراءة النسخة المحلية البديلة.', error);
+        return false;
+    }
+}
+window.applyCachedPageChangesFallback = applyCachedPageChangesFallback;
+
+function updateTextPreservingMarkup(element, savedText) {
+    if (!element.children.length) { element.textContent = savedText; return true; }
+    const protectedChildren = Array.from(element.children).filter(child => (child.textContent || '').length > 0);
+    const nodes = Array.from(element.childNodes);
+    let cursor = 0;
+    for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        if (node.nodeType !== Node.ELEMENT_NODE || (node.textContent || '').length) continue;
+        let before = -1, after = nodes.length;
+        for (let j = i - 1; j >= 0; j--) if (nodes[j].nodeType === Node.ELEMENT_NODE && (nodes[j].textContent || '').length) { before = j; break; }
+        for (let j = i + 1; j < nodes.length; j++) if (nodes[j].nodeType === Node.ELEMENT_NODE && (nodes[j].textContent || '').length) { after = j; break; }
+        const hasBefore = nodes.slice(before + 1, i).some(n => n.nodeType === Node.TEXT_NODE && n.nodeValue);
+        const hasAfter = nodes.slice(i + 1, after).some(n => n.nodeType === Node.TEXT_NODE && n.nodeValue);
+        if (hasBefore && hasAfter) return false;
+    }
+    const segments = [];
+    for (const child of protectedChildren) {
+        const childText = child.textContent || '';
+        const at = savedText.indexOf(childText, cursor);
+        if (at < 0) return false;
+        segments.push(savedText.slice(cursor, at));
+        cursor = at + childText.length;
+    }
+    segments.push(savedText.slice(cursor));
+    let segmentIndex = 0, pending = [], used = false;
+    const flush = beforeNode => {
+        const value = used ? '' : (segments[segmentIndex] || '');
+        if (pending.length) {
+            pending[0].nodeValue = value;
+            pending.slice(1).forEach(n => { n.nodeValue = ''; });
+            used = true;
+        } else if (value) {
+            if (beforeNode) element.insertBefore(document.createTextNode(value), beforeNode);
+            else element.appendChild(document.createTextNode(value));
+            used = true;
+        }
+        pending = [];
     };
+    for (const node of Array.from(element.childNodes)) {
+        if (node.nodeType === Node.TEXT_NODE) { pending.push(node); continue; }
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            if ((node.textContent || '').length) { flush(node); segmentIndex++; used = false; }
+            else if (pending.length) flush(node);
+        }
+    }
+    flush(null);
+    return true;
+}
 
+function applyPageChangesList(changes) {
+    const stats = { received: Array.isArray(changes) ? changes.length : 0, matched: 0, applied: 0, unchanged: 0, skippedEditing: 0, missing: 0, invalid: 0, missingIds: [] };
     if (!Array.isArray(changes)) return stats;
-
+    const depths = new Map();
     changes.forEach(item => {
-        if (!item || typeof item.id !== "string" || typeof item.text !== "string") {
-            stats.invalid++;
-            return;
-        }
-
-        const element = document.querySelector(
-            '[data-page-edit-id="' + CSS.escape(item.id) + '"]'
-        );
-
-        if (!element) {
-            stats.missing++;
-            if (stats.missingIds.length < 20) {
-                stats.missingIds.push(item.id);
-            }
-            return;
-        }
-
+        if (!item || typeof item.id !== 'string') return;
+        const found = document.querySelectorAll('[data-page-edit-id="' + CSS.escape(item.id) + '"]');
+        if (found.length !== 1) { depths.set(item.id, -1); return; }
+        let depth = 0; for (let node = found[0]; node; node = node.parentElement) depth++;
+        depths.set(item.id, depth);
+    });
+    const ordered = changes.slice().sort((a,b) => (depths.get(b && b.id) || -1) - (depths.get(a && a.id) || -1));
+    ordered.forEach(item => {
+        if (!item || typeof item.id !== 'string' || typeof item.text !== 'string' || !item.id.trim() || item.text.length > 10000) { stats.invalid++; return; }
+        const found = document.querySelectorAll('[data-page-edit-id="' + CSS.escape(item.id) + '"]');
+        if (found.length > 1) { stats.invalid++; return; }
+        const el = found[0];
+        if (!el) { stats.missing++; if (stats.missingIds.length < 20) stats.missingIds.push(item.id); return; }
         stats.matched++;
-
-        // لا تطبّق ردود الخادم فوق نص يحرره المسؤول حاليًا.
-        if (isLiveEditing && element.isContentEditable) {
-            stats.skippedEditing++;
-            return;
-        }
-
-        const savedText = item.id === "footer-leadership"
-            ? item.text.replace("مديرية التربية والتعليم بمحافظة القاهرة", "وزارة التربية والتعليم بمحافظة القاهرة")
-            : item.text;
-
-        if (element.textContent.trim() === savedText.trim()) {
-            stats.unchanged++;
-            return;
-        }
-
-        // حافظ على تنسيق اسم مدير المدرسة داخل التذييل.
-        if (item.id === "footer-manager") {
-            const managerName = element.querySelector("span");
-            const separator = savedText.indexOf(":");
-            if (managerName && separator !== -1) {
-                const prefix = savedText.slice(0, separator + 1) + " ";
-                const firstTextNode = Array.from(element.childNodes)
-                    .find(node => node.nodeType === Node.TEXT_NODE);
-                if (firstTextNode) firstTextNode.nodeValue = prefix;
-                else element.insertBefore(document.createTextNode(prefix), managerName);
-                managerName.textContent = savedText.slice(separator + 1).trim();
-                stats.applied++;
-                return;
+        if (isLiveEditing && el.isContentEditable) { stats.skippedEditing++; return; }
+        const value = item.id === 'footer-leadership' ? item.text.replace('مديرية التربية والتعليم بمحافظة القاهرة', 'وزارة التربية والتعليم بمحافظة القاهرة') : item.text;
+        if (el.textContent.trim() === value.trim()) { stats.unchanged++; return; }
+        if (item.id === 'footer-manager') {
+            const name = el.querySelector('span'), sep = value.indexOf(':');
+            if (name && sep !== -1) {
+                const prefix = value.slice(0, sep + 1) + ' ';
+                const first = Array.from(el.childNodes).find(n => n.nodeType === Node.TEXT_NODE);
+                if (first) first.nodeValue = prefix; else el.insertBefore(document.createTextNode(prefix), name);
+                name.textContent = value.slice(sep + 1).trim(); stats.applied++; return;
             }
         }
-
-        element.textContent = savedText;
+        if (!updateTextPreservingMarkup(el, value)) { stats.invalid++; return; }
         stats.applied++;
     });
-
     return stats;
 }
 
-function cacheCurrentPageChanges() {
+function cacheCurrentPageChanges(changesSnapshot) {
     try {
 
-        const changes = Array.from(document.querySelectorAll("[data-page-edit-id]"))
+        const changes = Array.isArray(changesSnapshot) ? changesSnapshot : Array.from(document.querySelectorAll("[data-page-edit-id]"))
             .map(element => ({
                 id: element.getAttribute("data-page-edit-id"),
                 text: element.textContent.trim()
@@ -2796,81 +2765,80 @@ function cacheCurrentPageChanges() {
 }
 
 function loadSavedPageChanges() {
-    const scriptURL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+    if (pageChangesRequestInFlight) return;
+    const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
     const script = document.createElement("script");
-
+    pageChangesRequestInFlight = true;
     pageChangesResponseReceived = false;
-    script.src =
-        scriptURL +
-        "?action=pageChanges&callback=receivePageChanges&_=" +
-        Date.now();
-
+    let settled = false;
+    const finish = () => {
+        if (settled) return;
+        settled = true;
+        pageChangesRequestInFlight = false;
+        if (pageChangesRequestTimeout) { clearTimeout(pageChangesRequestTimeout); pageChangesRequestTimeout = null; }
+        script.remove();
+    };
+    script.src = endpoint + "?action=pageChanges&callback=receivePageChanges&_=" + Date.now();
     script.onerror = () => {
-        console.error("تعذر تحميل تعديلات نصوص الموقع من الخادم؛ تم الإبقاء على آخر نسخة محلية إن وجدت.");
-        document.documentElement.removeAttribute("data-page-edits-pending");
-        script.remove();
+        console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستُستخدم النسخة المحلية للعرض إن كانت صالحة.');
+        applyCachedPageChangesFallback('script-error');
+        document.documentElement.removeAttribute('data-page-edits-pending');
+        finish();
     };
-
     script.onload = () => {
-        // تحميل ملف JavaScript لا يعني بالضرورة أن callback أعاد بيانات صالحة.
         if (!pageChangesResponseReceived) {
-            console.error("وصل رد من خدمة التعديلات دون استدعاء receivePageChanges؛ لم يتم تأكيد تحميل التعديلات.");
+            console.error('[PageChanges] تم تحميل الاستجابة دون تأكيد callback؛ سنحاول النسخة المحلية.');
+            applyCachedPageChangesFallback('callback-missing');
         }
-        document.documentElement.removeAttribute("data-page-edits-pending");
-        script.remove();
+        document.documentElement.removeAttribute('data-page-edits-pending');
+        finish();
     };
-
+    pageChangesRequestTimeout = setTimeout(() => {
+        console.warn('[PageChanges] انتهت مهلة تحميل تعديلات النصوص.');
+        applyCachedPageChangesFallback('request-timeout');
+        document.documentElement.removeAttribute('data-page-edits-pending');
+        finish();
+    }, 15000);
     document.body.appendChild(script);
 }
 
 function receivePageChanges(data) {
     pageChangesResponseReceived = true;
-
-    // لا نحوّل خطأ قراءة الخادم أو الاستجابة غير السليمة إلى قائمة تعديلات فارغة.
-    if (!data || data.success !== true || !Array.isArray(data.changes)) {
-        const message = data && (data.message || data.error)
-            ? (data.message || data.error)
-            : "استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.";
-        console.error("تعذر استرجاع تعديلات نصوص الموقع:", message);
+    if (!data || data.success !== true || !validatePageChangesForClient(data.changes)) {
+        window.__productionPageChangesBackendReady = false;
+        const message = data && (data.message || data.error) ? (data.message || data.error) : 'استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.';
+        console.error('[PageChanges] تعذر استرجاع تعديلات نصوص الموقع:', message);
+        applyCachedPageChangesFallback('invalid-server-response');
         return false;
     }
-
-    const normalizedChanges = normalizeFixedPageChanges(data.changes);
-    const applyStats = applyPageChangesList(normalizedChanges);
-
-    console.info("[PageChanges] نتيجة استرجاع التعديلات:", {
-        serverReceived: data.changes.length,
-        normalized: normalizedChanges.length,
-        matched: applyStats.matched,
-        applied: applyStats.applied,
-        unchanged: applyStats.unchanged,
-        skippedEditing: applyStats.skippedEditing,
-        missing: applyStats.missing,
-        invalid: applyStats.invalid,
-        missingIds: applyStats.missingIds
+    const normalized = normalizeFixedPageChanges(data.changes);
+    const stats = applyPageChangesList(normalized);
+    console.info('[PageChanges] نتيجة استرجاع التعديلات:', {
+        serverReceived: data.changes.length, matched: stats.matched, applied: stats.applied,
+        unchanged: stats.unchanged, skippedEditing: stats.skippedEditing,
+        missing: stats.missing, invalid: stats.invalid, missingIds: stats.missingIds
     });
-
-    if (applyStats.missing > 0 || applyStats.invalid > 0) {
-        console.warn("[PageChanges] توجد تعديلات لم تُطبّق على عناصر الصفحة. راجع المعرّفات المفقودة أو البيانات غير الصحيحة.");
+    if (stats.missing > 0 || stats.invalid > 0 || stats.skippedEditing > 0) {
+        window.__productionPageChangesBackendReady = false;
+        console.warn('[PageChanges] لم تُطبّق كل التعديلات أو توجد عناصر قيد التحرير؛ لن نعتمد الاستجابة أو نحدّث الكاش.');
+        applyCachedPageChangesFallback('incomplete-server-apply');
+        return false;
     }
-
+    window.__productionPageChangesBackendReady = true;
+    window.__productionPageChangesUsingLocalFallback = false;
+    window.__pageChangesFallbackPending = '';
     try {
-        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({
-            changes: normalizedChanges
-        }));
+        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({ changes: normalized }));
     } catch (error) {
-        console.warn("تعذر حفظ نسخة محلية من تعديلات النصوص.", error);
+        console.warn('[PageChanges] تعذر حفظ نسخة محلية من استجابة الخادم.', error);
     }
-
-    const messages = document.querySelectorAll('#tickerText .ticker-message');
-    messages.forEach((message, index) =>
+    document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
-
     return true;
 }
 
-        function exportUpdatedHTML() {
+function exportUpdatedHTML() {
     if (!isDeveloperLoggedIn) {
         alert('سجّل الدخول بحساب Google المصرح به أولاً.');
         return;
