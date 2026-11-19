@@ -401,6 +401,7 @@
             <button onclick="saveAllPageChanges()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
             </button>
+            <span id="pageChangesSaveStatus" class="hidden text-navy font-bold px-2 py-1" role="status" aria-live="polite"></span>
             <button onclick="exportUpdatedHTML()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-file-code"></i> تحميل كود HTML المعدل
             </button>
@@ -506,7 +507,7 @@
                 <button onclick="switchTab('tablet')" id="tab-tablet" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
                     <i class="fa-solid fa-tablet-screen-button"></i><span data-page-edit-id="auto-21be9ba56301b173">التطوير التكنولوجي والتابلت</span></button>
                 <button onclick="switchTab('schedules')" id="tab-schedules" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
-                    <i class="fa-solid fa-calendar-days"></i><span data-page-edit-id="auto-539f0a245831829a">قوائم الفصول</span></button>
+                    <i class="fa-solid fa-calendar-days"></i><span data-page-edit-id="auto-539f0a245831829a">قوائم فصول</span></button>
                 <button onclick="switchTab('alerts')" id="tab-alerts" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
                     <i class="fa-solid fa-images"></i><span data-page-edit-id="auto-6b994fdf8db2b321">معرض الصور والأنشطة</span></button>
                 <button onclick="switchTab('student-queries')" id="tab-student-queries" class="tab-btn px-5 py-3 font-bold text-sm border-b-4 border-transparent text-slate-300 hover:text-white flex items-center gap-2 whitespace-nowrap transition">
@@ -1476,43 +1477,44 @@
             } catch (error) { return ''; }
         }
 
+        function isAppsScriptFrameSource(source, expectedFrame) {
+            if (!expectedFrame) return true;
+            // Apps Script may post from a nested Google sandbox frame.
+            // Accept only the submitted iframe or a descendant browsing context.
+            const pending = [expectedFrame];
+            const visited = new Set();
+            while (pending.length && visited.size < 64) {
+                const current = pending.pop();
+                if (!current || visited.has(current)) continue;
+                visited.add(current);
+                if (source === current) return true;
+                let frameCount = 0;
+                try { frameCount = current.length; }
+                catch (error) { continue; }
+                for (let index = 0; index < frameCount; index++) {
+                    try {
+                        const child = current.frames[index];
+                        if (child && !visited.has(child)) pending.push(child);
+                    } catch (error) {
+                        // Inaccessible descendants are not trusted.
+                    }
+                }
+            }
+            return false;
+        }
+
         function isTrustedAppsScriptMessage(event, expectedSource) {
-            // postMessage responses must come from a different browsing context.
-            if (
-                !event ||
-                !event.source ||
-                event.source === window ||
-                (expectedSource && event.source !== expectedSource)
-            ) {
-                return false;
-            }
-
+            if (!event || !event.source || event.source === window ||
+                !isAppsScriptFrameSource(event.source, expectedSource)) return false;
             let originUrl;
-
-            try {
-                originUrl = new URL(event.origin);
-            } catch (error) {
-                return false;
-            }
-
-            if (
-                originUrl.protocol !== "https:" ||
-                originUrl.username ||
-                originUrl.password ||
-                originUrl.port
-            ) {
-                return false;
-            }
-
+            try { originUrl = new URL(event.origin); }
+            catch (error) { return false; }
+            if (originUrl.protocol !== "https:" || originUrl.username ||
+                originUrl.password || originUrl.port) return false;
             const hostname = originUrl.hostname.toLowerCase();
-
-            // Accept only the Apps Script response origins, not every
-            // Google-owned googleusercontent.com subdomain.
             const sandboxSuffix = "-script.googleusercontent.com";
             const sandboxPrefix = hostname.endsWith(sandboxSuffix)
-                ? hostname.slice(0, -sandboxSuffix.length)
-                : "";
-
+                ? hostname.slice(0, -sandboxSuffix.length) : "";
             return hostname === "script.google.com" ||
                 hostname === "script.googleusercontent.com" ||
                 (sandboxPrefix.length > 0 && /^[a-z0-9-]+$/.test(sandboxPrefix));
@@ -2400,6 +2402,48 @@ window.addEventListener('DOMContentLoaded', () => {
 
         let pendingPageChangesNonce = null;
 let pageChangesTimeout = null;
+let pageChangesStatusHideTimer = null;
+
+// Keep edits made locally until the server confirms that exact submitted value.
+// Polling responses must never overwrite text that has not yet been confirmed saved.
+const unsavedPageTextChanges = new Map();
+
+document.addEventListener('input', function(event) {
+    const target = event.target;
+    if (!target || !target.closest) return;
+    const element = target.closest('[data-page-edit-id]');
+    if (!element || !element.isContentEditable) return;
+    const id = (element.getAttribute('data-page-edit-id') || '').trim();
+    if (id) unsavedPageTextChanges.set(id, element.textContent.trim());
+});
+
+function getPageChangesSaveStatus() {
+    const status = document.getElementById('pageChangesSaveStatus');
+    if (status) {
+        status.classList.remove('hidden');
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+    }
+    return status;
+}
+
+function showPageChangesSaveStatus(message, autoHide = false) {
+    const status = getPageChangesSaveStatus();
+    if (!status) return;
+    if (pageChangesStatusHideTimer) {
+        clearTimeout(pageChangesStatusHideTimer);
+        pageChangesStatusHideTimer = null;
+    }
+    status.textContent = message;
+    status.classList.remove('hidden');
+    if (autoHide) {
+        pageChangesStatusHideTimer = setTimeout(() => {
+            status.classList.add('hidden');
+            status.textContent = '';
+            pageChangesStatusHideTimer = null;
+        }, 3000);
+    }
+}
 
 function toggleLiveEditing() {
     if (assignPageEditIds() !== true) { alert("تعذر تفعيل التحرير: توجد معرّفات نصوص ناقصة أو مكررة."); return; }
@@ -2467,6 +2511,10 @@ async function saveAllPageChanges() {
         console.error('[PageChanges] duplicate IDs blocked:', Array.from(duplicateIds));
         return;
     }
+    // Local edits take precedence if a previous poll arrived while editing.
+    unsavedPageTextChanges.forEach((text, id) => {
+        if (changesById.has(id)) changesById.set(id, { id, text });
+    });
     const changes = Array.from(changesById.values());
     if (!changes.length) {
         alert('لا توجد نصوص قابلة للحفظ.');
@@ -2499,10 +2547,10 @@ async function saveAllPageChanges() {
     });
     document.body.appendChild(form); form.submit(); form.remove();
     const status=document.getElementById('googleSignInStatus');
-    if(status) status.textContent='تم إرسال طلب الحفظ، في انتظار تأكيد الخادم...';
+    showPageChangesSaveStatus('تم إرسال طلب الحفظ، في انتظار تأكيد الخادم...');
     pageChangesTimeout=setTimeout(() => {
         if(pendingPageChangesNonce===nonce) {
-            if(status) status.textContent='تأخر تأكيد الخادم. لا تعاود الحفظ الآن؛ قد يكون الحفظ اكتمل بالفعل، وسيُقبل الرد المتأخر إذا وصل.';
+            showPageChangesSaveStatus('تأخر تأكيد الخادم. لا تعاود الحفظ الآن؛ قد يكون الحفظ اكتمل بالفعل، وسيُقبل الرد المتأخر إذا وصل.');
             console.warn('[PageChanges] Save response timed out; nonce retained for a late server response.');
         }
     },20000);
@@ -2511,7 +2559,7 @@ async function saveAllPageChanges() {
 window.addEventListener('message', function(event) {
     const responseFrame = document.getElementById('pageChangesUploadFrame');
 
-    if (!responseFrame || !isTrustedAppsScriptMessage(event)) return;
+    if (!responseFrame || !isTrustedAppsScriptMessage(event, responseFrame.contentWindow)) return;
 
     const data = event.data;
 
@@ -2525,7 +2573,6 @@ window.addEventListener('message', function(event) {
     clearTimeout(pageChangesTimeout);
     pendingPageChangesNonce = null;
 
-    const status = document.getElementById('googleSignInStatus');
     const result = data.result || {};
 
     // لا نعلن النجاح إلا بعد تأكيد الحفظ في Drive والمزامنة مع GitHub.
@@ -2534,17 +2581,16 @@ window.addEventListener('message', function(event) {
         result.driveSaved === true &&
         result.githubSynced === true
     ) {
+        if (pendingPageChangesSnapshot) {
+            pendingPageChangesSnapshot.forEach(item => {
+                if (unsavedPageTextChanges.get(item.id) === item.text) {
+                    unsavedPageTextChanges.delete(item.id);
+                }
+            });
+        }
         cacheCurrentPageChanges(pendingPageChangesSnapshot);
         pendingPageChangesSnapshot = null;
-
-        const saveSuccessMessage = 'تم الحفظ بنجاح.';
-
-        if (status) {
-            status.textContent = saveSuccessMessage;
-            status.classList.remove('hidden');
-            status.setAttribute('role', 'status');
-            status.setAttribute('aria-live', 'polite');
-        }
+        showPageChangesSaveStatus('تم الحفظ بنجاح.', true);
 
         if (isLiveEditing) toggleLiveEditing();
 
@@ -2560,7 +2606,8 @@ window.addEventListener('message', function(event) {
             result.message ||
             'تم حفظ التعديلات في Google Drive، لكن تعذرت مزامنتها مع GitHub.';
 
-        if (status) status.textContent = message;
+        pendingPageChangesSnapshot = null;
+        showPageChangesSaveStatus(message);
 
         alert(
             'تم الحفظ في Google Drive فقط، ولم يتم تأكيد تحديث نسخة الموقع المنشورة.\n\n' +
@@ -2577,7 +2624,7 @@ window.addEventListener('message', function(event) {
         result.error ||
         'لم يتم تأكيد نجاح حفظ التعديلات.';
 
-    if (status) status.textContent = message;
+    showPageChangesSaveStatus(message);
 
     alert('لم يتم تأكيد حفظ التعديلات: ' + message);
 });
@@ -2727,6 +2774,7 @@ function applyPageChangesList(changes) {
         const el = found[0];
         if (!el) { stats.missing++; if (stats.missingIds.length < 20) stats.missingIds.push(item.id); return; }
         stats.matched++;
+        if (unsavedPageTextChanges.has(item.id)) { stats.skippedEditing++; return; }
         if (isLiveEditing && el.isContentEditable) { stats.skippedEditing++; return; }
         const value = item.id === 'footer-leadership' ? item.text.replace('مديرية التربية والتعليم بمحافظة القاهرة', 'وزارة التربية والتعليم بمحافظة القاهرة') : item.text;
         if (el.textContent.trim() === value.trim()) { stats.unchanged++; return; }
@@ -2747,18 +2795,22 @@ function applyPageChangesList(changes) {
 
 function cacheCurrentPageChanges(changesSnapshot) {
     try {
-
-        const changes = Array.isArray(changesSnapshot) ? changesSnapshot : Array.from(document.querySelectorAll("[data-page-edit-id]"))
-            .map(element => ({
-                id: element.getAttribute("data-page-edit-id"),
-                text: element.textContent.trim()
-            }))
-            .filter(item => item.id && item.text.length <= 10000);
-
-        const payload = JSON.stringify({ changes: changes });
-        if (payload.length <= 90000) {
-            localStorage.setItem(PAGE_CHANGES_CACHE_KEY, payload);
-        }
+        const changesById = new Map(
+            (Array.isArray(changesSnapshot) ? changesSnapshot :
+                Array.from(document.querySelectorAll("[data-page-edit-id]")).map(element => ({
+                    id: element.getAttribute("data-page-edit-id"),
+                    text: element.textContent.trim()
+                })))
+                .filter(item => item && item.id && typeof item.text === "string" && item.text.length <= 10000)
+                .map(item => [item.id, item.text])
+        );
+        // Preserve newer edits made while the submitted snapshot was in flight.
+        unsavedPageTextChanges.forEach((text, id) => {
+            if (changesById.has(id)) changesById.set(id, text);
+        });
+        const changes = Array.from(changesById, ([id, text]) => ({ id, text }));
+        const payload = JSON.stringify({ changes });
+        if (payload.length <= 90000) localStorage.setItem(PAGE_CHANGES_CACHE_KEY, payload);
     } catch (error) {
         console.warn("تعذر تحديث النسخة المحلية من تعديلات النصوص.", error);
     }
@@ -2818,20 +2870,19 @@ function receivePageChanges(data) {
         unchanged: stats.unchanged, skippedEditing: stats.skippedEditing,
         missing: stats.missing, invalid: stats.invalid, missingIds: stats.missingIds
     });
-    if (stats.missing > 0 || stats.invalid > 0 || stats.skippedEditing > 0) {
+    // Skipped items are expected when a local unsaved edit is protected.
+    // They do not invalidate an otherwise valid server response.
+    if (stats.missing > 0 || stats.invalid > 0) {
         window.__productionPageChangesBackendReady = false;
-        console.warn('[PageChanges] لم تُطبّق كل التعديلات أو توجد عناصر قيد التحرير؛ لن نعتمد الاستجابة أو نحدّث الكاش.');
+        console.warn('[PageChanges] توجد تعديلات مفقودة أو غير صالحة؛ لن نعتمد الاستجابة أو نحدّث الكاش.');
         applyCachedPageChangesFallback('incomplete-server-apply');
         return false;
     }
     window.__productionPageChangesBackendReady = true;
     window.__productionPageChangesUsingLocalFallback = false;
     window.__pageChangesFallbackPending = '';
-    try {
-        localStorage.setItem(PAGE_CHANGES_CACHE_KEY, JSON.stringify({ changes: normalized }));
-    } catch (error) {
-        console.warn('[PageChanges] تعذر حفظ نسخة محلية من استجابة الخادم.', error);
-    }
+    // Merge the server snapshot with any local edits still awaiting confirmation.
+    cacheCurrentPageChanges(normalized);
     document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
