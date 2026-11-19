@@ -2391,37 +2391,28 @@ window.addEventListener('DOMContentLoaded', () => {
 let pageChangesTimeout = null;
 
 function toggleLiveEditing() {
-    assignPageEditIds();
-    if (!hasDualAdminAuthorization()) {
-        alert("يجب تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به لاستخدام أدوات التعديل.");
-        return;
-    }
+    if (assignPageEditIds() !== true) { alert("تعذر تفعيل التحرير: توجد معرّفات نصوص ناقصة أو مكررة."); return; }
+    if (!hasDualAdminAuthorization()) { alert("يجب تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به لاستخدام أدوات التعديل."); return; }
     isLiveEditing = !isLiveEditing;
     document.querySelectorAll('[data-page-edit-id]').forEach(el => {
         if (isLiveEditing) {
-            // صرّح بإمكانية إدخال النص ولوحة المفاتيح على الهواتف، بما فيها Android.
-            el.setAttribute('contenteditable', 'true');
-            el.setAttribute('inputmode', 'text');
-            el.setAttribute('tabindex', '0');
-            el.setAttribute('autocapitalize', 'off');
-            el.classList.add('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+            el.setAttribute('contenteditable','true'); el.setAttribute('inputmode','text'); el.setAttribute('tabindex','0'); el.setAttribute('autocapitalize','off');
+            el.querySelectorAll('*').forEach(child => {
+                if (child.hasAttribute('data-page-edit-id')) return;
+                const managerName = el.getAttribute('data-page-edit-id') === 'footer-manager' && child.tagName === 'SPAN' && child.parentElement === el;
+                child.setAttribute('contenteditable', managerName ? 'true' : 'false');
+            });
+            el.classList.add('outline-dashed','outline-2','outline-navy','p-0.5');
         } else {
-            el.removeAttribute('contenteditable');
-            el.removeAttribute('inputmode');
-            el.removeAttribute('tabindex');
-            el.removeAttribute('autocapitalize');
-            el.classList.remove('outline-dashed', 'outline-2', 'outline-navy', 'p-0.5');
+            el.removeAttribute('contenteditable'); el.removeAttribute('inputmode'); el.removeAttribute('tabindex'); el.removeAttribute('autocapitalize');
+            el.querySelectorAll('[contenteditable]').forEach(child => child.removeAttribute('contenteditable'));
+            el.classList.remove('outline-dashed','outline-2','outline-navy','p-0.5');
         }
     });
     document.getElementById('tickerText').classList.toggle('ticker-editing', isLiveEditing);
     const btn = document.getElementById('editToggleBtn');
-    if (isLiveEditing) {
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> إنهاء التعديل';
-        btn.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
-    } else {
-        btn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي';
-        btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1";
-    }
+    if (isLiveEditing) { btn.innerHTML = '<i class="fa-solid fa-check"></i> إنهاء التعديل'; btn.className = "bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1"; }
+    else { btn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي'; btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1"; }
 }
 
 async function saveAllPageChanges() {
@@ -2433,7 +2424,8 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-    assignPageEditIds();
+    if (window.__productionPageChangesUsingLocalFallback || window.__productionPageChangesBackendReady !== true) { alert('الحفظ متوقف مؤقتًا: لم يتم تأكيد تحميل النصوص من الخادم. حدّث الصفحة وحاول بعد عودة الاتصال.'); return; }
+    if (assignPageEditIds() !== true) { alert('تعذر الحفظ: توجد معرّفات نصوص ناقصة أو مكررة.'); return; }
     const editableElements = Array.from(
         document.querySelectorAll('[data-page-edit-id]')
     );
@@ -2459,14 +2451,12 @@ async function saveAllPageChanges() {
         }
     });
 
-    const changes = Array.from(changesById.values());
-
     if (duplicateIds.size) {
-        console.warn(
-            'تم اكتشاف معرّفات نصوص مكررة واستبعاد تكرارها قبل الحفظ:',
-            Array.from(duplicateIds)
-        );
+        alert('تعذر الحفظ: توجد معرّفات نصوص مكررة. لم يتم استبعاد أي نص تلقائيًا.');
+        console.error('[PageChanges] duplicate IDs blocked:', Array.from(duplicateIds));
+        return;
     }
+    const changes = Array.from(changesById.values());
     if (!changes.length) {
         alert('لا توجد نصوص قابلة للحفظ.');
         return;
@@ -2500,9 +2490,8 @@ async function saveAllPageChanges() {
     if(status) status.textContent='تم إرسال طلب الحفظ، في انتظار تأكيد الخادم...';
     pageChangesTimeout=setTimeout(() => {
         if(pendingPageChangesNonce===nonce) {
-            pendingPageChangesNonce=null;
-            if(status) status.textContent='لم يصل تأكيد الحفظ. تحقق من الصفحة قبل إعادة المحاولة.';
-            alert('لم يصل تأكيد من الخادم؛ لم يتم تأكيد حفظ التعديلات.');
+            if(status) status.textContent='تأخر تأكيد الخادم. لا تعاود الحفظ الآن؛ قد يكون الحفظ اكتمل بالفعل، وسيُقبل الرد المتأخر إذا وصل.';
+            console.warn('[PageChanges] Save response timed out; nonce retained for a late server response.');
         }
     },20000);
 }
