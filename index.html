@@ -2617,13 +2617,18 @@ function normalizeFixedPageChanges(changes) {
 }
 
 function validatePageChangesForClient(changes) {
-    if (!Array.isArray(changes) || changes.length > 500) return false;
+    if (!Array.isArray(changes) || window.__pageEditIdsReady !== true) return false;
+    const pageElements = Array.from(document.querySelectorAll('[data-page-edit-id]'));
+    if (changes.length !== pageElements.length) return false;
+    const expectedIds = new Set(pageElements.map(element => (element.getAttribute('data-page-edit-id') || '').trim()));
+    if (expectedIds.size !== pageElements.length || expectedIds.has('')) return false;
     const seen = new Set();
     return changes.every(item => {
         if (!item || typeof item.id !== 'string' || typeof item.text !== 'string' ||
-            !item.id.trim() || item.id.length > 200 || item.text.length > 10000 || seen.has(item.id)) return false;
+            !item.id.trim() || item.id.length > 200 || item.text.length > 10000 ||
+            !expectedIds.has(item.id) || seen.has(item.id)) return false;
         seen.add(item.id); return true;
-    });
+    }) && seen.size === expectedIds.size;
 }
 
 // الكاش نسخة عرض احتياطية فقط؛ لا يسمح بالحفظ منها قبل تأكيد الخادم.
