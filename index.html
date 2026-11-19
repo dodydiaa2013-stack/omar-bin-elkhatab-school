@@ -394,14 +394,14 @@
             <i class="fa-solid fa-code text-lg"></i>
             <span>وضع المطور الشامل: يمكنك تعديل أي نص أو عنصر في الصفحة مباشرة!</span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             <button onclick="toggleLiveEditing()" id="editToggleBtn" class="bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي
             </button>
             <button onclick="saveAllPageChanges()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
             </button>
-            <p id="pageChangesSaveStatus" class="hidden text-xs font-bold text-navy" role="status" aria-live="polite"></p>
+            <p id="pageChangesSaveStatus" class="hidden basis-full text-xs font-bold text-navy" role="status" aria-live="polite"></p>
             <button onclick="exportUpdatedHTML()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-file-code"></i> تحميل كود HTML المعدل
             </button>
