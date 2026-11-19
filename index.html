@@ -267,7 +267,15 @@
             "?action=pageChanges&callback=receivePageChangesEarly&_=" +
             Date.now();
 
+        const earlyRequestTimeout = setTimeout(() => {
+            if (window.__earlyPageChangesReceived) return;
+            window.__earlyPageChangesFailed = true;
+            request.remove();
+            if (window.__pageChangesDomReady && typeof window.loadSavedPageChanges === "function") window.loadSavedPageChanges();
+        }, 15000);
+
         request.onload = () => {
+            clearTimeout(earlyRequestTimeout);
             // قد يكتمل تحميل السكربت دون استدعاء callback؛ لا تترك الصفحة دون خطة بديلة.
             if (!window.__earlyPageChangesReceived) {
                 window.__earlyPageChangesFailed = true;
@@ -279,6 +287,7 @@
         };
 
         request.onerror = () => {
+            clearTimeout(earlyRequestTimeout);
             window.__earlyPageChangesFailed = true;
             console.warn("تعذر تحميل تعديلات النصوص مبكرًا؛ سيتم استخدام مسار التحميل الاحتياطي.");
             if (window.__pageChangesDomReady &&
