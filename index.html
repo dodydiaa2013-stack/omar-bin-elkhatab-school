@@ -2537,21 +2537,16 @@ window.addEventListener('message', function(event) {
         cacheCurrentPageChanges(pendingPageChangesSnapshot);
         pendingPageChangesSnapshot = null;
 
-        const saveSuccessMessage =
-            'تم الحفظ بنجاح ✅ تم حفظ التعديلات والتحقق من إرسالها إلى GitHub.';
-        const publishMessage =
-            'تحديث نسخة الموقع جارٍ، وستظهر التعديلات بعد اكتمال النشر.';
+        const saveSuccessMessage = 'تم الحفظ بنجاح.';
 
         if (status) {
-            status.textContent = saveSuccessMessage + ' ' + publishMessage;
+            status.textContent = saveSuccessMessage;
             status.classList.remove('hidden');
             status.setAttribute('role', 'status');
             status.setAttribute('aria-live', 'polite');
         }
 
         if (isLiveEditing) toggleLiveEditing();
-
-        alert(saveSuccessMessage + '\n' + publishMessage);
 
         return;
     }
@@ -2690,8 +2685,9 @@ function updateTextPreservingMarkup(element, savedText) {
             pending[0].nodeValue = value;
             pending.slice(1).forEach(n => { n.nodeValue = ''; });
             used = true;
-        } else if (value && beforeNode) {
-            element.insertBefore(document.createTextNode(value), beforeNode);
+        } else if (value) {
+            if (beforeNode) element.insertBefore(document.createTextNode(value), beforeNode);
+            else element.appendChild(document.createTextNode(value));
             used = true;
         }
         pending = [];
