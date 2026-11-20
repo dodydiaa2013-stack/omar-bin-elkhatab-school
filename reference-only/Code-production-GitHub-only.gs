@@ -323,7 +323,7 @@ function productionPageReviewStatusPostMessage(p, result) {
   }
 
   const payload = JSON.stringify({
-    type: "labPageReviewStatusResult",
+    type: "productionPageReviewStatusResult",
     nonce: String(p.nonce || ""),
     result: Object.assign({}, result || {}, { environment: "PRODUCTION" })
   }).replace(/</g, "\\u003c");
@@ -2955,7 +2955,7 @@ function savePageChanges(p) {
     );
 
     const requestBody = {
-      message: "Save lab page text changes",
+      message: "Save production page text changes",
       content: contentBase64,
       branch: current.settings.branch
     };
