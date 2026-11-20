@@ -243,6 +243,10 @@
     })();
 </script>
 <script>
+    // تعريف رابط خادم الإنتاج قبل سكربت التحميل المبكر لتجنب ReferenceError.
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+</script>
+<script>
     // ابدأ طلب تعديلات النصوص أثناء قراءة الصفحة بدل انتظار DOMContentLoaded.
     // إذا وصلت الاستجابة قبل تجهيز عناصر الصفحة، احتفظ بها حتى تصبح جاهزة.
     (() => {
@@ -1195,7 +1199,7 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+// رابط خادم الإنتاج مُعرّف مسبقًا قبل سكربت التحميل المبكر.
 
         // معاينة الصور داخل الموقع مع تكبير مستقل للصورة دون تكبير صفحة الموقع.
         let schoolImageViewerReturnFocus = null;
