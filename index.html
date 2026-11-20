@@ -246,7 +246,7 @@
     // ابدأ طلب تعديلات النصوص أثناء قراءة الصفحة بدل انتظار DOMContentLoaded.
     // إذا وصلت الاستجابة قبل تجهيز عناصر الصفحة، احتفظ بها حتى تصبح جاهزة.
     (() => {
-        const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+        const endpoint = GOOGLE_SCRIPT_URL;
         window.__pageChangesDomReady = false;
         window.__earlyPageChangesReceived = false;
 
@@ -2544,7 +2544,7 @@ async function saveAllPageChanges() {
     }
     const form = document.createElement('form');
     form.method = 'POST';
-    form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+    form.action = GOOGLE_SCRIPT_URL;
     form.target = 'pageChangesUploadFrame';
     form.style.display = 'none';
     const fields = { action:'savePageChanges', environment:'PRODUCTION', googleUploadToken:googleUploadToken, adminSessionToken:window.adminSessionToken, nonce:nonce, origin:location.origin, changes:payload };
@@ -2941,7 +2941,7 @@ function loadSavedPageChanges() {
         if (pageChangesRequestTimeout) { clearTimeout(pageChangesRequestTimeout); pageChangesRequestTimeout = null; }
         script.remove();
     };
-    script.src = endpoint + "?action=pageChanges&callback=receivePageChanges&_=" + Date.now();
+    script.src = endpoint + "?action=pageChanges&environment=PRODUCTION&callback=receivePageChanges&_=" + Date.now();
     script.onerror = () => {
         console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستُستخدم النسخة المحلية للعرض إن كانت صالحة.');
         applyCachedPageChangesFallback('script-error');
