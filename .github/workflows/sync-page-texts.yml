@@ -1,7 +1,5 @@
-name: Sync saved page text and publish automatically
-# Apps Script writes only to the dedicated input branch.
-# This workflow builds from main, validates the result, then proposes and merges
-# the text-only update. Repository branch protection remains in force.
+name: Prepare saved page text review pull request
+# The workflow prepares a reviewable text-only change. It never merges or publishes.
 on:
   push:
     branches:
@@ -19,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  sync-and-publish:
+  prepare-review:
     runs-on: ubuntu-latest
     steps:
       - name: Check out main as the clean base
@@ -33,7 +31,21 @@ jobs:
           set -euo pipefail
           git fetch origin automation/page-text-sync-input
           git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.json
-          node -e "const p=require('./page-changes-production.json'); if(!p || p.success!==true || !Array.isArray(p.changes) || p.changes.some(x=>!x || typeof x.id!=='string' || typeof x.text!=='string')) process.exit(1);"
+          node <<'NODE'
+          const p = require('./page-changes-production.json');
+          if (!p || p.success !== true || !Array.isArray(p.changes) || p.changes.length > 500) {
+            throw new Error('Invalid page text payload.');
+          }
+          const ids = new Set();
+          for (const item of p.changes) {
+            if (!item || typeof item.id !== 'string' || !item.id ||
+                item.id.length > 200 || typeof item.text !== 'string' ||
+                item.text.length > 10000 || ids.has(item.id)) {
+              throw new Error('Invalid or duplicate page text item.');
+            }
+            ids.add(item.id);
+          }
+          NODE
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -50,7 +62,7 @@ jobs:
           test -s index.html
           node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); if(!h.includes('data-page-edit-id=')) process.exit(1);"
 
-      - name: Create or update the publication pull request
+      - name: Create or update a draft review pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -66,27 +78,42 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Prepare saved school page text update"
+          git commit -m "Prepare saved school page text review"
           git push --force origin HEAD:automation/page-text-sync
 
           pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number // empty')
 
           if [ -z "$pr_number" ]; then
-            gh pr create \
+            gh pr create --draft \
               --repo "$GITHUB_REPOSITORY" \
               --base main \
               --head automation/page-text-sync \
-              --title "Publish saved school page text" \
-              --body "## Automatic page-text publication
+              --title "Review saved school page text update" \
+              --body "## Saved page-text review
 
-          - Generated from the latest Google Drive-saved page text payload.
+          - Generated from the dedicated page-text input branch.
           - Updates only page-changes-production.json and matching text in index.html.
-          - The workflow validates the generated update before proposing it.
-          - GitHub branch protection is not bypassed; if a required approval or check blocks merging, the PR remains open and the workflow reports the failure."
+          - The synchronization script validates the HTML structure, saved IDs, and duplicate IDs before proposing changes.
+          - This pull request is intentionally draft.
+          - No automatic merge, publication, or deployment is performed.
+          - Review the diff and preview manually before approving."
             pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
+          else
+            is_draft=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            if [ "$is_draft" != "true" ]; then
+              pr_node_id=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json id --jq '.id')
+              gh api graphql -f query='mutation($pullRequestId: ID!) { convertPullRequestToDraft(input: {pullRequestId: $pullRequestId}) { pullRequest { isDraft } } }' -F pullRequestId="$pr_node_id"
+            fi
+            gh pr edit "$pr_number" --repo "$GITHUB_REPOSITORY" \
+              --title "Review saved school page text update" \
+              --body "## Saved page-text review
+
+          - Generated from the dedicated page-text input branch.
+          - Updates only page-changes-production.json and matching text in index.html.
+          - The synchronization script validates the HTML structure, saved IDs, and duplicate IDs before proposing changes.
+          - This pull request is intentionally draft.
+          - No automatic merge, publication, or deployment is performed.
+          - Review the diff and preview manually before approving."
           fi
 
-          # Convert any existing draft PR to ready, then merge only if GitHub
-          # confirms all repository protection requirements are satisfied.
-          gh pr ready "$pr_number"
-          gh pr merge "$pr_number" --squash --delete-branch
+          echo "Draft review PR is ready for human inspection. No merge was attempted."
