@@ -405,7 +405,6 @@
             <button onclick="saveAllPageChanges()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
             </button>
-            <span id="pageChangesSaveStatus" class="hidden text-navy font-bold px-2 py-1" role="status" aria-live="polite"></span>
             <button onclick="exportUpdatedHTML()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-file-code"></i> تحميل كود HTML المعدل
             </button>
@@ -2406,7 +2405,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
         let pendingPageChangesNonce = null;
 let pageChangesTimeout = null;
-let pageChangesStatusHideTimer = null;
 let pendingReviewStatusNonce = null;
 let pendingReviewStatusHash = '';
 let reviewStatusTimeout = null;
@@ -2426,34 +2424,6 @@ document.addEventListener('input', function(event) {
     const id = (element.getAttribute('data-page-edit-id') || '').trim();
     if (id) unsavedPageTextChanges.set(id, element.textContent.trim());
 });
-
-function getPageChangesSaveStatus() {
-    const status = document.getElementById('pageChangesSaveStatus');
-    if (status) {
-        status.classList.remove('hidden');
-        status.setAttribute('role', 'status');
-        status.setAttribute('aria-live', 'polite');
-    }
-    return status;
-}
-
-function showPageChangesSaveStatus(message, autoHide = false) {
-    const status = getPageChangesSaveStatus();
-    if (!status) return;
-    if (pageChangesStatusHideTimer) {
-        clearTimeout(pageChangesStatusHideTimer);
-        pageChangesStatusHideTimer = null;
-    }
-    status.textContent = message;
-    status.classList.remove('hidden');
-    if (autoHide) {
-        pageChangesStatusHideTimer = setTimeout(() => {
-            status.classList.add('hidden');
-            status.textContent = '';
-            pageChangesStatusHideTimer = null;
-        }, 3000);
-    }
-}
 
 function toggleLiveEditing() {
     if (assignPageEditIds() !== true) { alert("تعذر تفعيل التحرير: توجد معرّفات نصوص ناقصة أو مكررة."); return; }
@@ -2556,12 +2526,9 @@ async function saveAllPageChanges() {
         const input=document.createElement('input'); input.type='hidden'; input.name=name; input.value=value; form.appendChild(input);
     });
     document.body.appendChild(form); form.submit(); form.remove();
-    const status=document.getElementById('googleSignInStatus');
-    showPageChangesSaveStatus('تم إرسال طلب الحفظ، في انتظار تأكيد GitHub...');
     pageChangesTimeout=setTimeout(() => {
         if(pendingPageChangesNonce===nonce) {
-            showPageChangesSaveStatus('تأخر تأكيد الخادم. لا تعاود الحفظ الآن؛ قد يكون الحفظ اكتمل بالفعل، وسيُقبل الرد المتأخر إذا وصل.');
-            console.warn('[PageChanges] Save response timed out; nonce retained for a late server response.');
+            console.warn('[PageChanges] Save response timed out; nonce retained for a late server response. No visible status was shown.');
         }
     },20000);
 }
@@ -2717,7 +2684,6 @@ window.addEventListener('message', function(event) {
         }
         cacheCurrentPageChanges(pendingPageChangesSnapshot);
         pendingPageChangesSnapshot = null;
-        showPageChangesSaveStatus('تم الحفظ بنجاح.', true);
 
         if (isLiveEditing) toggleLiveEditing();
 
@@ -2740,7 +2706,6 @@ window.addEventListener('message', function(event) {
         result.error ||
         'لم يتم تأكيد حفظ التعديلات في GitHub.';
 
-    showPageChangesSaveStatus(message);
     alert('لم يتم تأكيد حفظ التعديلات: ' + message);
 });
 
