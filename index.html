@@ -2403,6 +2403,12 @@ window.addEventListener('DOMContentLoaded', () => {
         let pendingPageChangesNonce = null;
 let pageChangesTimeout = null;
 let pageChangesStatusHideTimer = null;
+let pendingReviewStatusNonce = null;
+let pendingReviewStatusHash = '';
+let reviewStatusTimeout = null;
+let reviewPollTimer = null;
+let reviewPollAttempts = 0;
+let reviewExpectedHash = '';
 
 // Keep edits made locally until the server confirms that exact submitted value.
 // Polling responses must never overwrite text that has not yet been confirmed saved.
@@ -2541,13 +2547,13 @@ async function saveAllPageChanges() {
     form.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
     form.target = 'pageChangesUploadFrame';
     form.style.display = 'none';
-    const fields = { action:'savePageChanges', googleUploadToken:googleUploadToken, adminSessionToken:window.adminSessionToken, nonce:nonce, origin:location.origin, replaceAll:'true', changes:payload };
+    const fields = { action:'savePageChanges', environment:'PRODUCTION', googleUploadToken:googleUploadToken, adminSessionToken:window.adminSessionToken, nonce:nonce, origin:location.origin, changes:payload };
     Object.entries(fields).forEach(([name,value]) => {
         const input=document.createElement('input'); input.type='hidden'; input.name=name; input.value=value; form.appendChild(input);
     });
     document.body.appendChild(form); form.submit(); form.remove();
     const status=document.getElementById('googleSignInStatus');
-    showPageChangesSaveStatus('تم إرسال طلب الحفظ، في انتظار تأكيد الخادم...');
+    showPageChangesSaveStatus('تم إرسال طلب الحفظ، في انتظار تأكيد GitHub...');
     pageChangesTimeout=setTimeout(() => {
         if(pendingPageChangesNonce===nonce) {
             showPageChangesSaveStatus('تأخر تأكيد الخادم. لا تعاود الحفظ الآن؛ قد يكون الحفظ اكتمل بالفعل، وسيُقبل الرد المتأخر إذا وصل.');
@@ -2556,30 +2562,147 @@ async function saveAllPageChanges() {
     },20000);
 }
 
-window.addEventListener('message', function(event) {
-    const responseFrame = document.getElementById('pageChangesUploadFrame');
 
-    if (!responseFrame || !isTrustedAppsScriptMessage(event, responseFrame.contentWindow)) return;
+function scheduleProductionPageReviewPoll(delay = 2500) {
+    if (reviewPollTimer) clearTimeout(reviewPollTimer);
+    reviewPollTimer = setTimeout(() => {
+        reviewPollTimer = null;
+        requestProductionPageReviewStatus();
+    }, delay);
+}
+
+function requestProductionPageReviewStatus() {
+    if (!reviewExpectedHash || pendingReviewStatusNonce) return;
+
+    if (reviewPollAttempts >= 20) {
+        reviewPollAttempts = 0;
+        scheduleProductionPageReviewPoll(300000);
+        return;
+    }
+
+    if (!hasDualAdminAuthorization()) {
+        scheduleProductionPageReviewPoll(5000);
+        return;
+    }
+
+    reviewPollAttempts++;
+    const nonce = (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+    pendingReviewStatusNonce = nonce;
+    pendingReviewStatusHash = reviewExpectedHash;
+
+    let frame = document.getElementById('pageReviewStatusFrame');
+    if (!frame) {
+        frame = document.createElement('iframe');
+        frame.id = 'pageReviewStatusFrame';
+        frame.name = 'pageReviewStatusFrame';
+        frame.style.display = 'none';
+        document.body.appendChild(frame);
+    }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = GOOGLE_SCRIPT_URL;
+    form.target = 'pageReviewStatusFrame';
+    form.style.display = 'none';
+
+    const fields = {
+        action: 'checkProductionPageReviewStatus',
+        environment: 'PRODUCTION',
+        googleUploadToken: googleUploadToken,
+        adminSessionToken: window.adminSessionToken,
+        nonce: nonce,
+        origin: location.origin,
+        expectedHash: reviewExpectedHash
+    };
+
+    Object.entries(fields).forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+
+    if (reviewStatusTimeout) clearTimeout(reviewStatusTimeout);
+    reviewStatusTimeout = setTimeout(() => {
+        if (pendingReviewStatusNonce === nonce) {
+            pendingReviewStatusNonce = null;
+            pendingReviewStatusHash = '';
+            scheduleProductionPageReviewPoll(3500);
+        }
+    }, 12000);
+}
+
+function renderProductionPageReviewStatus(result) {
+    // حالة PR مستقلة تمامًا عن رسالة نجاح الحفظ في شريط المطور.
+    if (result && result.status === 'confirmed' &&
+        result.created === true && result.url) {
+        reviewExpectedHash = '';
+        if (reviewPollTimer) clearTimeout(reviewPollTimer);
+        reviewPollTimer = null;
+        return;
+    }
+
+    // يستمر التحقق بصمت؛ لا نغيّر رسالة "تم الحفظ بنجاح".
+    scheduleProductionPageReviewPoll(2500);
+}
+
+window.addEventListener('message', function(event) {
+    if (!isTrustedAppsScriptMessage(event)) return;
 
     const data = event.data;
+    if (!data) return;
 
-    if (
-        !data ||
+    if (data.type === 'productionPageReviewStatusResult') {
+        const reviewFrame = document.getElementById('pageReviewStatusFrame');
+        if (!reviewFrame ||
+            !isTrustedAppsScriptMessage(event, reviewFrame.contentWindow) ||
+            !pendingReviewStatusNonce ||
+            data.nonce !== pendingReviewStatusNonce) return;
+
+        if (reviewStatusTimeout) clearTimeout(reviewStatusTimeout);
+        reviewStatusTimeout = null;
+        pendingReviewStatusNonce = null;
+        const requestedHash = pendingReviewStatusHash;
+        pendingReviewStatusHash = '';
+
+        if (requestedHash !== reviewExpectedHash) {
+            scheduleProductionPageReviewPoll(250);
+            return;
+        }
+
+        const result = data.result || {};
+        if (result.environment !== 'PRODUCTION') {
+            renderProductionPageReviewStatus({});
+            return;
+        }
+
+        renderProductionPageReviewStatus(result);
+        return;
+    }
+
+    const responseFrame = document.getElementById('pageChangesUploadFrame');
+    if (!responseFrame ||
+        !isTrustedAppsScriptMessage(event, responseFrame.contentWindow) ||
         data.type !== 'savePageChangesResult' ||
         !pendingPageChangesNonce ||
-        data.nonce !== pendingPageChangesNonce
-    ) return;
+        data.nonce !== pendingPageChangesNonce) return;
 
     clearTimeout(pageChangesTimeout);
     pendingPageChangesNonce = null;
 
     const result = data.result || {};
-
-    // لا نعلن النجاح إلا بعد تأكيد الحفظ في Drive والمزامنة مع GitHub.
     if (
+        result.environment === 'PRODUCTION' &&
         result.success === true &&
-        result.driveSaved === true &&
-        result.githubSynced === true
+        result.githubSaved === true &&
+        result.githubVerified === true
     ) {
         if (pendingPageChangesSnapshot) {
             pendingPageChangesSnapshot.forEach(item => {
@@ -2594,38 +2717,26 @@ window.addEventListener('message', function(event) {
 
         if (isLiveEditing) toggleLiveEditing();
 
+        reviewExpectedHash = String(result.reviewExpectedHash || '');
+        reviewPollAttempts = 0;
+        if (reviewPollTimer) clearTimeout(reviewPollTimer);
+        reviewPollTimer = null;
+
+        if (/^[A-Za-z0-9_-]{43}$/.test(reviewExpectedHash)) {
+            scheduleProductionPageReviewPoll(700);
+        } else {
+            console.warn('[PageChanges] بصمة تأكيد طلب المراجعة غير صالحة.');
+        }
         return;
     }
 
-    // الحفظ في Drive تم، لكن مزامنة GitHub لم تنجح.
-    if (
-        result.driveSaved === true &&
-        result.githubSynced === false
-    ) {
-        const message =
-            result.message ||
-            'تم حفظ التعديلات في Google Drive، لكن تعذرت مزامنتها مع GitHub.';
-
-        pendingPageChangesSnapshot = null;
-        showPageChangesSaveStatus(message);
-
-        alert(
-            'تم الحفظ في Google Drive فقط، ولم يتم تأكيد تحديث نسخة الموقع المنشورة.\n\n' +
-            message
-        );
-
-        return;
-    }
-
-    // فشل الحفظ أو لم تصل استجابة مؤكدة بالصيغة المتوقعة.
     pendingPageChangesSnapshot = null;
     const message =
         result.message ||
         result.error ||
-        'لم يتم تأكيد نجاح حفظ التعديلات.';
+        'لم يتم تأكيد حفظ التعديلات في GitHub.';
 
     showPageChangesSaveStatus(message);
-
     alert('لم يتم تأكيد حفظ التعديلات: ' + message);
 });
 
@@ -2856,7 +2967,7 @@ function loadSavedPageChanges() {
 
 function receivePageChanges(data) {
     pageChangesResponseReceived = true;
-    if (!data || data.success !== true || !validatePageChangesForClient(data.changes)) {
+    if (!data || data.success !== true || data.environment !== 'PRODUCTION' || !validatePageChangesForClient(data.changes)) {
         window.__productionPageChangesBackendReady = false;
         const message = data && (data.message || data.error) ? (data.message || data.error) : 'استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.';
         console.error('[PageChanges] تعذر استرجاع تعديلات نصوص الموقع:', message);
