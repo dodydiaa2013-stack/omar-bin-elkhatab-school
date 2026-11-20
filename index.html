@@ -2688,7 +2688,7 @@ window.addEventListener('message', function(event) {
         if (isLiveEditing) toggleLiveEditing();
 
         // Show success only after Apps Script confirms GitHub save and verification.
-        alert('تم حفظ التعديلات والتحقق منها بنجاح في GitHub.');
+        alert('تم الحفظ بنجاح في المستودع الأصلي على GitHub، وتم التحقق من التعديلات.');
 
         reviewExpectedHash = String(result.reviewExpectedHash || '');
         reviewPollAttempts = 0;
