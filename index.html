@@ -264,7 +264,7 @@
         const request = document.createElement("script");
         request.async = true;
         request.src = endpoint +
-            "?action=pageChanges&callback=receivePageChangesEarly&_=" +
+            "?action=pageChanges&environment=PRODUCTION&callback=receivePageChangesEarly&_=" +
             Date.now();
 
         const earlyRequestTimeout = setTimeout(() => {
