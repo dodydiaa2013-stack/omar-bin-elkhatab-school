@@ -74,6 +74,8 @@
 
     const img = $('schoolEntranceImage');
     if (img) {
+      img.onload = null;
+      img.onerror = null;
       img.style.transform = '';
       img.style.filter = '';
       img.style.objectFit = '';
@@ -407,7 +409,6 @@
           img.style.filter = '';
           img.style.objectFit = '';
           img.src = result.image;
-          img.onload = () => setSavedAspectFromImage(img);
         }
       }
 
