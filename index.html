@@ -45,6 +45,13 @@
           imagesrcset="https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w640 640w, https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w960 960w, https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w1200 1200w"
           imagesizes="(max-width: 456px) calc(100vw - 1.6rem), 430px"
           fetchpriority="high">
+    <!-- تسجيل ذاكرة محلية لصورة المدخل: تعرض النسخة المخزنة فورًا عند الزيارات التالية، مع تحديثها من Drive بالخلفية. -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./hero-image-cache-sw.js', { scope: './' })
+          .catch(error => console.warn('تعذر تفعيل ذاكرة صورة المدخل:', error));
+      }
+    </script>
     <title>مدرسة عمر بن الخطاب ث بنين - إدارة المستقبل التعليمية</title>
     <!-- Tailwind CSS v4 - Locally compiled stylesheet -->
     <link rel="stylesheet" href="./assets/tailwind.css">
