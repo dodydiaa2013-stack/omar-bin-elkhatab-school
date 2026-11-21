@@ -14,7 +14,8 @@
     brightness: 100,
     aspectRatio: '3/4',
     savedAspectRatio: '5 / 6',
-    saving: false
+    saving: false,
+    loadGeneration: 0
   };
 
   function status(message, error) {
@@ -118,6 +119,8 @@
       return;
     }
 
+    // أبطل أي استجابة قديمة بدأت قبل اختيار الصورة الجديدة.
+    state.loadGeneration++;
     cancelSelection();
     state.file = file;
     state.aspectRatio = '3/4';
@@ -353,6 +356,9 @@
   function loadSavedImage() {
     if (!endpoint()) return;
 
+    // كل طلب يحمل رقم جيل؛ لا يُسمح لرد قديم بتغيير صورة أحدث.
+    const requestGeneration = ++state.loadGeneration;
+
     const callback = 'heroImageCallback_' + Date.now() + '_' +
       Math.random().toString(36).slice(2);
 
@@ -381,7 +387,7 @@
       clearTimeout(timer);
       cleanup();
 
-      if (state.file) return;
+      if (requestGeneration !== state.loadGeneration || state.file) return;
       if (data && data.success && data.image) {
         const img = $('schoolEntranceImage');
         state.originalSrc = data.image;
@@ -421,6 +427,8 @@
       return;
     }
 
+    // إبطال طلب إعدادات الصورة الذي بدأ عند فتح الصفحة قبل بدء الحفظ.
+    state.loadGeneration++;
     state.saving = true;
     const button = $('heroImageSave');
     if (button) button.disabled = true;
