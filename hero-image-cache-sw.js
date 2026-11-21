@@ -38,26 +38,26 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   if (!isSchoolHeroImage(request)) return;
 
-  event.respondWith((async () => {
-    const cache = await caches.open(HERO_IMAGE_CACHE);
-    const cached = await cache.match(request);
-
-    const refresh = fetch(request).then(response => {
+  const cachePromise = caches.open(HERO_IMAGE_CACHE);
+  const refreshPromise = cachePromise.then(cache =>
+    fetch(request).then(response => {
       if (response && (response.ok || response.type === 'opaque')) {
-        event.waitUntil(cache.put(request, response.clone()).catch(error => {
+        return cache.put(request, response.clone()).catch(error => {
           console.warn('تعذر تحديث ذاكرة صورة المدخل:', error);
-        }));
+        }).then(() => response);
       }
       return response;
-    });
+    })
+  );
 
-    // إذا وجدت نسخة سابقة، اعرضها فورًا ثم حدّثها من Drive دون تعطيل الرسم.
-    if (cached) {
-      event.waitUntil(refresh.catch(() => {}));
-      return cached;
-    }
+  // ابدأ التحديث في الخلفية مع تمديد عمر حدث fetch من بدايته.
+  event.waitUntil(refreshPromise.catch(() => {}));
 
-    // في أول زيارة أو عند تغيير معرّف الصورة، استخدم المصدر الأصلي ثم خزّن الرد.
-    return refresh;
-  })());
+  event.respondWith(cachePromise
+    .then(cache => cache.match(request))
+    .then(cached => {
+      // اعرض النسخة المخزنة فورًا إن وجدت، وإلا انتظر أول تحميل من Drive.
+      return cached || refreshPromise;
+    })
+  );
 });
