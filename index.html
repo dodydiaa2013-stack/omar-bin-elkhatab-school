@@ -688,6 +688,21 @@
                 <div class="home-hero-photo">
                     <div id="schoolEntranceStage" class="home-hero-image-stage">
                         <img id="schoolEntranceImage" src="./images/school-entrance.jpg" alt="مدخل مدرسة عمر بن الخطاب ث بنين" loading="eager" fetchpriority="high" width="220" height="264">
+                        <script>
+                            // اعرض آخر صورة محفوظة فورًا قبل أول رسم، ثم يتحقق Apps Script من أحدث نسخة.
+                            (() => {
+                                try {
+                                    const cached = localStorage.getItem('schoolEntranceImageUrl');
+                                    if (!cached) return;
+                                    const url = new URL(cached);
+                                    const valid = url.protocol === 'https:' &&
+                                        url.hostname === 'drive.google.com' &&
+                                        url.pathname === '/thumbnail' &&
+                                        /^[A-Za-z0-9_-]{10,200}$/.test(url.searchParams.get('id') || '');
+                                    if (valid) document.getElementById('schoolEntranceImage').src = url.href;
+                                } catch (_) {}
+                            })();
+                        </script>
                     </div>
                     <button type="button" id="heroImageEditTrigger" hidden class="rounded-lg bg-amber-300 px-4 py-2 text-sm font-black text-slate-900">تعديل صورة المدخل</button>
                     <section id="heroImageEditor" class="hero-image-editor" hidden aria-label="ضبط صورة مدخل المدرسة">
