@@ -80,6 +80,7 @@
       img.style.filter = '';
       img.style.objectFit = '';
       if (state.originalSrc) img.src = state.originalSrc;
+      else img.removeAttribute('src');
     }
 
     resetControlValues();
@@ -455,7 +456,7 @@
 
     if (!stage || !img) return;
 
-    state.originalSrc = img.src;
+    state.originalSrc = '';
     img.addEventListener('load', () => setSavedAspectFromImage(img));
     setSavedAspectFromImage(img);
 
