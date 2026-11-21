@@ -3,8 +3,8 @@
 
   const $ = id => document.getElementById(id);
   const endpoint = () => typeof GOOGLE_SCRIPT_URL === 'string' ? GOOGLE_SCRIPT_URL : '';
-  const allowedRatios = ['3/4', '4/5', '1/1', '4/3'];
-  const ratioValue = value => allowedRatios.includes(value) ? value : '3/4';
+  const allowedRatios = ['5/6', '3/4', '4/5', '1/1', '4/3'];
+  const ratioValue = value => allowedRatios.includes(value) ? value : '5/6';
 
   const state = {
     file: null,
@@ -12,7 +12,7 @@
     originalSrc: '',
     zoom: 1,
     brightness: 100,
-    aspectRatio: '3/4',
+    aspectRatio: '5/6',
     savedAspectRatio: '5 / 6',
     saving: false,
     loadGeneration: 0
@@ -114,11 +114,21 @@
 
   window.refreshHeroImageEditorAuthorization = refreshAuthorization;
 
+  function fileFromBase64(data, fileName, mimeType) {
+    const binary = atob(String(data || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new File([bytes], fileName || 'school-entrance-current.jpg', {
+      type: mimeType || 'image/jpeg',
+      lastModified: Date.now()
+    });
+  }
+
   function chooseFile(file) {
     if (!file) return;
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      status('اختر صورة JPG أو PNG أو WebP.', true);
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      status('اختر صورة JPG أو PNG أو WebP أو GIF.', true);
       return;
     }
 
@@ -131,7 +141,7 @@
     state.loadGeneration++;
     cancelSelection();
     state.file = file;
-    state.aspectRatio = '3/4';
+    state.aspectRatio = '5/6';
     $('schoolEntranceImage').style.objectFit = 'cover';
 
     if ($('heroImageAspect')) $('heroImageAspect').value = state.aspectRatio;
@@ -188,7 +198,7 @@
   }
 
   async function prepareImage() {
-    if (!state.file) throw new Error('اختر صورة جديدة أولًا.');
+    if (!state.file) throw new Error('لم يتم تحميل صورة للتحرير بعد.');
 
     const source = await loadImage(state.file);
     const parts = ratioValue(state.aspectRatio).split('/').map(Number);
@@ -241,7 +251,7 @@
     });
   }
 
-  function post(fields) {
+  function post(fields, action, responseType, timeoutMs) {
     return new Promise((resolve, reject) => {
       if (!endpoint()) {
         reject(new Error('رابط خادم الموقع غير متاح.'));
@@ -271,7 +281,7 @@
       };
 
       const payload = Object.assign({
-        action: 'saveHeroImage',
+        action: action || 'saveHeroImage',
         environment: 'PRODUCTION',
         nonce: nonce,
         token: typeof googleUploadToken !== 'undefined' ? googleUploadToken : '',
@@ -311,7 +321,7 @@
         ) return;
 
         const message = event.data;
-        if (!message || message.type !== 'heroImageSaveResult' || message.nonce !== nonce) return;
+        if (!message || message.type !== (responseType || 'heroImageSaveResult') || message.nonce !== nonce) return;
 
         if (message.result && message.result.success) {
           finish(resolve, message.result);
@@ -323,8 +333,10 @@
       };
 
       const timer = setTimeout(
-        () => finish(reject, new Error('لم يصل تأكيد الحفظ من الخادم.')),
-        90000
+        () => finish(reject, new Error(action === 'getHeroImageForEditor'
+          ? 'لم تصل الصورة الحالية من الخادم. حاول مرة أخرى.'
+          : 'لم يصل تأكيد الحفظ من الخادم.')),
+        Number(timeoutMs) > 0 ? Number(timeoutMs) : 90000
       );
 
       window.addEventListener('message', onMessage);
@@ -458,7 +470,7 @@
     }
 
     if (!state.file) {
-      status('اختر صورة جديدة أولًا.', true);
+      status('حمّل الصورة الحالية أو اختر صورة جديدة قبل الحفظ.', true);
       return;
     }
 
@@ -518,14 +530,35 @@
     }
   }
 
-  function open() {
+  async function open() {
     if (!authorized()) {
       status('يلزم تسجيل الدخول بكلمة مرور المسؤول والتحقق بحساب Google المعتمد.', true);
       return;
     }
 
     $('heroImageEditor').hidden = false;
-    status('اختر صورة جديدة، ثم اضبط التكبير وشكل الصورة والإضاءة قبل الحفظ.', false);
+    if (state.file) {
+      setControlsDisabled(false);
+      status('الصورة جاهزة للتحرير. يمكنك تعديلها أو اختيار صورة جديدة.', false);
+      return;
+    }
+
+    const requestGeneration = ++state.loadGeneration;
+    setControlsDisabled(true);
+    status('جارٍ تحميل صورة المدخل الحالية إلى المحرر...', false);
+
+    try {
+      const result = await post({}, 'getHeroImageForEditor', 'heroImageLoadResult', 60000);
+      if (requestGeneration !== state.loadGeneration || $('heroImageEditor').hidden || !authorized()) return;
+      if (!result || !result.data) throw new Error('لم يُرجع الخادم بيانات الصورة الحالية.');
+      const file = fileFromBase64(result.data, result.fileName, result.mimeType);
+      chooseFile(file);
+      status('تم تحميل الصورة الحالية. عدّلها وراجع المعاينة قبل الحفظ، أو اختر صورة جديدة.', false);
+    } catch (error) {
+      if (requestGeneration !== state.loadGeneration) return;
+      setControlsDisabled(true);
+      status(error.message || 'تعذر تحميل الصورة الحالية للتحرير.', true);
+    }
   }
 
   function init() {
@@ -553,6 +586,7 @@
     });
 
     $('heroImageClose')?.addEventListener('click', () => {
+      state.loadGeneration++;
       cancelSelection();
       $('heroImageEditor').hidden = true;
     });
