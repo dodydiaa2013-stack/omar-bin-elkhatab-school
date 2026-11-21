@@ -65,10 +65,9 @@ async function prepareImage(){
  const ctx=c.getContext('2d',{alpha:false});if(!ctx)throw new Error('تعذر تجهيز الصورة النهائية.');
  ctx.fillStyle='#071b43';ctx.fillRect(0,0,w,h);
  // صورة رئيسية واحدة بنسبة 5:6؛ إعدادات الموضع والتكبير منفصلة للعرض فقط.
- const p=state.profiles.desktop,scale=Math.max(w/src.naturalWidth,h/src.naturalHeight)*p.zoom;
+ const scale=Math.max(w/src.naturalWidth,h/src.naturalHeight);
  const dw=src.naturalWidth*scale,dh=src.naturalHeight*scale;
- ctx.filter='brightness('+p.brightness+'%)';
- ctx.drawImage(src,(w-dw)/2+p.x/100*dw,(h-dh)/2+p.y/100*dh,dw,dh);
+ ctx.drawImage(src,(w-dw)/2,(h-dh)/2,dw,dh);
  let b=await blobOf(c,.9);if(b.size>3.8*1024*1024)b=await blobOf(c,.78);
  if(b.size>4*1024*1024)throw new Error('الصورة الناتجة أكبر من 4 ميجابايت. اختر صورة أصغر.');
  return b;
@@ -88,6 +87,25 @@ function post(fields){
   const timer=setTimeout(()=>finish(reject,new Error('لم يصل تأكيد الحفظ من الخادم.')),90000);
   addEventListener('message',onMessage);document.body.append(frame,form);form.submit();
  });
+}
+function loadSavedConfig(){
+ if(!endpoint())return;
+ window.heroImageConfigCallback=data=>{
+  if(!data||!data.success)return;
+  const cfg=data.displayConfig||data.config||{};
+  if(cfg.profiles){for(const k of ['desktop','mobile'])if(cfg.profiles[k])state.profiles[k]=Object.assign(defaultProfile(),cfg.profiles[k]);}
+  if(data.image){state.originalSrc=data.image;$('schoolEntranceImage').src=data.image;}
+  state.loaded=true;applyResponsiveProfile();
+ };
+ const s=document.createElement('script');s.src=endpoint()+'?action=heroImageConfig&environment=PRODUCTION&callback=heroImageConfigCallback&_='+Date.now();
+ s.onerror=()=>console.warn('تعذر تحميل إعدادات صورة المدخل المحفوظة.');document.head.appendChild(s);
+}
+function applyResponsiveProfile(){
+ if(state.profile!=='desktop'&&state.profile!=='mobile')state.profile=matchMedia('(max-width:640px)').matches?'mobile':'desktop';
+ if(state.profile==='desktop'||state.profile==='mobile'){
+  const p=state.profiles[matchMedia('(max-width:640px)').matches?'mobile':'desktop'];
+  const img=$('schoolEntranceImage');if(img){img.style.transform='translate('+p.x+'%, '+p.y+'%) scale('+p.zoom+')';img.style.filter='brightness('+p.brightness+'%)';}
+ }
 }
 async function save(){
  if(state.saving)return;
@@ -119,7 +137,7 @@ function init(){
  $('heroImageSave').addEventListener('click',save);
  stage.addEventListener('pointerdown',pointerDown);stage.addEventListener('pointermove',pointerMove);
  ['pointerup','pointercancel','lostpointercapture'].forEach(n=>stage.addEventListener(n,pointerUp));
- refreshAuthorization();
+ refreshAuthorization();loadSavedConfig();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
