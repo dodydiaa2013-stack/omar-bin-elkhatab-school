@@ -39,6 +39,12 @@
     <!-- تحميل Cairo محليًا: تحميل المجموعة العربية مبكرًا لتقليل وميض الخط -->
     <link rel="preload" href="./assets/fonts/cairo/cairo-arabic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preconnect" href="https://accounts.google.com" crossorigin>
+    <!-- تحميل صورة المدخل مبكرًا بنفس خيارات srcset لتقليل الوميض عند تحديث الصفحة -->
+    <link rel="preload" as="image"
+          href="https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w1200"
+          imagesrcset="https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w640 640w, https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w960 960w, https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w1200 1200w"
+          imagesizes="(max-width: 456px) calc(100vw - 1.6rem), 430px"
+          fetchpriority="high">
     <title>مدرسة عمر بن الخطاب ث بنين - إدارة المستقبل التعليمية</title>
     <!-- Tailwind CSS v4 - Locally compiled stylesheet -->
     <link rel="stylesheet" href="./assets/tailwind.css">
