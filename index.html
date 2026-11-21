@@ -558,8 +558,22 @@
                 .home-hero-actions button:hover { transform:translateY(-2px); filter:brightness(1.06); }
                 .home-hero-results { background:linear-gradient(180deg,#ffd33e,#f5a900); color:#092654; border:1px solid #ffe17b; }
                 .home-hero-tablet { background:linear-gradient(180deg,#1682e8,#0753ae); color:#fff; border:1px solid #48a9ff; text-shadow:0 1px 2px #002c66; }
-                .home-hero-photo { min-height:0; padding:.65rem; display:flex; align-items:center; justify-content:center; position:relative; }
-                .home-hero-photo img { display:block; width:100%; max-width:300px; height:auto; max-height:360px; object-fit:contain; object-position:center; border-radius:1.1rem; border:0; box-shadow:0 8px 24px #0005; }
+                .home-hero-photo { min-height:0; padding:.65rem; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:.65rem; position:relative; }
+                .home-hero-image-stage { position:relative; width:min(100%,430px); aspect-ratio:5 / 6; overflow:hidden; border-radius:1.1rem; background:#071b43; box-shadow:0 8px 24px #0005; }
+                .home-hero-image-stage > img { display:block; width:100%; height:100%; object-fit:contain; object-position:center; border:0; border-radius:0; transform:none !important; filter:none !important; }
+                .hero-image-editor[hidden], #heroImageEditTrigger[hidden] { display:none !important; }
+                .hero-image-editor { width:min(100%,430px); padding:.8rem; border:1px solid #cbd5e1; border-radius:1rem; background:#fff; color:#12345c; box-shadow:0 5px 16px #0002; }
+                .hero-image-editor-heading { display:flex; justify-content:space-between; align-items:center; gap:.5rem; font-weight:900; }
+                .hero-image-editor-actions { display:flex; flex-wrap:wrap; gap:.45rem; margin:.6rem 0; }
+                .hero-image-editor button, .hero-image-editor select { min-height:38px; border:1px solid #9eb4d0; border-radius:.65rem; padding:.4rem .7rem; background:#fff; color:#12345c; font:700 .8rem 'Cairo',sans-serif; }
+                .hero-image-editor .hero-image-save { background:#075c38; color:#fff; border-color:#075c38; }
+                .hero-image-editor-field { display:flex; align-items:center; justify-content:space-between; gap:.8rem; margin:.55rem 0; font-size:.82rem; font-weight:700; }
+                .hero-image-editor-field input[type=range] { width:48%; accent-color:#075caa; }
+                #heroImageEditorStatus { min-height:1.4em; margin:.45rem 0 0; color:#234; font-size:.8rem; }
+                #heroImageEditorStatus[data-error="true"] { color:#b42318; }
+                #schoolEntranceStage.hero-image-editing { cursor:grab; touch-action:none; outline:2px dashed #f0b429; outline-offset:3px; }
+                #schoolEntranceStage.hero-image-editing:active { cursor:grabbing; }
+                @media (max-width:640px) { .hero-image-editor-field { align-items:flex-start; flex-direction:column; gap:.2rem; } .hero-image-editor-field input[type=range] { width:100%; } }
 
                 .home-feature-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.15rem; }
                 .home-feature-card {
@@ -650,7 +664,7 @@
                     .home-hero { grid-template-columns:1fr; }
                     .home-hero-copy { padding:1.35rem; }
                     .home-hero-photo { padding:0 .8rem .8rem; }
-                    .home-hero-photo img { width:100%; max-width:300px; height:auto; max-height:360px; min-height:0; object-fit:contain; object-position:center; }
+                    .home-hero-photo > .home-hero-image-stage > img { width:100%; max-width:none; height:100%; max-height:none; min-height:0; object-fit:contain; object-position:center; }
                     .home-hero-actions { display:grid; grid-template-columns:1fr; }
                     .home-hero-actions button { width:100%; justify-content:center; }
                 }
@@ -669,7 +683,26 @@
                     </div>
                 </div>
                 <div class="home-hero-photo">
-                    <img src="./images/school-entrance.jpg" alt="مدخل مدرسة عمر بن الخطاب ث بنين" loading="eager" fetchpriority="high">
+                    <div id="schoolEntranceStage" class="home-hero-image-stage">
+                        <img id="schoolEntranceImage" src="./images/school-entrance.jpg" alt="مدخل مدرسة عمر بن الخطاب ث بنين" loading="eager" fetchpriority="high" width="220" height="264">
+                    </div>
+                    <button type="button" id="heroImageEditTrigger" hidden class="rounded-lg bg-amber-300 px-4 py-2 text-sm font-black text-slate-900">تعديل صورة المدخل</button>
+                    <section id="heroImageEditor" class="hero-image-editor" hidden aria-label="استبدال صورة مدخل المدرسة">
+                        <div class="hero-image-editor-heading">
+                            <strong>استبدال صورة المدخل</strong>
+                            <span>اختر صورة جديدة، وستظهر تلقائيًا بما يناسب الكمبيوتر والموبايل.</span>
+                        </div>
+                        <div class="hero-image-editor-actions">
+                            <button type="button" id="heroImageChooseButton">اختيار صورة جديدة</button>
+                            <button type="button" id="heroImageClose">إغلاق</button>
+                        </div>
+                        <input id="heroImageFileInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                        <div class="hero-image-editor-actions">
+                            <button type="button" id="heroImageCancelSelection">إلغاء الصورة المختارة</button>
+                            <button type="button" id="heroImageSave" class="hero-image-save">حفظ واعتماد الصورة</button>
+                        </div>
+                        <p id="heroImageEditorStatus" role="status" aria-live="polite"></p>
+                    </section>
                 </div>
             </div>
 
@@ -2407,6 +2440,10 @@ window.addEventListener('DOMContentLoaded', () => {
                 backupControls.classList.toggle('hidden', !canManage);
                 backupControls.hidden = !canManage;
                 backupControls.style.display = canManage ? 'flex' : 'none';
+            }
+
+            if (typeof window.refreshHeroImageEditorAuthorization === 'function') {
+                window.refreshHeroImageEditorAuthorization();
             }
         }
 
@@ -5596,5 +5633,6 @@ async function deleteCurrentPhotoAlbum() {
 }
 
     </script>
+    <script src="./assets/hero-image-editor.js" defer></script>
 </body>
 </html>
