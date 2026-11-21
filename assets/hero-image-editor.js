@@ -320,6 +320,36 @@
     });
   }
 
+  function getDriveImageFileId(value) {
+    if (!value) return '';
+    try {
+      const url = new URL(value, window.location.href);
+      return url.searchParams.get('id') ||
+        url.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ||
+        '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function isSameDisplayedImage(img, nextSrc) {
+    if (!img || !nextSrc) return false;
+
+    const currentSrc = img.getAttribute('src') || img.src || '';
+    if (currentSrc === nextSrc) return true;
+
+    const currentId = getDriveImageFileId(currentSrc);
+    const nextId = getDriveImageFileId(nextSrc);
+
+    // روابط Drive قد تختلف في الحجم أو الصيغة مع أنها تشير إلى الملف نفسه.
+    if (currentId && nextId && currentId === nextId) {
+      // لا تعِد بدء طلب صورة ما زالت تُحمّل أو اكتمل تحميلها بنجاح.
+      return !img.complete || img.naturalWidth > 0;
+    }
+
+    return false;
+  }
+
   function loadSavedImage() {
     if (!endpoint()) return;
 
@@ -353,9 +383,14 @@
 
       if (state.file) return;
       if (data && data.success && data.image) {
-        state.originalSrc = data.image;
         const img = $('schoolEntranceImage');
-        if (img) img.src = data.image;
+        state.originalSrc = data.image;
+
+        // لا تعِد تعيين src إذا كانت الصورة الابتدائية هي الملف المحفوظ نفسه.
+        // هذا يمنع إيقاف الطلب الأول وإظهار مساحة فارغة أثناء إعادة التحميل.
+        if (img && !isSameDisplayedImage(img, data.image)) {
+          img.src = data.image;
+        }
       }
     };
 
