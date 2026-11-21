@@ -22,6 +22,38 @@ function getFolder() {
     : DriveApp.createFolder(FOLDER_NAME);
 }
 
+function getHeroImageFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const savedId = props.getProperty("HERO_IMAGE_FOLDER_ID");
+  if (savedId) {
+    try {
+      const savedFolder = DriveApp.getFolderById(savedId);
+      if (!savedFolder.isTrashed() &&
+          savedFolder.getName() === "صور مدخل مدرسة عمر بن الخطاب ث بنين") {
+        return savedFolder;
+      }
+    } catch (error) {
+      throw new Error("تعذر الوصول إلى مجلد صورة المدخل المحفوظ. راجع إعداد HERO_IMAGE_FOLDER_ID.");
+    }
+    throw new Error("مجلد صورة المدخل المحفوظ غير صالح أو موجود في سلة المهملات.");
+  }
+
+  const name = "صور مدخل مدرسة عمر بن الخطاب ث بنين";
+  const folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) {
+    const folder = folders.next();
+    if (folders.hasNext()) {
+      throw new Error("يوجد أكثر من مجلد باسم صور مدخل المدرسة. راجع المجلدات المكررة قبل الحفظ.");
+    }
+    props.setProperty("HERO_IMAGE_FOLDER_ID", folder.getId());
+    return folder;
+  }
+
+  const created = DriveApp.createFolder(name);
+  props.setProperty("HERO_IMAGE_FOLDER_ID", created.getId());
+  return created;
+}
+
 function getScheduleFolder() {
   const folders = DriveApp.getFoldersByName(SCHEDULE_FOLDER_NAME);
   return folders.hasNext()
@@ -1540,9 +1572,208 @@ if (action === "photoAlbums") {
       p.callback
     );
   }
+  if (action === "heroImageConfig") {
+    if (String(p.environment || "") !== "PRODUCTION") {
+      return outputWithCallback({
+        success: false,
+        environment: "PRODUCTION",
+        message: "طلب قراءة صورة المدخل لا يحمل علامة الإنتاج الصحيحة."
+      }, p.callback);
+    }
+    return outputWithCallback(getHeroImageConfig_(), p.callback);
+  }
   return ContentService.createTextOutput(
     "خدمة صور مدرسة عمر بن الخطاب تعمل"
   );
+}
+
+
+function getHeroImageConfig_() {
+  const props = PropertiesService.getScriptProperties();
+  const imageId = props.getProperty("HERO_IMAGE_FILE_ID") || "";
+  let image = "";
+  if (imageId) {
+    try {
+      const file = DriveApp.getFileById(imageId);
+      if (!file.isTrashed() && isImageMimeType(file.getMimeType())) {
+        image = getImageUrl(imageId);
+      }
+    } catch (error) {
+      console.error("تعذر قراءة ملف صورة المدخل: " + error.message);
+    }
+  }
+
+  let displayConfig = {
+    version: 1,
+    aspectRatio: "5:6",
+    profiles: {
+      desktop: { zoom: 1, x: 0, y: 0, brightness: 100 },
+      mobile: { zoom: 1, x: 0, y: 0, brightness: 100 }
+    }
+  };
+  const raw = props.getProperty("HERO_IMAGE_DISPLAY_CONFIG");
+  if (raw) {
+    try {
+      displayConfig = validateHeroImageDisplayConfig_(raw);
+    } catch (error) {
+      console.error("إعدادات عرض صورة المدخل غير صالحة: " + error.message);
+    }
+  }
+  return {
+    success: true,
+    environment: "PRODUCTION",
+    image: image,
+    displayConfig: displayConfig
+  };
+}
+
+function validateHeroImageDisplayConfig_(rawConfig) {
+  let config;
+  try {
+    config = typeof rawConfig === "string" ? JSON.parse(rawConfig) : rawConfig;
+  } catch (error) {
+    throw new Error("إعدادات عرض صورة المدخل ليست بصيغة JSON صحيحة.");
+  }
+  if (!config || typeof config !== "object" || Array.isArray(config) ||
+      config.version !== 1 || config.aspectRatio !== "5:6" ||
+      !config.profiles || typeof config.profiles !== "object" ||
+      Array.isArray(config.profiles)) {
+    throw new Error("بنية إعدادات عرض صورة المدخل غير صحيحة.");
+  }
+
+  const result = { version: 1, aspectRatio: "5:6", profiles: {} };
+  ["desktop", "mobile"].forEach(function(device) {
+    const profile = config.profiles[device];
+    if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+      throw new Error("إعدادات " + device + " غير مكتملة.");
+    }
+    const values = {};
+    ["zoom", "x", "y", "brightness"].forEach(function(key) {
+      const raw = profile[key];
+      if ((typeof raw !== "number" && typeof raw !== "string") ||
+          String(raw).trim() === "") {
+        throw new Error("قيمة " + key + " في إعدادات " + device + " غير صالحة.");
+      }
+      values[key] = Number(raw);
+      if (!Number.isFinite(values[key])) {
+        throw new Error("قيمة " + key + " في إعدادات " + device + " غير رقمية.");
+      }
+    });
+    if (values.zoom < 1 || values.zoom > 3 ||
+        values.x < -100 || values.x > 100 ||
+        values.y < -100 || values.y > 100 ||
+        values.brightness < 60 || values.brightness > 140) {
+      throw new Error("إعدادات " + device + " تتجاوز الحدود المسموح بها.");
+    }
+    result.profiles[device] = values;
+  });
+  return result;
+}
+
+function heroImagePostMessage(p, result) {
+  p = p || {};
+  const requestedOrigin = String(p.origin || "");
+  const allowedOrigin = ALLOWED_PAGE_ORIGINS.includes(requestedOrigin)
+    ? requestedOrigin : "";
+  if (!allowedOrigin) {
+    return jsonOutput({ success: false, message: "مصدر الطلب غير مسموح." });
+  }
+  const payload = JSON.stringify({
+    type: "heroImageSaveResult",
+    nonce: String(p.nonce || ""),
+    result: Object.assign({}, result || {}, { environment: "PRODUCTION" })
+  }).replace(/</g, "\\u003c");
+  const html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><script>" +
+    "window.top.postMessage(" + payload + "," + JSON.stringify(allowedOrigin) + ");" +
+    "</script></body></html>";
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function saveHeroImage(p) {
+  p = p || {};
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+  let newFile = null;
+  let committed = false;
+  try {
+    if (String(p.environment || "") !== "PRODUCTION") {
+      throw new Error("بيئة الحفظ غير صحيحة.");
+    }
+    const nonce = String(p.nonce || "");
+    if (!/^[A-Za-z0-9_-]{10,120}$/.test(nonce)) {
+      throw new Error("رقم طلب الحفظ غير صالح.");
+    }
+    const requestedOrigin = String(p.origin || "");
+    if (!ALLOWED_PAGE_ORIGINS.includes(requestedOrigin)) {
+      throw new Error("مصدر الطلب غير مسموح.");
+    }
+
+    verifyAdminToken(p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+
+    const displayConfig = validateHeroImageDisplayConfig_(p.displayConfig || "");
+    const fileName = getSafeFileName(p.fileName || "school-entrance.jpg");
+    const mimeType = String(p.mimeType || "");
+    if (mimeType !== "image/jpeg") {
+      throw new Error("يجب تجهيز صورة المدخل بصيغة JPG.");
+    }
+    const bytes = decodeImageData(p.data || "", mimeType);
+    if (!bytes || !bytes.length) {
+      throw new Error("ملف صورة المدخل فارغ.");
+    }
+
+    lock.waitLock(20000);
+    lockAcquired = true;
+
+    const props = PropertiesService.getScriptProperties();
+    const oldImageId = props.getProperty("HERO_IMAGE_FILE_ID") || "";
+    const folder = getHeroImageFolder_();
+    newFile = folder.createFile(Utilities.newBlob(bytes, mimeType, fileName));
+    setPublicImage(newFile);
+
+    const newImageId = newFile.getId();
+    const oldConfig = props.getProperty("HERO_IMAGE_DISPLAY_CONFIG") || "";
+    try {
+      props.setProperties({
+        HERO_IMAGE_FILE_ID: newImageId,
+        HERO_IMAGE_DISPLAY_CONFIG: JSON.stringify(displayConfig)
+      });
+      committed = true;
+    } catch (saveError) {
+      if (oldImageId) props.setProperty("HERO_IMAGE_FILE_ID", oldImageId);
+      else props.deleteProperty("HERO_IMAGE_FILE_ID");
+      if (oldConfig) props.setProperty("HERO_IMAGE_DISPLAY_CONFIG", oldConfig);
+      else props.deleteProperty("HERO_IMAGE_DISPLAY_CONFIG");
+      throw new Error("تعذر تثبيت إعدادات صورة المدخل: " + saveError.message);
+    }
+
+    if (oldImageId && oldImageId !== newImageId) {
+      try {
+        DriveApp.getFileById(oldImageId).setTrashed(true);
+      } catch (cleanupError) {
+        console.error("تعذر نقل الصورة القديمة إلى المهملات: " + cleanupError.message);
+      }
+    }
+
+    return heroImagePostMessage(p, {
+      success: true,
+      image: getImageUrl(newImageId),
+      message: "تم حفظ صورة المدخل وإعدادات الكمبيوتر والموبايل بنجاح."
+    });
+  } catch (error) {
+    if (newFile && !committed) {
+      try { newFile.setTrashed(true); } catch (cleanupError) {
+        console.error("تعذر تنظيف ملف صورة المدخل المؤقت: " + cleanupError.message);
+      }
+    }
+    return heroImagePostMessage(p, {
+      success: false,
+      message: error.message || "تعذر حفظ صورة المدخل."
+    });
+  } finally {
+    if (lockAcquired) lock.releaseLock();
+  }
 }
 
 function outputWithCallback(data, callback) {
@@ -1569,7 +1800,10 @@ function doPost(e) {
   const action = p.action || "";
 
   try {
-        if (action === "adminLogin") {
+    if (action === "saveHeroImage") {
+      return saveHeroImage(p);
+    }
+    if (action === "adminLogin") {
       return adminLogin(p);
     }
 
@@ -1668,6 +1902,13 @@ function doPost(e) {
 
   } catch (error) {
     const message = error.message || "تعذر تنفيذ العملية";
+
+    if (action === "saveHeroImage") {
+      return heroImagePostMessage(p, {
+        success: false,
+        message: message
+      });
+    }
 
     if (action === "adminLogout") {
       return adminLogoutPostMessage(p, {
