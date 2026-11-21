@@ -1,3 +1,6 @@
+const HERO_IMAGE_FOLDER_NAME = "صور مدخل مدرسة عمر بن الخطاب ث بنين";
+const HERO_IMAGE_FILE_PROPERTY = "HERO_IMAGE_FILE_ID";
+const HERO_IMAGE_CONFIG_PROPERTY = "HERO_IMAGE_DISPLAY_CONFIG";
 
 const CLIENT_ID = "";
 const ALLOWED_EMAIL = "";
@@ -1776,6 +1779,113 @@ function saveHeroImage(p) {
   }
 }
 
+
+function getHeroImageFolder_() {
+  const folders = DriveApp.getFoldersByName(HERO_IMAGE_FOLDER_NAME);
+  if (folders.hasNext()) {
+    const folder = folders.next();
+    if (folders.hasNext()) throw new Error("يوجد أكثر من مجلد مخصص لصورة مدخل المدرسة.");
+    return folder;
+  }
+  return DriveApp.createFolder(HERO_IMAGE_FOLDER_NAME);
+}
+
+function validateHeroImageDisplayConfig_(rawConfig) {
+  let config;
+  try { config = typeof rawConfig === "string" ? JSON.parse(rawConfig) : rawConfig; }
+  catch (e) { throw new Error("إعدادات عرض صورة المدخل غير صالحة."); }
+  if (!config || typeof config !== "object" || Array.isArray(config) || config.version !== 1 ||
+      config.aspectRatio !== "5:6" || !config.profiles || typeof config.profiles !== "object" ||
+      Array.isArray(config.profiles)) throw new Error("بنية إعدادات صورة المدخل غير صحيحة.");
+  const result = { version: 1, aspectRatio: "5:6", profiles: {} };
+  ["desktop", "mobile"].forEach(function(device) {
+    const profile = config.profiles[device];
+    if (!profile || typeof profile !== "object" || Array.isArray(profile)) throw new Error("إعدادات " + device + " غير مكتملة.");
+    const values = {};
+    ["zoom", "x", "y", "brightness"].forEach(function(key) {
+      if ((typeof profile[key] !== "number" && typeof profile[key] !== "string") || String(profile[key]).trim() === "") throw new Error("قيمة " + key + " غير صالحة.");
+      values[key] = Number(profile[key]);
+      if (!Number.isFinite(values[key])) throw new Error("قيمة " + key + " غير رقمية.");
+    });
+    if (values.zoom < 1 || values.zoom > 3 || values.x < -100 || values.x > 100 ||
+        values.y < -100 || values.y > 100 || values.brightness < 60 || values.brightness > 140) {
+      throw new Error("إعدادات " + device + " تتجاوز الحدود المسموح بها.");
+    }
+    result.profiles[device] = values;
+  });
+  return result;
+}
+
+function getHeroImageConfigForClient_() {
+  const properties = PropertiesService.getScriptProperties();
+  const defaults = { version: 1, aspectRatio: "5:6", profiles: {
+    desktop: { zoom: 1, x: 0, y: 0, brightness: 100 },
+    mobile: { zoom: 1, x: 0, y: 0, brightness: 100 }
+  }};
+  let displayConfig = defaults;
+  try {
+    const raw = properties.getProperty(HERO_IMAGE_CONFIG_PROPERTY) || "";
+    if (raw) displayConfig = validateHeroImageDisplayConfig_(raw);
+  } catch (error) { console.error("إعدادات صورة المدخل غير صالحة: " + error.message); }
+  const id = String(properties.getProperty(HERO_IMAGE_FILE_PROPERTY) || "");
+  if (!id) return { success: true, image: "", displayConfig: displayConfig };
+  try {
+    const folder = getHeroImageFolder_(), file = DriveApp.getFileById(id);
+    if (file.isTrashed()) return { success: true, image: "", displayConfig: defaults };
+    let belongs = false; const parents = file.getParents();
+    while (parents.hasNext()) if (parents.next().getId() === folder.getId()) belongs = true;
+    if (!belongs) throw new Error("ملف صورة المدخل لا يتبع مجلد الصور المخصص.");
+    return { success: true, image: getImageUrl(id), displayConfig: displayConfig };
+  } catch (error) {
+    console.error("تعذر قراءة صورة المدخل: " + error.message);
+    return { success: false, image: "", displayConfig: defaults, message: "تعذر تحميل صورة المدخل المحفوظة." };
+  }
+}
+
+function saveHeroImage(p) {
+  p = p || {};
+  const lock = LockService.getScriptLock();
+  let acquired = false, newFile = null, committed = false;
+  try {
+    if (String(p.environment || "") !== "PRODUCTION") throw new Error("هذا الإجراء متاح للإنتاج فقط.");
+    const nonce = String(p.nonce || "");
+    if (!/^[A-Za-z0-9_-]{10,120}$/.test(nonce)) throw new Error("رقم طلب الحفظ غير صالح.");
+    const origin = String(p.origin || "");
+    if (!ALLOWED_PAGE_ORIGINS.includes(origin)) throw new Error("مصدر الطلب غير مسموح.");
+    verifyAdminToken(p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+    const config = validateHeroImageDisplayConfig_(p.displayConfig || "");
+    const mimeType = String(p.mimeType || "");
+    if (mimeType !== "image/jpeg") throw new Error("يجب تجهيز الصورة بصيغة JPG.");
+    const bytes = decodeImageData(p.data || "", mimeType);
+    if (!bytes || !bytes.length) throw new Error("ملف صورة المدخل فارغ.");
+    lock.waitLock(20000); acquired = true;
+    const properties = PropertiesService.getScriptProperties();
+    const folder = getHeroImageFolder_();
+    newFile = folder.createFile(Utilities.newBlob(bytes, mimeType, getSafeFileName(p.fileName || "school-entrance.jpg")));
+    setPublicImage(newFile);
+    properties.setProperties({
+      HERO_IMAGE_FILE_ID: newFile.getId(),
+      HERO_IMAGE_DISPLAY_CONFIG: JSON.stringify(config)
+    });
+    committed = true;
+    // لا نحذف الصورة السابقة من Drive؛ نحدّث مرجع العرض فقط بعد نجاح الحفظ.
+    return heroImagePostMessage(p, { success: true, image: getImageUrl(newFile.getId()), message: "تم استبدال صورة المدخل وحفظها بنجاح." });
+  } catch (error) {
+    if (newFile && !committed) { try { newFile.setTrashed(true); } catch (cleanupError) {} }
+    return heroImagePostMessage(p, { success: false, message: error.message || "تعذر حفظ صورة المدخل." });
+  } finally { if (acquired) lock.releaseLock(); }
+}
+
+function heroImagePostMessage(p, result) {
+  p = p || {};
+  const origin = String(p.origin || "");
+  if (!ALLOWED_PAGE_ORIGINS.includes(origin)) return jsonOutput({ success: false, message: "مصدر الطلب غير مسموح." });
+  const payload = JSON.stringify({ type: "heroImageSaveResult", nonce: String(p.nonce || ""), result: result || {} }).replace(/</g, "\\u003c");
+  const html = "<!DOCTYPE html><html><body><script>window.top.postMessage(" + payload + ", " + JSON.stringify(origin) + ");</script></body></html>";
+  return HtmlService.createHtmlOutput(html).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
 function outputWithCallback(data, callback) {
   const result = JSON.stringify(data);
 
@@ -1902,6 +2012,8 @@ function doPost(e) {
 
   } catch (error) {
     const message = error.message || "تعذر تنفيذ العملية";
+
+    if (action === "saveHeroImage") return heroImagePostMessage(p, { success: false, message: message });
 
     if (action === "saveHeroImage") {
       return heroImagePostMessage(p, {
