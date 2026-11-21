@@ -258,7 +258,18 @@
         return;
       }
 
-      const nonce = 'hero-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      // استخدم قيمة عشوائية قوية لربط رد Apps Script بهذا الطلب تحديدًا.
+      const nonceBytes = new Uint8Array(18);
+      if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        window.crypto.getRandomValues(nonceBytes);
+      } else {
+        for (let i = 0; i < nonceBytes.length; i++) {
+          nonceBytes[i] = Math.floor(Math.random() * 256);
+        }
+      }
+      const nonce = 'hero-' + Array.from(nonceBytes, byte =>
+        byte.toString(16).padStart(2, '0')
+      ).join('');
       const frame = document.createElement('iframe');
       const form = document.createElement('form');
       const target = 'heroFrame_' + nonce.replace(/[^a-zA-Z0-9_]/g, '');
@@ -315,13 +326,32 @@
       };
 
       const onMessage = event => {
-        if (
-          typeof isTrustedAppsScriptMessage !== 'function' ||
-          !isTrustedAppsScriptMessage(event, frame.contentWindow)
-        ) return;
+        if (!event || !event.source || event.source === window) return;
 
         const message = event.data;
-        if (!message || message.type !== (responseType || 'heroImageSaveResult') || message.nonce !== nonce) return;
+        if (!message ||
+            message.type !== (responseType || 'heroImageSaveResult') ||
+            message.nonce !== nonce) return;
+
+        // Apps Script قد يرسل postMessage من إطار Google sandbox متداخل
+        // لا يظهر دائمًا كابن مباشر لإطار POST؛ اقبل فقط أصل Google الموثوق
+        // مع nonce قوي خاص بالطلب، مع الإبقاء على فحص الإطار الأصلي متى أمكن.
+        let trustedGoogleOrigin = false;
+        try {
+          const responseUrl = new URL(event.origin);
+          const host = responseUrl.hostname.toLowerCase();
+          trustedGoogleOrigin = responseUrl.protocol === 'https:' &&
+            !responseUrl.username && !responseUrl.password && !responseUrl.port &&
+            (host === 'script.google.com' ||
+             host === 'script.googleusercontent.com' ||
+             host.endsWith('-script.googleusercontent.com'));
+        } catch (_) {
+          trustedGoogleOrigin = false;
+        }
+
+        const trustedFrame = typeof isTrustedAppsScriptMessage === 'function' &&
+          isTrustedAppsScriptMessage(event, frame.contentWindow);
+        if (!trustedFrame && !trustedGoogleOrigin) return;
 
         if (message.result && message.result.success) {
           finish(resolve, message.result);
