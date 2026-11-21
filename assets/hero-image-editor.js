@@ -80,8 +80,13 @@
       img.style.transform = '';
       img.style.filter = '';
       img.style.objectFit = '';
-      if (state.originalSrc) img.src = state.originalSrc;
-      else img.removeAttribute('src');
+      if (state.originalSrc) {
+        setResponsiveImageSource(img, state.originalSrc);
+      } else {
+        img.removeAttribute('src');
+        img.removeAttribute('srcset');
+        img.removeAttribute('sizes');
+      }
     }
 
     resetControlValues();
@@ -131,6 +136,8 @@
 
     state.objectUrl = URL.createObjectURL(file);
     const img = $('schoolEntranceImage');
+    img.removeAttribute('srcset');
+    img.removeAttribute('sizes');
 
     img.onload = () => {
       updatePreview();
@@ -335,6 +342,31 @@
     }
   }
 
+  function setResponsiveImageSource(img, source) {
+    if (!img || !source) return;
+
+    const fileId = getDriveImageFileId(source);
+    if (!fileId) {
+      img.removeAttribute('srcset');
+      img.removeAttribute('sizes');
+      img.src = source;
+      return;
+    }
+
+    const base = 'https://drive.google.com/thumbnail?id=' +
+      encodeURIComponent(fileId);
+
+    img.srcset = [
+      base + '&sz=w640 640w',
+      base + '&sz=w960 960w',
+      base + '&sz=w1200 1200w'
+    ].join(', ');
+
+    // يتبع حجم العرض المسجل في PageSpeed، مع اختيار نسخة أدق للشاشات عالية الكثافة.
+    img.sizes = '(max-width: 640px) 100vw, 617px';
+    img.src = source;
+  }
+
   function isSameDisplayedImage(img, nextSrc) {
     if (!img || !nextSrc) return false;
 
@@ -395,7 +427,7 @@
         // لا تعِد تعيين src إذا كانت الصورة الابتدائية هي الملف المحفوظ نفسه.
         // هذا يمنع إيقاف الطلب الأول وإظهار مساحة فارغة أثناء إعادة التحميل.
         if (img && !isSameDisplayedImage(img, data.image)) {
-          img.src = data.image;
+          setResponsiveImageSource(img, data.image);
         }
       }
     };
@@ -458,7 +490,7 @@
           img.style.transform = '';
           img.style.filter = '';
           img.style.objectFit = '';
-          img.src = result.image;
+          setResponsiveImageSource(img, result.image);
         }
       }
 
@@ -499,7 +531,7 @@
 
     if (!stage || !img) return;
 
-    state.originalSrc = '';
+    state.originalSrc = img.getAttribute('src') || img.src || '';
     img.addEventListener('load', () => setSavedAspectFromImage(img));
     setSavedAspectFromImage(img);
 
