@@ -560,20 +560,23 @@
                 .home-hero-tablet { background:linear-gradient(180deg,#1682e8,#0753ae); color:#fff; border:1px solid #48a9ff; text-shadow:0 1px 2px #002c66; }
                 .home-hero-photo { min-height:0; padding:.65rem; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:.65rem; position:relative; }
                 .home-hero-image-stage { position:relative; width:min(100%,430px); aspect-ratio:5 / 6; overflow:hidden; border-radius:1.1rem; background:#071b43; box-shadow:0 8px 24px #0005; }
-                .home-hero-image-stage > img { display:block; width:100%; height:100%; object-fit:contain; object-position:center; border:0; border-radius:0; transform:none !important; filter:none !important; }
+                .home-hero-image-stage > img { display:block; width:100%; height:100%; object-fit:contain; object-position:center; border:0; border-radius:0; transform:none; filter:none; }
                 .hero-image-editor[hidden], #heroImageEditTrigger[hidden] { display:none !important; }
-                .hero-image-editor { width:min(100%,430px); padding:.8rem; border:1px solid #cbd5e1; border-radius:1rem; background:#fff; color:#12345c; box-shadow:0 5px 16px #0002; }
+                .hero-image-editor { width:min(100%,430px); box-sizing:border-box; padding:.8rem; border:1px solid #cbd5e1; border-radius:1rem; background:#fff; color:#12345c; box-shadow:0 5px 16px #0002; }
                 .hero-image-editor-heading { display:flex; justify-content:space-between; align-items:center; gap:.5rem; font-weight:900; }
                 .hero-image-editor-actions { display:flex; flex-wrap:wrap; gap:.45rem; margin:.6rem 0; }
                 .hero-image-editor button, .hero-image-editor select { min-height:38px; border:1px solid #9eb4d0; border-radius:.65rem; padding:.4rem .7rem; background:#fff; color:#12345c; font:700 .8rem 'Cairo',sans-serif; }
+                .hero-image-editor button:disabled, .hero-image-editor select:disabled, .hero-image-editor input:disabled { opacity:.5; cursor:not-allowed; }
                 .hero-image-editor .hero-image-save { background:#075c38; color:#fff; border-color:#075c38; }
                 .hero-image-editor-field { display:flex; align-items:center; justify-content:space-between; gap:.8rem; margin:.55rem 0; font-size:.82rem; font-weight:700; }
                 .hero-image-editor-field input[type=range] { width:48%; accent-color:#075caa; }
+                .hero-image-editor-field select { width:48%; min-height:38px; }
                 #heroImageEditorStatus { min-height:1.4em; margin:.45rem 0 0; color:#234; font-size:.8rem; }
                 #heroImageEditorStatus[data-error="true"] { color:#b42318; }
-                #schoolEntranceStage.hero-image-editing { cursor:grab; touch-action:none; outline:2px dashed #f0b429; outline-offset:3px; }
-                #schoolEntranceStage.hero-image-editing:active { cursor:grabbing; }
-                @media (max-width:640px) { .hero-image-editor-field { align-items:flex-start; flex-direction:column; gap:.2rem; } .hero-image-editor-field input[type=range] { width:100%; } }
+                @media (max-width:640px) {
+                    .hero-image-editor-field { align-items:flex-start; flex-direction:column; gap:.2rem; }
+                    .hero-image-editor-field input[type=range], .hero-image-editor-field select { width:100%; box-sizing:border-box; }
+                }
 
                 .home-feature-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.15rem; }
                 .home-feature-card {
@@ -687,18 +690,36 @@
                         <img id="schoolEntranceImage" src="./images/school-entrance.jpg" alt="مدخل مدرسة عمر بن الخطاب ث بنين" loading="eager" fetchpriority="high" width="220" height="264">
                     </div>
                     <button type="button" id="heroImageEditTrigger" hidden class="rounded-lg bg-amber-300 px-4 py-2 text-sm font-black text-slate-900">تعديل صورة المدخل</button>
-                    <section id="heroImageEditor" class="hero-image-editor" hidden aria-label="استبدال صورة مدخل المدرسة">
+                    <section id="heroImageEditor" class="hero-image-editor" hidden aria-label="ضبط صورة مدخل المدرسة">
                         <div class="hero-image-editor-heading">
-                            <strong>استبدال صورة المدخل</strong>
-                            <span>اختر صورة جديدة، وستظهر تلقائيًا بما يناسب الكمبيوتر والموبايل.</span>
+                            <strong>ضبط صورة المدخل</strong>
+                            <span>اختر صورة، ثم اضبط شكلها وحجمها والإضاءة مع معاينة مباشرة.</span>
                         </div>
                         <div class="hero-image-editor-actions">
                             <button type="button" id="heroImageChooseButton">اختيار صورة جديدة</button>
                             <button type="button" id="heroImageClose">إغلاق</button>
+                            <button type="button" id="heroImageCancelSelection">إلغاء الصورة المختارة</button>
                         </div>
                         <input id="heroImageFileInput" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+                        <label class="hero-image-editor-field">
+                            <span>شكل الصورة</span>
+                            <select id="heroImageAspect" disabled>
+                                <option value="3/4" selected>طولي</option>
+                                <option value="4/5">طولي أقصر</option>
+                                <option value="1/1">مربع</option>
+                                <option value="4/3">عرضي</option>
+                            </select>
+                        </label>
+                        <label class="hero-image-editor-field">
+                            <span>التكبير والتصغير</span>
+                            <input id="heroImageZoom" type="range" min="1" max="3" step="0.05" value="1" disabled>
+                        </label>
+                        <label class="hero-image-editor-field">
+                            <span>الإضاءة</span>
+                            <input id="heroImageBrightness" type="range" min="70" max="130" step="1" value="100" disabled>
+                        </label>
                         <div class="hero-image-editor-actions">
-                            <button type="button" id="heroImageCancelSelection">إلغاء الصورة المختارة</button>
+                            <button type="button" id="heroImageReset" disabled>إعادة ضبط التكبير والإضاءة</button>
                             <button type="button" id="heroImageSave" class="hero-image-save">حفظ واعتماد الصورة</button>
                         </div>
                         <p id="heroImageEditorStatus" role="status" aria-live="polite"></p>
