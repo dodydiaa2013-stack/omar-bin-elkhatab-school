@@ -1763,6 +1763,102 @@ function heroImagePostMessage(p, result) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+function heroImageEditorLoadPostMessage(p, result) {
+  p = p || {};
+  const requestedOrigin = String(p.origin || "");
+  const allowedOrigin = ALLOWED_PAGE_ORIGINS.includes(requestedOrigin)
+    ? requestedOrigin : "";
+  if (!allowedOrigin) {
+    return jsonOutput({ success: false, message: "مصدر الطلب غير مسموح." });
+  }
+
+  const payload = JSON.stringify({
+    type: "heroImageLoadResult",
+    nonce: String(p.nonce || ""),
+    result: Object.assign({}, result || {}, { environment: "PRODUCTION" })
+  }).replace(/</g, "\\u003c");
+
+  const html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"></head><body><script>" +
+    "window.top.postMessage(" + payload + "," + JSON.stringify(allowedOrigin) + ");" +
+    "</script></body></html>";
+
+  return HtmlService.createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function getHeroImageForEditor(p) {
+  p = p || {};
+
+  try {
+    if (String(p.environment || "") !== "PRODUCTION") {
+      throw new Error("بيئة قراءة الصورة غير صحيحة.");
+    }
+
+    const nonce = String(p.nonce || "");
+    if (!/^[A-Za-z0-9_-]{10,120}$/.test(nonce)) {
+      throw new Error("رقم طلب قراءة الصورة غير صالح.");
+    }
+
+    const requestedOrigin = String(p.origin || "");
+    if (!ALLOWED_PAGE_ORIGINS.includes(requestedOrigin)) {
+      throw new Error("مصدر الطلب غير مسموح.");
+    }
+
+    verifyAdminToken(p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+
+    const imageId = String(
+      PropertiesService.getScriptProperties().getProperty(HERO_IMAGE_FILE_PROPERTY) || ""
+    );
+    if (!imageId) {
+      throw new Error("لا توجد صورة مدخل معتمدة لتحريرها.");
+    }
+
+    const folder = getHeroImageFolder_();
+    const file = DriveApp.getFileById(imageId);
+
+    if (file.isTrashed() || !isImageMimeType(file.getMimeType())) {
+      throw new Error("ملف صورة المدخل غير صالح أو موجود في سلة المهملات.");
+    }
+
+    let belongsToFolder = false;
+    const parents = file.getParents();
+    while (parents.hasNext()) {
+      if (parents.next().getId() === folder.getId()) {
+        belongsToFolder = true;
+        break;
+      }
+    }
+    if (!belongsToFolder) {
+      throw new Error("ملف صورة المدخل لا يتبع مجلد الصور المخصص.");
+    }
+
+    const blob = file.getBlob();
+    const bytes = blob.getBytes();
+    if (!bytes.length || bytes.length > MAX_FILE_SIZE) {
+      throw new Error("حجم الصورة الحالية غير صالح للتحرير؛ يجب ألا يتجاوز 4 ميجابايت.");
+    }
+
+    const mimeType = String(file.getMimeType() || blob.getContentType() || "");
+    if (!/^image\\/(jpeg|png|webp|gif)$/.test(mimeType)) {
+      throw new Error("صيغة الصورة الحالية غير مدعومة للتحرير.");
+    }
+
+    return heroImageEditorLoadPostMessage(p, {
+      success: true,
+      fileName: getSafeFileName(file.getName()),
+      mimeType: mimeType,
+      data: Utilities.base64Encode(bytes)
+    });
+  } catch (error) {
+    return heroImageEditorLoadPostMessage(p, {
+      success: false,
+      message: error.message || "تعذر تحميل صورة المدخل الحالية."
+    });
+  }
+}
+
+
 function saveHeroImage(p) {
   p = p || {};
   const lock = LockService.getScriptLock();
@@ -1904,6 +2000,9 @@ function doPost(e) {
     if (action === "saveHeroImage") {
       return saveHeroImage(p);
     }
+    if (action === "getHeroImageForEditor") {
+      return getHeroImageForEditor(p);
+    }
     if (action === "adminLogin") {
       return adminLogin(p);
     }
@@ -2004,6 +2103,13 @@ function doPost(e) {
   } catch (error) {
     const message = error.message || "تعذر تنفيذ العملية";
 
+
+    if (action === "getHeroImageForEditor") {
+      return heroImageEditorLoadPostMessage(p, {
+        success: false,
+        message: message
+      });
+    }
 
     if (action === "adminLogout") {
       return adminLogoutPostMessage(p, {
