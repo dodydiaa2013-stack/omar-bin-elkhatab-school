@@ -132,7 +132,7 @@ async function save(){
   const blob=await prepareImage(),data=await toBase64(blob);
   const result=await post({fileName:'school-entrance-'+Date.now()+'.jpg',mimeType:'image/jpeg',data,displayConfig:JSON.stringify({version:1,aspectRatio:'5:6',profiles:state.profiles})});
   if(result.image){state.savedImageUrl=result.image;state.originalSrc=result.image;$('schoolEntranceImage').src=result.image;}
-  cancelSelection();$('heroImageEditor').hidden=true;$('schoolEntranceStage').classList.remove('hero-image-editing');
+  cancelSelection();$('heroImageEditor').hidden=true;$('schoolEntranceStage').classList.remove('hero-image-editing');applyResponsiveProfile();
   status(result.message||'تم حفظ صورة المدخل وإعدادات الكمبيوتر والموبايل.',false);
  }catch(e){status(e.message||'تعذر حفظ صورة المدخل.',true);}
  finally{state.saving=false;$('heroImageSave').disabled=false;}
@@ -147,7 +147,7 @@ function init(){
  $('heroPreviewDesktop').addEventListener('click',()=>setProfile('desktop'));
  $('heroPreviewMobile').addEventListener('click',()=>setProfile('mobile'));
  $('heroImageReset').addEventListener('click',resetProfile);
- $('heroImageClose').addEventListener('click',()=>{cancelSelection();$('heroImageEditor').hidden=true;stage.classList.remove('hero-image-editing');});
+ $('heroImageClose').addEventListener('click',()=>{cancelSelection();$('heroImageEditor').hidden=true;stage.classList.remove('hero-image-editing');applyResponsiveProfile();});
  $('heroImageCancelSelection').addEventListener('click',()=>{cancelSelection();applyProfile();status('تم إلغاء الصورة المختارة دون تغيير الصورة الحالية.');});
  for(const [id,key] of [['heroImageZoom','zoom'],['heroImageX','x'],['heroImageY','y'],['heroImageBrightness','brightness']])$(id).addEventListener('input',e=>{profile()[key]=Number(e.target.value);applyProfile();});
  $('heroImageSave').addEventListener('click',save);
