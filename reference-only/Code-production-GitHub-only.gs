@@ -1840,7 +1840,7 @@ function getHeroImageForEditor(p) {
     }
 
     const mimeType = String(file.getMimeType() || blob.getContentType() || "");
-    if (!/^image\\/(jpeg|png|webp|gif)$/.test(mimeType)) {
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(mimeType)) {
       throw new Error("صيغة الصورة الحالية غير مدعومة للتحرير.");
     }
 
