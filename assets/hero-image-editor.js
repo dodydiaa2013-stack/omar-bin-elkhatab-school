@@ -69,6 +69,10 @@
   }
 
   function cancelSelection() {
+    // لا تلمس مصدر الصورة المعروضة عند فتح الصفحة أو تحديث الصلاحيات.
+    // استعادة المصدر مطلوبة فقط إذا كان المستخدم قد اختار معاينة محلية بالفعل.
+    const hadSelection = !!state.file;
+
     if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
     state.objectUrl = '';
     state.file = null;
@@ -80,12 +84,11 @@
       img.style.transform = '';
       img.style.filter = '';
       img.style.objectFit = '';
-      if (state.originalSrc) {
+
+      // تجنب إعادة طلب الصورة نفسها؛ أعد المصدر فقط بعد إلغاء معاينة محلية.
+      if (hadSelection && state.originalSrc &&
+          !isSameDisplayedImage(img, state.originalSrc)) {
         setResponsiveImageSource(img, state.originalSrc);
-      } else {
-        img.removeAttribute('src');
-        img.removeAttribute('srcset');
-        img.removeAttribute('sizes');
       }
     }
 
