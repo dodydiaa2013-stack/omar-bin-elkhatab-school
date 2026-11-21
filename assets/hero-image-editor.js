@@ -101,11 +101,12 @@ function loadSavedConfig(){
  s.onerror=()=>console.warn('تعذر تحميل إعدادات صورة المدخل المحفوظة.');document.head.appendChild(s);
 }
 function applyResponsiveProfile(){
- if(state.profile!=='desktop'&&state.profile!=='mobile')state.profile=matchMedia('(max-width:640px)').matches?'mobile':'desktop';
- if(state.profile==='desktop'||state.profile==='mobile'){
-  const p=state.profiles[matchMedia('(max-width:640px)').matches?'mobile':'desktop'];
-  const img=$('schoolEntranceImage');if(img){img.style.transform='translate('+p.x+'%, '+p.y+'%) scale('+p.zoom+')';img.style.filter='brightness('+p.brightness+'%)';}
- }
+ // أثناء فتح المحرر نعرض الجهاز المختار للمعاينة، ولا نستبدله بمقاس نافذة المتصفح.
+ const editor=$('heroImageEditor');
+ if(editor&&!editor.hidden)return;
+ const name=matchMedia('(max-width:640px)').matches?'mobile':'desktop';
+ const p=state.profiles[name],img=$('schoolEntranceImage');
+ if(img){img.style.transform='translate('+p.x+'%, '+p.y+'%) scale('+p.zoom+')';img.style.filter='brightness('+p.brightness+'%)';}
 }
 async function save(){
  if(state.saving)return;
@@ -138,6 +139,11 @@ function init(){
  stage.addEventListener('pointerdown',pointerDown);stage.addEventListener('pointermove',pointerMove);
  ['pointerup','pointercancel','lostpointercapture'].forEach(n=>stage.addEventListener(n,pointerUp));
  refreshAuthorization();loadSavedConfig();
+ // بدّل الإعدادات تلقائيًا عند تغيير عرض الشاشة، مع احترام وضع المعاينة داخل المحرر.
+ const media=matchMedia('(max-width:640px)');
+ if(typeof media.addEventListener==='function')media.addEventListener('change',applyResponsiveProfile);
+ else if(typeof media.addListener==='function')media.addListener(applyResponsiveProfile);
+ window.addEventListener('resize',applyResponsiveProfile,{passive:true});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
