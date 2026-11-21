@@ -326,7 +326,7 @@
       };
 
       const onMessage = event => {
-        if (!event || !event.source || event.source === window) return;
+        if (!event || !event.source) return;
 
         const message = event.data;
         if (!message ||
