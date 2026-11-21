@@ -388,6 +388,10 @@
     state.saving = true;
     const button = $('heroImageSave');
     if (button) button.disabled = true;
+    if ($('heroImageChooseButton')) $('heroImageChooseButton').disabled = true;
+    if ($('heroImageCancelSelection')) $('heroImageCancelSelection').disabled = true;
+    if ($('heroImageClose')) $('heroImageClose').disabled = true;
+    setControlsDisabled(true);
 
     status('جارٍ تجهيز الصورة بالإعدادات المختارة وحفظها...', false);
 
@@ -405,6 +409,8 @@
         const img = $('schoolEntranceImage');
 
         if (img) {
+          img.onload = null;
+          img.onerror = null;
           img.style.transform = '';
           img.style.filter = '';
           img.style.objectFit = '';
@@ -426,6 +432,10 @@
     } finally {
       state.saving = false;
       if (button) button.disabled = false;
+      if ($('heroImageChooseButton')) $('heroImageChooseButton').disabled = false;
+      if ($('heroImageCancelSelection')) $('heroImageCancelSelection').disabled = false;
+      if ($('heroImageClose')) $('heroImageClose').disabled = false;
+      setControlsDisabled(!state.file);
     }
   }
 
