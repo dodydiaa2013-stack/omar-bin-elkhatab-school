@@ -325,7 +325,7 @@
     try {
       const url = new URL(value, window.location.href);
       return url.searchParams.get('id') ||
-        url.pathname.match(/\\/d\\/([a-zA-Z0-9_-]+)/)?.[1] ||
+        url.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ||
         '';
     } catch (_) {
       return '';
