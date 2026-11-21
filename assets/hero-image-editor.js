@@ -128,7 +128,7 @@
     if (!file) return;
 
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
-      status('اختر صورة JPG أو PNG أو WebP.', true);
+      status('اختر صورة JPG أو PNG أو WebP أو GIF.', true);
       return;
     }
 
