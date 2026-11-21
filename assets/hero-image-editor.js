@@ -127,7 +127,7 @@
   function chooseFile(file) {
     if (!file) return;
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
       status('اختر صورة JPG أو PNG أو WebP.', true);
       return;
     }
