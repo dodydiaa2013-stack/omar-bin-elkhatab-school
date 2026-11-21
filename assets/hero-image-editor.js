@@ -363,7 +363,7 @@
     ].join(', ');
 
     // يتبع حجم العرض المسجل في PageSpeed، مع اختيار نسخة أدق للشاشات عالية الكثافة.
-    img.sizes = '(max-width: 640px) 100vw, 617px';
+    img.sizes = '(max-width: 456px) calc(100vw - 1.6rem), 430px';
     img.src = source;
   }
 
