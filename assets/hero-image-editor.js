@@ -6,6 +6,29 @@
   const allowedRatios = ['3/4', '4/5', '1/1', '4/3'];
   const ratioValue = value => allowedRatios.includes(value) ? value : '3/4';
 
+  const HERO_IMAGE_CACHE_KEY = 'schoolEntranceImageUrl';
+
+  function isValidSavedHeroImageUrl(value) {
+    try {
+      const url = new URL(String(value || ''));
+      return url.protocol === 'https:' &&
+        url.hostname === 'drive.google.com' &&
+        url.pathname === '/thumbnail' &&
+        /^[A-Za-z0-9_-]{10,200}$/.test(url.searchParams.get('id') || '');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function cacheSavedHeroImageUrl(value) {
+    if (!isValidSavedHeroImageUrl(value)) return;
+    try {
+      window.localStorage.setItem(HERO_IMAGE_CACHE_KEY, value);
+    } catch (_) {
+      // التخزين المؤقت تحسين اختياري؛ لا يؤثر تعطله في حفظ الصورة أو عرضها.
+    }
+  }
+
   const state = {
     file: null,
     objectUrl: '',
@@ -351,10 +374,11 @@
       cleanup();
 
       if (state.file) return;
-      if (data && data.success && data.image) {
+      if (data && data.success && isValidSavedHeroImageUrl(data.image)) {
         state.originalSrc = data.image;
+        cacheSavedHeroImageUrl(data.image);
         const img = $('schoolEntranceImage');
-        if (img) img.src = data.image;
+        if (img && img.src !== data.image) img.src = data.image;
       }
     };
 
@@ -404,8 +428,9 @@
         data: data
       });
 
-      if (result.image) {
+      if (isValidSavedHeroImageUrl(result.image)) {
         state.originalSrc = result.image;
+        cacheSavedHeroImageUrl(result.image);
         const img = $('schoolEntranceImage');
 
         if (img) {
