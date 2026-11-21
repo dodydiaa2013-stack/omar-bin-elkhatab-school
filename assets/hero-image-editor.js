@@ -1,156 +1,499 @@
 (() => {
   'use strict';
+
   const $ = id => document.getElementById(id);
   const endpoint = () => typeof GOOGLE_SCRIPT_URL === 'string' ? GOOGLE_SCRIPT_URL : '';
-  const state = { file:null, objectUrl:'', originalSrc:'', saving:false };
+  const allowedRatios = ['3/4', '4/5', '1/1', '4/3'];
+  const ratioValue = value => allowedRatios.includes(value) ? value : '3/4';
+
+  const state = {
+    file: null,
+    objectUrl: '',
+    originalSrc: '',
+    zoom: 1,
+    brightness: 100,
+    aspectRatio: '3/4',
+    savedAspectRatio: '5 / 6',
+    saving: false
+  };
+
+  function status(message, error) {
+    const el = $('heroImageEditorStatus');
+    if (!el) return;
+    el.textContent = message || '';
+    el.dataset.error = error ? 'true' : 'false';
+  }
 
   function authorized() {
-    try { return typeof hasDualAdminAuthorization === 'function' && hasDualAdminAuthorization() === true; }
-    catch (_) { return false; }
+    try {
+      return typeof hasDualAdminAuthorization === 'function' &&
+        hasDualAdminAuthorization() === true;
+    } catch (_) {
+      return false;
+    }
   }
-  function status(message, error) {
-    const el=$('heroImageEditorStatus');
-    if(el){el.textContent=message||'';el.dataset.error=error?'true':'false';}
+
+  function setControlsDisabled(disabled) {
+    ['heroImageAspect', 'heroImageZoom', 'heroImageBrightness', 'heroImageReset']
+      .forEach(id => {
+        const control = $(id);
+        if (control) control.disabled = disabled;
+      });
   }
+
+  function resetControlValues() {
+    state.zoom = 1;
+    state.brightness = 100;
+    if ($('heroImageZoom')) $('heroImageZoom').value = '1';
+    if ($('heroImageBrightness')) $('heroImageBrightness').value = '100';
+  }
+
+  function setSavedAspectFromImage(img) {
+    if (!img || !img.naturalWidth || !img.naturalHeight) return;
+    state.savedAspectRatio = img.naturalWidth + ' / ' + img.naturalHeight;
+    if (!state.file) {
+      const stage = $('schoolEntranceStage');
+      if (stage) stage.style.aspectRatio = state.savedAspectRatio;
+    }
+  }
+
+  function updatePreview() {
+    const stage = $('schoolEntranceStage');
+    const img = $('schoolEntranceImage');
+    if (!stage || !img) return;
+
+    stage.style.aspectRatio = state.aspectRatio.replace('/', ' / ');
+    img.style.transform = 'scale(' + state.zoom + ')';
+    img.style.filter = 'brightness(' + state.brightness + '%)';
+  }
+
   function cancelSelection() {
-    if(state.objectUrl) URL.revokeObjectURL(state.objectUrl);
-    state.objectUrl=''; state.file=null;
-    const img=$('schoolEntranceImage');
-    if(img && state.originalSrc) img.src=state.originalSrc;
+    if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = '';
+    state.file = null;
+
+    const img = $('schoolEntranceImage');
+    if (img) {
+      img.style.transform = '';
+      img.style.filter = '';
+      if (state.originalSrc) img.src = state.originalSrc;
+    }
+
+    resetControlValues();
+    setControlsDisabled(true);
+
+    const stage = $('schoolEntranceStage');
+    if (stage) stage.style.aspectRatio = state.savedAspectRatio;
   }
+
   function refreshAuthorization() {
-    const ok=authorized(), trigger=$('heroImageEditTrigger'), editor=$('heroImageEditor');
-    if(trigger) trigger.hidden=!ok;
-    if(!ok && editor){editor.hidden=true;cancelSelection();}
+    const ok = authorized();
+    const trigger = $('heroImageEditTrigger');
+    const editor = $('heroImageEditor');
+
+    if (trigger) trigger.hidden = !ok;
+
+    if (!ok && editor) {
+      editor.hidden = true;
+      cancelSelection();
+    }
   }
-  window.refreshHeroImageEditorAuthorization=refreshAuthorization;
+
+  window.refreshHeroImageEditorAuthorization = refreshAuthorization;
 
   function chooseFile(file) {
-    if(!file)return;
-    if(!['image/jpeg','image/png','image/webp'].includes(file.type)){
-      status('اختر صورة JPG أو PNG أو WebP.',true);return;
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      status('اختر صورة JPG أو PNG أو WebP.', true);
+      return;
     }
-    if(file.size>15*1024*1024){status('حجم الصورة يجب ألا يتجاوز 15 ميجابايت.',true);return;}
+
+    if (file.size > 15 * 1024 * 1024) {
+      status('حجم الصورة يجب ألا يتجاوز 15 ميجابايت.', true);
+      return;
+    }
+
     cancelSelection();
-    state.file=file;state.objectUrl=URL.createObjectURL(file);
-    const img=$('schoolEntranceImage');
-    img.onload=()=>{
-      const low=img.naturalWidth<1000||img.naturalHeight<1200;
-      status(low?'الصورة جاهزة، لكن دقتها أقل من الموصى بها (1000×1200).':'الصورة جاهزة. ستظهر كاملة داخل إطار المدخل على الكمبيوتر والموبايل.',false);
+    state.file = file;
+    state.aspectRatio = '3/4';
+
+    if ($('heroImageAspect')) $('heroImageAspect').value = state.aspectRatio;
+    setControlsDisabled(false);
+
+    state.objectUrl = URL.createObjectURL(file);
+    const img = $('schoolEntranceImage');
+
+    img.onload = () => {
+      updatePreview();
+
+      if (img.naturalWidth < 900 || img.naturalHeight < 900) {
+        status('الصورة جاهزة، لكن دقتها منخفضة نسبيًا؛ قد تتأثر الجودة عند التكبير.', false);
+      } else {
+        status('الصورة جاهزة. اضبط الأبعاد والتكبير والإضاءة، ثم راجع المعاينة قبل الحفظ.', false);
+      }
     };
-    img.onerror=()=>status('تعذر فتح الصورة المختارة.',true);
-    img.src=state.objectUrl;
+
+    img.onerror = () => status('تعذر فتح الصورة المختارة. جرّب صورة أخرى.', true);
+    img.src = state.objectUrl;
   }
+
   function loadImage(file) {
-    return new Promise((resolve,reject)=>{
-      const im=new Image(),url=URL.createObjectURL(file);
-      im.onload=()=>{URL.revokeObjectURL(url);resolve(im);};
-      im.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('تعذرت قراءة الصورة.'));};
-      im.src=url;
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('تعذرت قراءة الصورة المختارة.'));
+      };
+
+      img.src = url;
     });
   }
-  function toBlob(canvas) {
-    return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('تعذر تجهيز الصورة.')),'image/jpeg',.9));
+
+  function toBlob(canvas, quality) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        blob => blob
+          ? resolve(blob)
+          : reject(new Error('تعذر تجهيز الصورة النهائية.')),
+        'image/jpeg',
+        quality
+      );
+    });
   }
+
   async function prepareImage() {
-    const src=await loadImage(state.file),w=1200,h=1440,c=document.createElement('canvas');
-    c.width=w;c.height=h;
-    const ctx=c.getContext('2d',{alpha:false});
-    if(!ctx)throw new Error('تعذر تجهيز الصورة النهائية.');
-    ctx.fillStyle='#071b43';ctx.fillRect(0,0,w,h);
-    // ملاءمة كاملة داخل 5:6 دون قص أو تحريك يدوي.
-    const scale=Math.min(w/src.naturalWidth,h/src.naturalHeight);
-    const dw=src.naturalWidth*scale,dh=src.naturalHeight*scale;
-    ctx.drawImage(src,(w-dw)/2,(h-dh)/2,dw,dh);
-    let blob=await toBlob(c);
-    if(blob.size>4*1024*1024)throw new Error('الصورة أكبر من 4 ميجابايت بعد التجهيز. اختر صورة أصغر.');
+    if (!state.file) throw new Error('اختر صورة جديدة أولًا.');
+
+    const source = await loadImage(state.file);
+    const parts = ratioValue(state.aspectRatio).split('/').map(Number);
+
+    const width = 1200;
+    const height = Math.round(width * parts[1] / parts[0]);
+    const canvas = document.createElement('canvas');
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('تعذر إنشاء الصورة النهائية.');
+
+    ctx.fillStyle = '#071b43';
+    ctx.fillRect(0, 0, width, height);
+
+    const scale = Math.max(
+      width / source.naturalWidth,
+      height / source.naturalHeight
+    ) * state.zoom;
+
+    const drawWidth = source.naturalWidth * scale;
+    const drawHeight = source.naturalHeight * scale;
+    const x = (width - drawWidth) / 2;
+    const y = (height - drawHeight) / 2;
+
+    ctx.filter = 'brightness(' + state.brightness + '%)';
+    ctx.drawImage(source, x, y, drawWidth, drawHeight);
+    ctx.filter = 'none';
+
+    let blob = await toBlob(canvas, 0.92);
+    if (blob.size > 3.8 * 1024 * 1024) blob = await toBlob(canvas, 0.84);
+    if (blob.size > 3.8 * 1024 * 1024) blob = await toBlob(canvas, 0.76);
+
+    if (blob.size > 4 * 1024 * 1024) {
+      throw new Error('الصورة الناتجة أكبر من 4 ميجابايت. اختر صورة أصغر أو قلل التكبير.');
+    }
+
     return blob;
   }
+
   function base64(blob) {
-    return new Promise((resolve,reject)=>{
-      const r=new FileReader();
-      r.onload=()=>resolve(String(r.result).split(',')[1]||'');
-      r.onerror=()=>reject(new Error('تعذر قراءة الصورة المجهزة.'));
-      r.readAsDataURL(blob);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+      reader.onerror = () => reject(new Error('تعذر تجهيز الصورة للإرسال.'));
+      reader.readAsDataURL(blob);
     });
   }
+
   function post(fields) {
-    return new Promise((resolve,reject)=>{
-      if(!endpoint()){reject(new Error('رابط خادم الموقع غير متاح.'));return;}
-      const nonce='hero-'+Date.now()+'-'+Math.random().toString(36).slice(2);
-      const frame=document.createElement('iframe'),form=document.createElement('form');
-      const target='heroFrame_'+nonce.replace(/[^a-zA-Z0-9_]/g,'');
-      frame.name=target;frame.hidden=true;form.method='POST';form.action=endpoint();form.target=target;form.hidden=true;
-      const config={version:1,aspectRatio:'5:6',profiles:{
-        desktop:{zoom:1,x:0,y:0,brightness:100},
-        mobile:{zoom:1,x:0,y:0,brightness:100}
-      }};
-      const payload=Object.assign({
-        action:'saveHeroImage',environment:'PRODUCTION',nonce,
-        token:typeof googleUploadToken!=='undefined'?googleUploadToken:'',
-        adminSessionToken:window.adminSessionToken||'',origin:location.origin,
-        displayConfig:JSON.stringify(config)
-      },fields);
-      Object.entries(payload).forEach(([k,v])=>{
-        const input=document.createElement('input');input.type='hidden';input.name=k;input.value=String(v==null?'':v);form.appendChild(input);
-      });
-      let done=false;
-      const cleanup=()=>{removeEventListener('message',onMessage);clearTimeout(timer);form.remove();frame.remove();};
-      const finish=(fn,value)=>{if(done)return;done=true;cleanup();fn(value);};
-      const onMessage=e=>{
-        if(typeof isTrustedAppsScriptMessage!=='function'||!isTrustedAppsScriptMessage(e,frame.contentWindow))return;
-        const m=e.data;
-        if(!m||m.type!=='heroImageSaveResult'||m.nonce!==nonce)return;
-        m.result&&m.result.success?finish(resolve,m.result):finish(reject,new Error(m.result&&m.result.message||'لم يتم حفظ الصورة.'));
+    return new Promise((resolve, reject) => {
+      if (!endpoint()) {
+        reject(new Error('رابط خادم الموقع غير متاح.'));
+        return;
+      }
+
+      const nonce = 'hero-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      const frame = document.createElement('iframe');
+      const form = document.createElement('form');
+      const target = 'heroFrame_' + nonce.replace(/[^a-zA-Z0-9_]/g, '');
+
+      frame.name = target;
+      frame.hidden = true;
+      form.method = 'POST';
+      form.action = endpoint();
+      form.target = target;
+      form.hidden = true;
+
+      // يحافظ على عقد Apps Script الحالي؛ أبعاد الصورة الفعلية محفوظة داخل ملف JPEG نفسه.
+      const config = {
+        version: 1,
+        aspectRatio: '5:6',
+        profiles: {
+          desktop: { zoom: 1, x: 0, y: 0, brightness: 100 },
+          mobile: { zoom: 1, x: 0, y: 0, brightness: 100 }
+        }
       };
-      const timer=setTimeout(()=>finish(reject,new Error('لم يصل تأكيد الحفظ من الخادم.')),90000);
-      addEventListener('message',onMessage);document.body.append(frame,form);form.submit();
+
+      const payload = Object.assign({
+        action: 'saveHeroImage',
+        environment: 'PRODUCTION',
+        nonce: nonce,
+        token: typeof googleUploadToken !== 'undefined' ? googleUploadToken : '',
+        adminSessionToken: window.adminSessionToken || '',
+        origin: location.origin,
+        displayConfig: JSON.stringify(config)
+      }, fields || {});
+
+      Object.entries(payload).forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = String(value == null ? '' : value);
+        form.appendChild(input);
+      });
+
+      let settled = false;
+
+      const cleanup = () => {
+        window.removeEventListener('message', onMessage);
+        clearTimeout(timer);
+        form.remove();
+        frame.remove();
+      };
+
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn(value);
+      };
+
+      const onMessage = event => {
+        if (
+          typeof isTrustedAppsScriptMessage !== 'function' ||
+          !isTrustedAppsScriptMessage(event, frame.contentWindow)
+        ) return;
+
+        const message = event.data;
+        if (!message || message.type !== 'heroImageSaveResult' || message.nonce !== nonce) return;
+
+        if (message.result && message.result.success) {
+          finish(resolve, message.result);
+        } else {
+          finish(reject, new Error(
+            message.result && message.result.message || 'لم يتم حفظ الصورة.'
+          ));
+        }
+      };
+
+      const timer = setTimeout(
+        () => finish(reject, new Error('لم يصل تأكيد الحفظ من الخادم.')),
+        90000
+      );
+
+      window.addEventListener('message', onMessage);
+      document.body.append(frame, form);
+      form.submit();
     });
   }
+
   function loadSavedImage() {
-    if(!endpoint())return;
-    const callback='heroImageCallback_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    let settled=false;const script=document.createElement('script');
-    const cleanup=()=>{script.remove();try{delete window[callback];}catch(_){window[callback]=undefined;}};
-    const timer=setTimeout(()=>{if(settled)return;settled=true;cleanup();console.warn('تعذر تحميل صورة المدخل المحفوظة.');},15000);
-    window[callback]=data=>{
-      if(settled)return;settled=true;clearTimeout(timer);cleanup();
-      if(data&&data.success&&data.image){state.originalSrc=data.image;$('schoolEntranceImage').src=data.image;}
+    if (!endpoint()) return;
+
+    const callback = 'heroImageCallback_' + Date.now() + '_' +
+      Math.random().toString(36).slice(2);
+
+    let settled = false;
+    const script = document.createElement('script');
+
+    const cleanup = () => {
+      script.remove();
+      try {
+        delete window[callback];
+      } catch (_) {
+        window[callback] = undefined;
+      }
     };
-    script.src=endpoint()+'?action=heroImageConfig&environment=PRODUCTION&callback='+encodeURIComponent(callback)+'&_='+Date.now();
-    script.onerror=()=>{if(settled)return;settled=true;clearTimeout(timer);cleanup();};
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      console.warn('تعذر تحميل صورة المدخل المحفوظة.');
+    }, 15000);
+
+    window[callback] = data => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+
+      if (data && data.success && data.image) {
+        state.originalSrc = data.image;
+        const img = $('schoolEntranceImage');
+        if (img) img.src = data.image;
+      }
+    };
+
+    script.src = endpoint() + '?action=heroImageConfig&environment=PRODUCTION&callback=' +
+      encodeURIComponent(callback) + '&_=' + Date.now();
+
+    script.onerror = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+    };
+
     document.head.appendChild(script);
   }
+
   async function save() {
-    if(state.saving)return;
-    if(!authorized()){status('يلزم تحقق الإدارة بكلمة المرور وحساب Google المعتمد.',true);refreshAuthorization();return;}
-    if(!state.file){status('اختر صورة جديدة أولًا.',true);return;}
-    state.saving=true;$('heroImageSave').disabled=true;status('جارٍ تجهيز الصورة وحفظها...');
-    try{
-      const blob=await prepareImage(),data=await base64(blob);
-      const result=await post({fileName:'school-entrance-'+Date.now()+'.jpg',mimeType:'image/jpeg',data});
-      if(result.image){state.originalSrc=result.image;$('schoolEntranceImage').src=result.image;}
-      if(state.objectUrl)URL.revokeObjectURL(state.objectUrl);
-      state.objectUrl='';state.file=null;$('heroImageEditor').hidden=true;
-      status(result.message||'تم استبدال صورة المدخل بنجاح.',false);
-    }catch(e){status(e.message||'تعذر حفظ صورة المدخل.',true);}
-    finally{state.saving=false;$('heroImageSave').disabled=false;}
+    if (state.saving) return;
+
+    if (!authorized()) {
+      status('يلزم تحقق الإدارة بكلمة المرور وحساب Google المعتمد.', true);
+      refreshAuthorization();
+      return;
+    }
+
+    if (!state.file) {
+      status('اختر صورة جديدة أولًا.', true);
+      return;
+    }
+
+    state.saving = true;
+    const button = $('heroImageSave');
+    if (button) button.disabled = true;
+
+    status('جارٍ تجهيز الصورة بالإعدادات المختارة وحفظها...', false);
+
+    try {
+      const blob = await prepareImage();
+      const data = await base64(blob);
+      const result = await post({
+        fileName: 'school-entrance-' + Date.now() + '.jpg',
+        mimeType: 'image/jpeg',
+        data: data
+      });
+
+      if (result.image) {
+        state.originalSrc = result.image;
+        const img = $('schoolEntranceImage');
+
+        if (img) {
+          img.style.transform = '';
+          img.style.filter = '';
+          img.src = result.image;
+          img.onload = () => setSavedAspectFromImage(img);
+        }
+      }
+
+      if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+      state.objectUrl = '';
+      state.file = null;
+
+      resetControlValues();
+      setControlsDisabled(true);
+      $('heroImageEditor').hidden = true;
+
+      status(result.message || 'تم استبدال صورة المدخل وحفظها بنجاح.', false);
+    } catch (error) {
+      status(error.message || 'تعذر حفظ صورة المدخل.', true);
+    } finally {
+      state.saving = false;
+      if (button) button.disabled = false;
+    }
   }
+
   function open() {
-    if(!authorized()){status('يلزم تسجيل الدخول بكلمة مرور المسؤول والتحقق بحساب Google المعتمد.',true);return;}
-    $('heroImageEditor').hidden=false;
-    status('اختر صورة جديدة ثم اضغط حفظ واعتماد. لن تتغير الصورة الحالية إلا بعد نجاح الحفظ.');
+    if (!authorized()) {
+      status('يلزم تسجيل الدخول بكلمة مرور المسؤول والتحقق بحساب Google المعتمد.', true);
+      return;
+    }
+
+    $('heroImageEditor').hidden = false;
+    status('اختر صورة جديدة، ثم اضبط التكبير وشكل الصورة والإضاءة قبل الحفظ.', false);
   }
+
   function init() {
-    if(!$('schoolEntranceStage'))return;
-    state.originalSrc=$('schoolEntranceImage').src;
-    $('heroImageEditTrigger').addEventListener('click',open);
-    $('heroImageChooseButton').addEventListener('click',()=>$('heroImageFileInput').click());
-    $('heroImageFileInput').addEventListener('change',e=>{chooseFile(e.target.files&&e.target.files[0]);e.target.value='';});
-    $('heroImageCancelSelection').addEventListener('click',()=>{cancelSelection();status('تم إلغاء الصورة المختارة. الصورة الحالية لم تتغير.');});
-    $('heroImageClose').addEventListener('click',()=>{cancelSelection();$('heroImageEditor').hidden=true;});
-    $('heroImageSave').addEventListener('click',save);
-    refreshAuthorization();loadSavedImage();
+    const stage = $('schoolEntranceStage');
+    const img = $('schoolEntranceImage');
+
+    if (!stage || !img) return;
+
+    state.originalSrc = img.src;
+    img.addEventListener('load', () => setSavedAspectFromImage(img));
+    setSavedAspectFromImage(img);
+
+    $('heroImageEditTrigger')?.addEventListener('click', open);
+    $('heroImageChooseButton')?.addEventListener('click', () => $('heroImageFileInput')?.click());
+
+    $('heroImageFileInput')?.addEventListener('change', event => {
+      const file = event.target.files && event.target.files[0];
+      if (file) chooseFile(file);
+      event.target.value = '';
+    });
+
+    $('heroImageCancelSelection')?.addEventListener('click', () => {
+      cancelSelection();
+      status('تم إلغاء الصورة المختارة. الصورة الحالية لم تتغير.', false);
+    });
+
+    $('heroImageClose')?.addEventListener('click', () => {
+      cancelSelection();
+      $('heroImageEditor').hidden = true;
+    });
+
+    $('heroImageAspect')?.addEventListener('change', event => {
+      state.aspectRatio = ratioValue(event.target.value);
+      updatePreview();
+    });
+
+    $('heroImageZoom')?.addEventListener('input', event => {
+      state.zoom = Math.max(1, Math.min(3, Number(event.target.value) || 1));
+      updatePreview();
+    });
+
+    $('heroImageBrightness')?.addEventListener('input', event => {
+      state.brightness = Math.max(70, Math.min(130, Number(event.target.value) || 100));
+      updatePreview();
+    });
+
+    $('heroImageReset')?.addEventListener('click', () => {
+      resetControlValues();
+      if (state.file) updatePreview();
+      status('تمت إعادة ضبط التكبير والإضاءة. احتفظنا بشكل الصورة المختار.', false);
+    });
+
+    $('heroImageSave')?.addEventListener('click', save);
+
+    setControlsDisabled(true);
+    refreshAuthorization();
+    loadSavedImage();
   }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 })();
