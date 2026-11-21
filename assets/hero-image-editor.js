@@ -124,6 +124,27 @@
     });
   }
 
+  function imageQualityMessage(img) {
+    if (!img || !img.naturalWidth || !img.naturalHeight) return '';
+
+    const parts = ratioValue(state.aspectRatio).split('/').map(Number);
+    const targetWidth = 1200;
+    const targetHeight = Math.round(targetWidth * parts[1] / parts[0]);
+    const coverScale = Math.max(
+      targetWidth / img.naturalWidth,
+      targetHeight / img.naturalHeight
+    );
+    const effectiveScale = coverScale * state.zoom;
+
+    // التحذير مرتبط بالتكبير الفعلي المطلوب لإنتاج الصورة النهائية،
+    // وليس بحد ثابت لأبعاد الصورة الأصلية.
+    if (effectiveScale > 1.08) {
+      return 'الصورة جاهزة، لكن إعدادات العرض ستحتاج إلى تكبير دقتها؛ قد تظهر التفاصيل أقل وضوحًا.';
+    }
+
+    return 'الصورة جاهزة. الدقة مناسبة للإعدادات الحالية؛ راجع المعاينة قبل الحفظ.';
+  }
+
   function chooseFile(file) {
     if (!file) return;
 
@@ -155,11 +176,7 @@
     img.onload = () => {
       updatePreview();
 
-      if (img.naturalWidth < 900 || img.naturalHeight < 900) {
-        status('الصورة جاهزة، لكن دقتها منخفضة نسبيًا؛ قد تتأثر الجودة عند التكبير.', false);
-      } else {
-        status('الصورة جاهزة. اضبط الأبعاد والتكبير والإضاءة، ثم راجع المعاينة قبل الحفظ.', false);
-      }
+      status(imageQualityMessage(img), false);
     };
 
     img.onerror = () => status('تعذر فتح الصورة المختارة. جرّب صورة أخرى.', true);
@@ -349,8 +366,15 @@
           trustedGoogleOrigin = false;
         }
 
-        const trustedFrame = typeof isTrustedAppsScriptMessage === 'function' &&
-          isTrustedAppsScriptMessage(event, frame.contentWindow);
+        let trustedFrame = false;
+        try {
+          trustedFrame = typeof isTrustedAppsScriptMessage === 'function' &&
+            isTrustedAppsScriptMessage(event, frame.contentWindow);
+        } catch (_) {
+          // قد يتعذر فحص شجرة إطارات Google المتداخلة؛ يظل تحقق أصل Google
+          // ورقم nonce الخاص بالطلب إلزاميين قبل قبول الرد.
+          trustedFrame = false;
+        }
         if (!trustedFrame && !trustedGoogleOrigin) return;
 
         if (message.result && message.result.success) {
@@ -578,7 +602,7 @@
     status('جارٍ تحميل صورة المدخل الحالية إلى المحرر...', false);
 
     try {
-      const result = await post({}, 'getHeroImageForEditor', 'heroImageLoadResult', 60000);
+      const result = await post({}, 'getHeroImageForEditor', 'heroImageLoadResult', 30000);
       if (requestGeneration !== state.loadGeneration || $('heroImageEditor').hidden || !authorized()) return;
       if (!result || !result.data) throw new Error('لم يُرجع الخادم بيانات الصورة الحالية.');
       const file = fileFromBase64(result.data, result.fileName, result.mimeType);
@@ -624,11 +648,19 @@
     $('heroImageAspect')?.addEventListener('change', event => {
       state.aspectRatio = ratioValue(event.target.value);
       updatePreview();
+      const img = $('schoolEntranceImage');
+      if (state.file && img && img.complete && img.naturalWidth) {
+        status(imageQualityMessage(img), false);
+      }
     });
 
     $('heroImageZoom')?.addEventListener('input', event => {
       state.zoom = Math.max(1, Math.min(3, Number(event.target.value) || 1));
       updatePreview();
+      const img = $('schoolEntranceImage');
+      if (state.file && img && img.complete && img.naturalWidth) {
+        status(imageQualityMessage(img), false);
+      }
     });
 
     $('heroImageBrightness')?.addEventListener('input', event => {
