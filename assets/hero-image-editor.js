@@ -76,6 +76,7 @@
     if (img) {
       img.style.transform = '';
       img.style.filter = '';
+      img.style.objectFit = '';
       if (state.originalSrc) img.src = state.originalSrc;
     }
 
@@ -117,6 +118,7 @@
     cancelSelection();
     state.file = file;
     state.aspectRatio = '3/4';
+    $('schoolEntranceImage').style.objectFit = 'cover';
 
     if ($('heroImageAspect')) $('heroImageAspect').value = state.aspectRatio;
     setControlsDisabled(false);
@@ -346,6 +348,7 @@
       clearTimeout(timer);
       cleanup();
 
+      if (state.file) return;
       if (data && data.success && data.image) {
         state.originalSrc = data.image;
         const img = $('schoolEntranceImage');
@@ -402,6 +405,7 @@
         if (img) {
           img.style.transform = '';
           img.style.filter = '';
+          img.style.objectFit = '';
           img.src = result.image;
           img.onload = () => setSavedAspectFromImage(img);
         }
