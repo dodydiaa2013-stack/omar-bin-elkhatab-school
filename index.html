@@ -2441,6 +2441,10 @@ window.addEventListener('DOMContentLoaded', () => {
                 backupControls.hidden = !canManage;
                 backupControls.style.display = canManage ? 'flex' : 'none';
             }
+
+            if (typeof window.refreshHeroImageEditorAuthorization === 'function') {
+                window.refreshHeroImageEditorAuthorization();
+            }
         }
 
         function updateDeveloperUI() {
