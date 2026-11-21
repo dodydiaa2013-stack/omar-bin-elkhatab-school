@@ -53,8 +53,9 @@ function pointerDown(e){
 function pointerMove(e){
  if(!state.dragging)return;
  const r=$('schoolEntranceStage').getBoundingClientRect(),p=profile();
- p.x=clamp(p.x+(e.clientX-state.pointerX)/Math.max(1,r.width)*100,-100,100);
- p.y=clamp(p.y+(e.clientY-state.pointerY)/Math.max(1,r.height)*100,-100,100);
+ const scale=Math.max(1,Number(p.zoom)||1);
+ p.x=clamp(p.x+(e.clientX-state.pointerX)/Math.max(1,r.width*scale)*100,-100,100);
+ p.y=clamp(p.y+(e.clientY-state.pointerY)/Math.max(1,r.height*scale)*100,-100,100);
  state.pointerX=e.clientX;state.pointerY=e.clientY;applyProfile();e.preventDefault();
 }
 function pointerUp(){state.dragging=false;}
@@ -65,7 +66,7 @@ async function prepareImage(){
  const ctx=c.getContext('2d',{alpha:false});if(!ctx)throw new Error('تعذر تجهيز الصورة النهائية.');
  ctx.fillStyle='#071b43';ctx.fillRect(0,0,w,h);
  // صورة رئيسية واحدة بنسبة 5:6؛ إعدادات الموضع والتكبير منفصلة للعرض فقط.
- const scale=Math.max(w/src.naturalWidth,h/src.naturalHeight);
+ const scale=Math.min(w/src.naturalWidth,h/src.naturalHeight);
  const dw=src.naturalWidth*scale,dh=src.naturalHeight*scale;
  ctx.drawImage(src,(w-dw)/2,(h-dh)/2,dw,dh);
  let b=await blobOf(c,.9);if(b.size>3.8*1024*1024)b=await blobOf(c,.78);
@@ -83,22 +84,36 @@ function post(fields){
   Object.entries(payload).forEach(([k,v])=>{const i=document.createElement('input');i.type='hidden';i.name=k;i.value=String(v??'');form.appendChild(i);});
   let done=false;const clean=()=>{removeEventListener('message',onMessage);clearTimeout(timer);form.remove();frame.remove();};
   const finish=(fn,v)=>{if(done)return;done=true;clean();fn(v);};
-  const onMessage=e=>{if(typeof isTrustedAppsScriptMessage!=='function'||!isTrustedAppsScriptMessage(e))return;const m=e.data;if(!m||m.type!=='heroImageSaveResult'||m.nonce!==nonce)return;m.result?.success?finish(resolve,m.result):finish(reject,new Error(m.result?.message||'لم يتم حفظ صورة المدخل.'));};
+  const onMessage=e=>{if(typeof isTrustedAppsScriptMessage!=='function'||!isTrustedAppsScriptMessage(e,frame.contentWindow))return;const m=e.data;if(!m||m.type!=='heroImageSaveResult'||m.nonce!==nonce)return;m.result?.success?finish(resolve,m.result):finish(reject,new Error(m.result?.message||'لم يتم حفظ صورة المدخل.'));};
   const timer=setTimeout(()=>finish(reject,new Error('لم يصل تأكيد الحفظ من الخادم.')),90000);
   addEventListener('message',onMessage);document.body.append(frame,form);form.submit();
  });
 }
 function loadSavedConfig(){
  if(!endpoint())return;
- window.heroImageConfigCallback=data=>{
-  if(!data||!data.success)return;
-  const cfg=data.displayConfig||data.config||{};
-  if(cfg.profiles){for(const k of ['desktop','mobile'])if(cfg.profiles[k])state.profiles[k]=Object.assign(defaultProfile(),cfg.profiles[k]);}
-  if(data.image){state.originalSrc=data.image;$('schoolEntranceImage').src=data.image;}
+ const callbackName='heroImageConfigCallback_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+ let settled=false;
+ const script=document.createElement('script');
+ const cleanup=()=>{script.remove();try{delete window[callbackName];}catch(_){window[callbackName]=undefined;}};
+ const timer=setTimeout(()=>{if(settled)return;settled=true;cleanup();console.warn('انتهت مهلة تحميل إعدادات صورة المدخل.');},15000);
+ window[callbackName]=data=>{
+  if(settled)return;settled=true;clearTimeout(timer);cleanup();
+  if(!data||data.success!==true)return;
+  const cfg=data.displayConfig||{};
+  if(cfg.version===1&&cfg.aspectRatio==='5:6'&&cfg.profiles){
+   for(const k of ['desktop','mobile']){
+    const p=cfg.profiles[k];
+    if(!p||!['zoom','x','y','brightness'].every(key=>Number.isFinite(Number(p[key]))))continue;
+    const values={zoom:Number(p.zoom),x:Number(p.x),y:Number(p.y),brightness:Number(p.brightness)};
+    if(values.zoom>=1&&values.zoom<=3&&values.x>=-100&&values.x<=100&&values.y>=-100&&values.y<=100&&values.brightness>=60&&values.brightness<=140)state.profiles[k]=Object.assign(defaultProfile(),values);
+   }
+  }
+  if(typeof data.image==='string'&&data.image){state.originalSrc=data.image;$('schoolEntranceImage').src=data.image;}
   state.loaded=true;applyResponsiveProfile();
  };
- const s=document.createElement('script');s.src=endpoint()+'?action=heroImageConfig&environment=PRODUCTION&callback=heroImageConfigCallback&_='+Date.now();
- s.onerror=()=>console.warn('تعذر تحميل إعدادات صورة المدخل المحفوظة.');document.head.appendChild(s);
+ script.src=endpoint()+'?action=heroImageConfig&environment=PRODUCTION&callback='+encodeURIComponent(callbackName)+'&_='+Date.now();
+ script.onerror=()=>{if(settled)return;settled=true;clearTimeout(timer);cleanup();console.warn('تعذر تحميل إعدادات صورة المدخل المحفوظة.');};
+ document.head.appendChild(script);
 }
 function applyResponsiveProfile(){
  // أثناء فتح المحرر نعرض الجهاز المختار للمعاينة، ولا نستبدله بمقاس نافذة المتصفح.
@@ -122,7 +137,7 @@ async function save(){
  }catch(e){status(e.message||'تعذر حفظ صورة المدخل.',true);}
  finally{state.saving=false;$('heroImageSave').disabled=false;}
 }
-function open(){if(!authorized()){status('يلزم تسجيل الدخول بكلمة مرور المسؤول والتحقق بحساب Google المعتمد.',true);return;}$('heroImageEditor').hidden=false;$('schoolEntranceStage').classList.add('hero-image-editing');setProfile('desktop');status('اختر صورة جديدة ثم اضبط الكمبيوتر والموبايل كلًّا على حدة.');}
+function open(){if(!authorized()){status('يلزم تسجيل الدخول بكلمة مرور المسؤول والتحقق بحساب Google المعتمد.',true);return;}$('heroImageEditor').hidden=false;$('schoolEntranceStage').classList.add('hero-image-editing');setProfile(matchMedia('(max-width:640px)').matches?'mobile':'desktop');status('اختر صورة جديدة ثم اضبط الكمبيوتر والموبايل كلًّا على حدة.');}
 function init(){
  const stage=$('schoolEntranceStage');if(!stage)return;
  state.originalSrc=$('schoolEntranceImage').src;
