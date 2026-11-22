@@ -1589,7 +1589,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
-    startPageChangesPolling();
 });
 
 
@@ -2771,7 +2770,6 @@ function assignPageEditIds() {
 const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
 let pageChangesRequestInFlight = false;
 let pageChangesRequestTimeout = null;
-let pageChangesPollTimer = null;
 let pendingPageChangesSnapshot = null;
 window.__productionPageChangesBackendReady = false;
 window.__productionPageChangesUsingLocalFallback = false;
@@ -2971,24 +2969,6 @@ function loadSavedPageChanges() {
         finish();
     }, 15000);
     document.body.appendChild(script);
-}
-
-// حدّث الصفحات المفتوحة تلقائيًا كل 20 ثانية دون إعادة تحميل الصفحة.
-// عند عودة الزائر إلى التبويب، نفّذ تحققًا فوريًا بدل انتظار الدورة التالية.
-function startPageChangesPolling() {
-    if (pageChangesPollTimer !== null) return;
-
-    pageChangesPollTimer = setInterval(() => {
-        if (document.visibilityState === "visible") {
-            loadSavedPageChanges();
-        }
-    }, 20000);
-
-    document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") {
-            loadSavedPageChanges();
-        }
-    });
 }
 
 function receivePageChanges(data) {
