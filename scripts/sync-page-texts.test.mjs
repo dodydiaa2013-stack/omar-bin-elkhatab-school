@@ -78,6 +78,7 @@ test("an admin-saved text change updates only its existing HTML target", t => {
   const record = payload.changes.find(item => item.id === "schedules-title");
   assert.ok(record);
   record.text = "قوائم فصول الصف الأول الثانوي";
+  payload.updatedAt = new Date(Date.parse(payload.updatedAt) + 60000).toISOString();
   writePayload(fixture, payload);
 
   const result = runSync(fixture);
@@ -105,6 +106,40 @@ test("a direct HTML edit without a matching saved JSON change is rejected safely
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /HTML\/JSON conflict/);
   assert.equal(fs.readFileSync(fixture.htmlPath, "utf8"), manuallyEdited);
+});
+
+test("a stale input cannot overwrite a newer repository HTML and JSON edit", t => {
+  const fixture = createFixture();
+  t.after(() => fs.rmSync(fixture.directory, { recursive: true, force: true }));
+
+  const newerBaseline = readPayload(fixture);
+  const record = newerBaseline.changes.find(item => item.id === "schedules-title");
+  assert.ok(record);
+  record.text = "تعديل محفوظ حديثًا في المستودع";
+  newerBaseline.updatedAt = new Date(Date.parse(newerBaseline.updatedAt) + 60000).toISOString();
+
+  fs.writeFileSync(
+    fixture.baselinePath,
+    JSON.stringify(newerBaseline, null, 2),
+    "utf8"
+  );
+  fs.writeFileSync(
+    fixture.htmlPath,
+    replaceElementText(
+      fs.readFileSync(fixture.htmlPath, "utf8"),
+      "schedules-title",
+      record.text
+    ),
+    "utf8"
+  );
+
+  // The incoming payload intentionally remains older than the new main baseline.
+  const before = fs.readFileSync(fixture.htmlPath, "utf8");
+  const result = runSync(fixture);
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Stale or conflicting page text payload/);
+  assert.equal(fs.readFileSync(fixture.htmlPath, "utf8"), before);
 });
 
 test("an HTML-only edit ID is rejected", t => {
