@@ -62,20 +62,7 @@ const initialDom = parseWithLocations(html);
 const document = initialDom.window.document;
 assertDocumentStructure(document, "before text synchronization");
 
-const excludedRoots = [
-  "#devControlBar", "#loginBtn", "#adminBadge", "#adminModal",
-  "#scheduleModal", "#passwordRecoveryPanel", "#tabletTeacherUpload",
-  "#tabletImageUploadControls", "#tabletImageManagement", "#tabletGallery",
-  "#googleSignInStatus", "#scheduleOperationStatus", "#scheduleTeacherControl",
-  "#scheduleBulkManagement", "#scheduleBulkSelectionStatus", "#schedulesGrid",
-  "#alertsTeacherControl", "#photoAlbumsStatus", "#photoAlbumsManagement",
-  "#albumsSelectionStatus", "#photoAlbumsGrid", "#photoAlbumViewer",
-  "#photoAlbumImagesGrid", "#photoAlbumEditor", "#photoAlbumUploadProgress",
-  "#photoAlbumUploadStatus", "#photoAlbumUploadProgressText",
-  "#photoAlbumUploadResults", "#albumImagesManagement",
-  "#albumImagesSelectionStatus", "#scheduleClassFiles", "#adminErrorMsg",
-  "#recoveryMessage", "#schoolImageViewer", '[data-page-no-auto-edit="true"]'
-].join(",");
+
 
 // Only update edit IDs that already exist in the production HTML.
 // Never create or wrap elements while synchronizing text: missing IDs are
