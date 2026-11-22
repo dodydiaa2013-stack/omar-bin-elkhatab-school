@@ -124,7 +124,7 @@ jobs:
           set -euo pipefail
           git add page-changes-production.json index.html
           changed="$(git diff --cached --name-only)"
-          if ! printf '%s\\n' "$changed" | grep -qx 'page-changes-production.json'; then
+          if ! printf '%s\n' "$changed" | grep -qx 'page-changes-production.json'; then
             echo "The saved page-text payload must be part of the change."
             exit 1
           fi
