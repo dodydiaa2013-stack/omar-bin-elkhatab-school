@@ -1,20 +1,8 @@
 name: Prepare saved page text review pull request
 # The workflow prepares a reviewable text-only change. It never merges or publishes.
 on:
-  # Apps Script dispatches this event only after GitHub save verification succeeds.
-  repository_dispatch:
-    types:
-      - production-page-text-saved
-
-  # Fallback in case the dispatch request cannot be delivered.
-  schedule:
-    - cron: "*/5 * * * *"
-
-  push:
-    branches:
-      - "automation/page-text-sync-input"
-    paths:
-      - "page-changes-production.json"
+  # Temporarily paused: automatic PR creation is disabled.
+  # Run manually only after the text-sync flow is reviewed.
   workflow_dispatch:
 
 permissions:
