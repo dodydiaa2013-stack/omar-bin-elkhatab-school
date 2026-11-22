@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="ar" dir="rtl" data-page-edits-pending="true">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -50,13 +50,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
     <!-- Cairo: ملفات WOFF2 محلية بدل الاعتماد على Google Fonts -->
     <style>
-        /* امنع ظهور النص الثابت القديم قبل وصول النصوص المحفوظة من الخادم. */
-        html[data-page-edits-pending="true"] body :is(h1, h2, h3, h4, h5, p, a, button, label, li, span, strong, em, small, td, th, i) {
-            color: transparent !important;
-            -webkit-text-fill-color: transparent !important;
-            text-shadow: none !important;
-        }
-
         @font-face {
             font-family: 'Cairo';
             font-style: normal;
@@ -1588,6 +1581,7 @@ window.addEventListener('DOMContentLoaded', () => {
     } else if (window.__earlyPageChangesFailed) {
         loadSavedPageChanges();
     }
+    document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
 });
 
@@ -2948,7 +2942,6 @@ function receivePageChanges(data) {
         window.__productionPageChangesBackendReady = false;
         const message = data && (data.message || data.error) ? (data.message || data.error) : 'استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.';
         console.error('[PageChanges] تعذر استرجاع تعديلات نصوص الموقع:', message);
-        document.documentElement.removeAttribute('data-page-edits-pending');
         return false;
     }
     const normalized = normalizeFixedPageChanges(data.changes);
@@ -2963,7 +2956,6 @@ function receivePageChanges(data) {
     if (stats.missing > 0 || stats.invalid > 0) {
         window.__productionPageChangesBackendReady = false;
         console.warn('[PageChanges] توجد تعديلات مفقودة أو غير صالحة؛ لن نعتمد الاستجابة ولن نستبدل نصوص الصفحة بنسخة محلية.');
-        document.documentElement.removeAttribute('data-page-edits-pending');
         return false;
     }
     rememberConfirmedPageChanges(normalized);
@@ -2972,7 +2964,6 @@ function receivePageChanges(data) {
     document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
-    document.documentElement.removeAttribute('data-page-edits-pending');
     return true;
 }
 
