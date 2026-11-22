@@ -1,8 +1,12 @@
 name: Prepare saved page text review pull request
 # The workflow prepares a reviewable text-only change. It never merges or publishes.
 on:
-  # Temporarily paused: automatic PR creation is disabled.
-  # Run manually only after the text-sync flow is reviewed.
+  # Apps Script dispatches this event only after GitHub save verification succeeds.
+  repository_dispatch:
+    types:
+      - production-page-text-saved
+
+  # Manual recovery path; no periodic polling or arbitrary branch-push trigger.
   workflow_dispatch:
 
 permissions:
@@ -23,9 +27,10 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Fetch and validate latest saved changes
+      - name: Preserve current production payload and fetch latest saved changes
         run: |
           set -euo pipefail
+          git show HEAD:page-changes-production.json > /tmp/page-changes-main.json
           git fetch origin automation/page-text-sync-input
           git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.json
           node <<'NODE'
@@ -35,7 +40,7 @@ jobs:
           }
           const ids = new Set();
           for (const item of p.changes) {
-            if (!item || typeof item.id !== 'string' || !item.id ||
+            if (!item || typeof item.id !== 'string' || !item.id.trim() ||
                 item.id.length > 200 || typeof item.text !== 'string' ||
                 item.text.length > 10000 || ids.has(item.id)) {
               throw new Error('Invalid or duplicate page text item.');
@@ -52,12 +57,37 @@ jobs:
       - name: Install HTML parser
         run: npm install --no-save jsdom@26
 
-      - name: Apply and validate saved text changes
+      - name: Apply text changes and enforce exact HTML/JSON parity
         run: |
           set -euo pipefail
           node scripts/sync-page-texts.mjs
-          test -s index.html
-          node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); if(!h.includes('data-page-edit-id=')) process.exit(1);"
+          node <<'NODE'
+          const fs = require('fs');
+          const payload = require('./page-changes-production.json');
+          const mainPayload = JSON.parse(fs.readFileSync('/tmp/page-changes-main.json', 'utf8'));
+          const html = fs.readFileSync('index.html', 'utf8');
+          const { JSDOM } = require('jsdom');
+          const document = new JSDOM(html).window.document;
+          const htmlIds = Array.from(document.querySelectorAll('[data-page-edit-id]'))
+            .map(el => el.getAttribute('data-page-edit-id'));
+          const jsonIds = payload.changes.map(item => item.id);
+          const uniqueHtml = new Set(htmlIds);
+          const uniqueJson = new Set(jsonIds);
+          if (uniqueHtml.size !== htmlIds.length || uniqueJson.size !== jsonIds.length ||
+              uniqueHtml.size !== uniqueJson.size ||
+              Array.from(uniqueHtml).some(id => !uniqueJson.has(id)) ||
+              Array.from(uniqueJson).some(id => !uniqueHtml.has(id))) {
+            throw new Error('HTML/JSON edit ID parity check failed.');
+          }
+          const normalize = p => JSON.stringify((p.changes || [])
+            .map(({id, text}) => ({id, text}))
+            .sort((a, b) => a.id.localeCompare(b.id)));
+          if (normalize(payload) === normalize(mainPayload)) {
+            fs.copyFileSync('/tmp/page-changes-main.json', 'page-changes-production.json');
+            console.log('No actual text-value changes; timestamp-only update discarded.');
+          }
+          NODE
+          git diff --check
 
       - name: Create or update a draft review pull request
         env:
@@ -90,10 +120,10 @@ jobs:
 
           - Generated from the dedicated page-text input branch.
           - Updates only page-changes-production.json and matching text in index.html.
-          - The synchronization script validates the HTML structure, saved IDs, and duplicate IDs before proposing changes.
+          - Enforces exact HTML/JSON edit-ID parity; no IDs are invented during synchronization.
+          - Timestamp-only updates are discarded.
           - This pull request is intentionally draft.
-          - No automatic merge, publication, or deployment is performed.
-          - Review the diff and preview manually before approving."
+          - No automatic merge, publication, or deployment is performed."
             pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
           else
             is_draft=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
@@ -107,10 +137,10 @@ jobs:
 
           - Generated from the dedicated page-text input branch.
           - Updates only page-changes-production.json and matching text in index.html.
-          - The synchronization script validates the HTML structure, saved IDs, and duplicate IDs before proposing changes.
+          - Enforces exact HTML/JSON edit-ID parity; no IDs are invented during synchronization.
+          - Timestamp-only updates are discarded.
           - This pull request is intentionally draft.
-          - No automatic merge, publication, or deployment is performed.
-          - Review the diff and preview manually before approving."
+          - No automatic merge, publication, or deployment is performed."
           fi
 
           echo "Draft review PR is ready for human inspection. No merge was attempted."
