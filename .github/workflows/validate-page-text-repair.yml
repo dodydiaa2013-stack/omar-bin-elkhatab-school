@@ -70,5 +70,5 @@ jobs:
               }
             }
             console.log('Smoke test passed for ' + payload.changes.length + ' text entries.');
-            NODE
+          NODE
           )
