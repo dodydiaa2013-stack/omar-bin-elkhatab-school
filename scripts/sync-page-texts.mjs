@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import path from "node:path";
 import { JSDOM } from "jsdom";
 
 const htmlPath = process.env.PAGE_TEXT_HTML_PATH || "index.html";
