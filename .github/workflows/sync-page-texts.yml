@@ -64,12 +64,20 @@ jobs:
       - name: Install HTML parser
         run: npm install --no-save jsdom@26
 
+      - name: Run page-text synchronization regression tests
+        run: |
+          set -euo pipefail
+          node --check scripts/sync-page-texts.mjs
+          node --check scripts/sync-page-texts.test.mjs
+          node --test scripts/sync-page-texts.test.mjs
+
       - name: Apply and validate saved text changes
         run: |
           set -euo pipefail
           node scripts/sync-page-texts.mjs
+          node scripts/verify-page-texts.mjs
           test -s index.html
-          node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); if(!h.includes('data-page-edit-id=')) process.exit(1);"
+          git diff --check
 
       - name: Create or update a draft review pull request
         env:
