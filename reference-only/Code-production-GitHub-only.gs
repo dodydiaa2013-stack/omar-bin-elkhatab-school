@@ -368,27 +368,52 @@ function checkProductionPageReviewStatus(p) {
     const apiRoot = "https://api.github.com/repos/" + settings.repository;
     const owner = settings.repository.split("/")[0];
     const reviewBranch = "automation/page-text-sync";
+    const headers = {
+      Authorization: "Bearer " + settings.token,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    };
+
+    function getGithubJson_(url, label) {
+      const response = UrlFetchApp.fetch(url, {
+        method: "get",
+        headers: headers,
+        muteHttpExceptions: true
+      });
+      const status = response.getResponseCode();
+      if (status !== 200) {
+        throw new Error("تعذرت قراءة " + label + " من GitHub (HTTP " + status + ").");
+      }
+      return JSON.parse(response.getContentText() || "null");
+    }
+
+    function readGithubTextFile_(path, ref) {
+      const url = apiRoot + "/contents/" + path + "?ref=" + encodeURIComponent(ref);
+      const file = getGithubJson_(url, path);
+      if (!file || file.encoding !== "base64" || !file.content) {
+        throw new Error("استجابة الملف " + path + " من GitHub غير مكتملة.");
+      }
+      return Utilities.newBlob(
+        Utilities.base64Decode(String(file.content).replace(/\\s/g, ""))
+      ).getDataAsString("UTF-8");
+    }
+
+    function pending_(message, number, url) {
+      return productionPageReviewStatusPostMessage(p, {
+        success: true,
+        status: "pending",
+        created: false,
+        number: number || null,
+        url: url || null,
+        message: message
+      });
+    }
+
     const pullsUrl = apiRoot +
       "/pulls?state=open&head=" +
       encodeURIComponent(owner + ":" + reviewBranch) +
       "&base=main&per_page=20";
-
-    const pullsResponse = UrlFetchApp.fetch(pullsUrl, {
-      method: "get",
-      headers: {
-        Authorization: "Bearer " + settings.token,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      },
-      muteHttpExceptions: true
-    });
-
-    const pullsStatus = pullsResponse.getResponseCode();
-    if (pullsStatus !== 200) {
-      throw new Error("تعذرت قراءة طلب المراجعة من GitHub (HTTP " + pullsStatus + ").");
-    }
-
-    const pulls = JSON.parse(pullsResponse.getContentText() || "[]");
+    const pulls = getGithubJson_(pullsUrl, "قائمة طلبات المراجعة");
     const reviewPR = (Array.isArray(pulls) ? pulls : []).find(function(pr) {
       return pr &&
         pr.state === "open" &&
@@ -396,58 +421,116 @@ function checkProductionPageReviewStatus(p) {
         pr.head.ref === reviewBranch &&
         pr.base &&
         pr.base.ref === "main" &&
-        pr.html_url;
+        pr.html_url &&
+        pr.number &&
+        pr.head.sha;
     });
 
     if (!reviewPR) {
-      return productionPageReviewStatusPostMessage(p, {
-        success: true,
-        status: "pending",
-        created: false,
-        message: "لم يظهر طلب المراجعة بعد."
-      });
+      return pending_("لم يظهر طلب المراجعة بعد.");
     }
 
-    const fileUrl = apiRoot + "/contents/" + settings.path +
-      "?ref=" + encodeURIComponent(reviewBranch);
-    const fileResponse = UrlFetchApp.fetch(fileUrl, {
-      method: "get",
-      headers: {
-        Authorization: "Bearer " + settings.token,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      },
-      muteHttpExceptions: true
-    });
-
-    if (fileResponse.getResponseCode() !== 200) {
-      return productionPageReviewStatusPostMessage(p, {
-        success: true,
-        status: "pending",
-        created: false,
-        message: "طلب المراجعة موجود، لكن ملف النصوص لم يصبح متاحًا للتحقق بعد."
-      });
+    if (reviewPR.draft !== true) {
+      return pending_(
+        "طلب المراجعة موجود لكنه ليس في حالة المسودة المطلوبة للمراجعة الآمنة.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
     }
 
-    const file = JSON.parse(fileResponse.getContentText() || "{}");
-    if (file.encoding !== "base64" || !file.content) {
-      throw new Error("استجابة ملف النصوص داخل طلب المراجعة غير مكتملة.");
+    // لا نؤكد الطلب إلا إذا اقتصر التغيير على ملفي النصوص والصفحة.
+    const changedFiles = getGithubJson_(
+      apiRoot + "/pulls/" + reviewPR.number + "/files?per_page=100",
+      "الملفات المعدلة في طلب المراجعة"
+    );
+    const allowedFiles = ["index.html", "page-changes-production.json"];
+    if (!Array.isArray(changedFiles) ||
+        changedFiles.length !== allowedFiles.length ||
+        changedFiles.some(function(file) {
+          return !file ||
+            !allowedFiles.includes(file.filename) ||
+            file.status !== "modified";
+        }) ||
+        allowedFiles.some(function(path) {
+          return !changedFiles.some(function(file) { return file.filename === path; });
+        })) {
+      return pending_(
+        "طلب المراجعة لا يقتصر على ملف الصفحة وملف النصوص المتوقعين؛ أوقفنا تأكيده.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
     }
 
-    const raw = Utilities.newBlob(
-      Utilities.base64Decode(String(file.content).replace(/\s/g, ""))
-    ).getDataAsString("UTF-8");
-    const actualPayload = validateProductionPageChangesPayload_(JSON.parse(raw));
+    const actualPayload = validateProductionPageChangesPayload_(
+      JSON.parse(readGithubTextFile_("page-changes-production.json", reviewBranch))
+    );
     const actualHash = getPageChangesSyncHash_(actualPayload);
-
     if (actualHash !== expectedHash) {
+      return pending_(
+        "طلب المراجعة موجود، لكنه لم يتضمن أحدث نسخة محفوظة من النصوص بعد.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
+    }
+
+    // فحص تطابق معرّفات HTML وJSON من نفس نسخة فرع طلب المراجعة.
+    const html = readGithubTextFile_("index.html", reviewBranch);
+    const htmlIds = [];
+    const idPattern = /data-page-edit-id\\s*=\\s*(["'])(.*?)\\1/g;
+    let match;
+    while ((match = idPattern.exec(html)) !== null) {
+      const id = String(match[2] || "").trim();
+      if (!id || htmlIds.indexOf(id) !== -1) {
+        return pending_(
+          "ملف الصفحة يحتوي على معرّف فارغ أو مكرر؛ لم نؤكد طلب المراجعة.",
+          reviewPR.number,
+          reviewPR.html_url
+        );
+      }
+      htmlIds.push(id);
+    }
+
+    const jsonIds = actualPayload.changes.map(function(item) { return item.id; });
+    if (htmlIds.length !== jsonIds.length ||
+        htmlIds.some(function(id) { return jsonIds.indexOf(id) === -1; }) ||
+        jsonIds.some(function(id) { return htmlIds.indexOf(id) === -1; })) {
+      return pending_(
+        "معرّفات عناصر الصفحة لا تطابق معرّفات ملف النصوص؛ لم نؤكد طلب المراجعة.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
+    }
+
+    // ننتظر فحص التحقق الخاص بطلب النصوص نفسه وعلى نفس SHA، ولا نقبل نتيجة قديمة.
+    const checks = getGithubJson_(
+      apiRoot + "/commits/" + encodeURIComponent(reviewPR.head.sha) +
+        "/check-runs?per_page=100",
+      "نتائج فحص تطابق نصوص الصفحة"
+    );
+    const validationCheck = checks && Array.isArray(checks.check_runs)
+      ? checks.check_runs.find(function(check) {
+          return check &&
+            check.name === "validate-page-text" &&
+            check.head_sha === reviewPR.head.sha;
+        })
+      : null;
+
+    if (!validationCheck || validationCheck.status !== "completed") {
+      return pending_(
+        "تم العثور على الطلب ومطابقة الملفات، وجارٍ انتظار فحص التحقق الآلي.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
+    }
+
+    if (validationCheck.conclusion !== "success") {
       return productionPageReviewStatusPostMessage(p, {
-        success: true,
-        status: "pending",
+        success: false,
+        status: "error",
         created: false,
         number: reviewPR.number,
         url: reviewPR.html_url,
-        message: "طلب المراجعة موجود، لكنه لم يتضمن أحدث نسخة محفوظة من النصوص بعد."
+        message: "فشل فحص تطابق نصوص الصفحة؛ لم نؤكد طلب المراجعة."
       });
     }
 
@@ -457,7 +540,7 @@ function checkProductionPageReviewStatus(p) {
       created: true,
       number: reviewPR.number,
       url: reviewPR.html_url,
-      message: "تم التأكد من وجود طلب المراجعة ومطابقة محتواه مع آخر نصوص محفوظة."
+      message: "تم التأكد من تطابق بصمة النصوص ومعرّفات الصفحة والملفات المعدلة ونجاح الفحص الآلي."
     });
 
   } catch (error) {
@@ -469,6 +552,7 @@ function checkProductionPageReviewStatus(p) {
     });
   }
 }
+
 function photoAlbumPostMessage(p, result) {
   p = p || {};
 
