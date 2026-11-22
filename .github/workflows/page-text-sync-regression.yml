@@ -1,4 +1,5 @@
 name: Production page-text sync regression tests
+# This job validates the exact current production input before any review PR can be merged.
 
 on:
   pull_request:
