@@ -20,7 +20,9 @@ function getFolder() {
   return folders.hasNext()
     ? folders.next()
     : DriveApp.createFolder(FOLDER_NAME);
-}function getScheduleFolder() {
+}
+
+function getScheduleFolder() {
   const folders = DriveApp.getFoldersByName(SCHEDULE_FOLDER_NAME);
   return folders.hasNext()
     ? folders.next()
@@ -1541,7 +1543,10 @@ if (action === "photoAlbums") {
     return ContentService.createTextOutput(
     "خدمة صور مدرسة عمر بن الخطاب تعمل"
   );
-}function outputWithCallback(data, callback) {
+}
+
+
+function outputWithCallback(data, callback) {
   const result = JSON.stringify(data);
 
   if (callback && /^[a-zA-Z_$][\w.$]*$/.test(callback)) {
@@ -1565,7 +1570,7 @@ function doPost(e) {
   const action = p.action || "";
 
   try {
-            if (action === "adminLogin") {
+    if (action === "adminLogin") {
       return adminLogin(p);
     }
 
@@ -1666,7 +1671,6 @@ function doPost(e) {
     const message = error.message || "تعذر تنفيذ العملية";
 
 
-    
     if (action === "adminLogout") {
       return adminLogoutPostMessage(p, {
         success: false,
