@@ -2784,6 +2784,12 @@ function assignPageEditIds() {
 let pageChangesRequestInFlight = false;
 let pageChangesRequestTimeout = null;
 let pendingPageChangesSnapshot = null;
+// احذف نسخة الكاش القديمة مرة واحدة؛ لم تعد مصدرًا لعرض نصوص الموقع.
+try {
+    localStorage.removeItem("obk_page_changes_cache_v1");
+} catch (error) {
+    console.warn("[PageChanges] تعذر حذف كاش النصوص القديم من هذا المتصفح.", error);
+}
 window.__productionPageChangesBackendReady = false;
 window.__productionPageChangesUsingLocalFallback = false;
 let pageChangesResponseReceived = false;
