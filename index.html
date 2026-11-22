@@ -279,6 +279,7 @@
         const endpoint = GOOGLE_SCRIPT_URL;
         window.__pageChangesDomReady = false;
         window.__earlyPageChangesReceived = false;
+
         window.receivePageChangesEarly = function(data) {
             if (window.__pageChangesDomReady &&
                 typeof window.receivePageChanges === "function") {
@@ -914,7 +915,7 @@
                 <div class="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-4">
                     <div>
                         <h2 class="text-2xl font-bold text-navy flex items-center gap-2">
-                            <i class="fa-solid fa-calendar-days text-gold"></i> <span data-page-edit-id="schedules-title">قوائم فصول اولى ث</span>
+                            <i class="fa-solid fa-calendar-days text-gold"></i> <span data-page-edit-id="schedules-title">قوائم فصول الصف الاول ث</span> 
                         </h2>
                         <p class="text-xs text-slate-500 mt-1"><span data-page-edit-id="schedules-description">قوائم الفصول الرسمية (1/1 إلى 1/8)</span></p>
                         <p id="scheduleOperationStatus" class="text-xs text-slate-600 mt-2" role="status" aria-live="polite">حالة عمليات قوائم الفصول ستظهر هنا.</p>
@@ -2950,6 +2951,7 @@ function loadSavedPageChanges() {
     script.onerror = () => {
         console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستُستخدم النسخة المحلية للعرض إن كانت صالحة.');
         applyCachedPageChangesFallback('script-error');
+        document.documentElement.removeAttribute('data-page-edits-pending');
         finish();
     };
     script.onload = () => {
@@ -2957,11 +2959,13 @@ function loadSavedPageChanges() {
             console.error('[PageChanges] تم تحميل الاستجابة دون تأكيد callback؛ سنحاول النسخة المحلية.');
             applyCachedPageChangesFallback('callback-missing');
         }
+        document.documentElement.removeAttribute('data-page-edits-pending');
         finish();
     };
     pageChangesRequestTimeout = setTimeout(() => {
         console.warn('[PageChanges] انتهت مهلة تحميل تعديلات النصوص.');
         applyCachedPageChangesFallback('request-timeout');
+        document.documentElement.removeAttribute('data-page-edits-pending');
         finish();
     }, 15000);
     document.body.appendChild(script);
@@ -2977,15 +2981,7 @@ function receivePageChanges(data) {
         return false;
     }
     const normalized = normalizeFixedPageChanges(data.changes);
-    let stats;
-    try {
-        stats = applyPageChangesList(normalized);
-    } catch (error) {
-        window.__productionPageChangesBackendReady = false;
-        console.error('[PageChanges] تعذر تطبيق تعديلات النصوص المحفوظة:', error);
-        applyCachedPageChangesFallback('server-apply-error');
-        return false;
-    }
+    const stats = applyPageChangesList(normalized);
     console.info('[PageChanges] نتيجة استرجاع التعديلات:', {
         serverReceived: data.changes.length, matched: stats.matched, applied: stats.applied,
         unchanged: stats.unchanged, skippedEditing: stats.skippedEditing,
