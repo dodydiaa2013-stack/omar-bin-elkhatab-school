@@ -1,12 +1,12 @@
 name: Prepare saved page text review pull request
-# The workflow prepares a reviewable text-only change. It never merges or publishes.
+# This workflow proposes saved page-text changes for human review only.
+# It never merges or publishes.
 on:
-  # Apps Script dispatches this event only after GitHub save verification succeeds.
   repository_dispatch:
     types:
       - production-page-text-saved
 
-  # Fallback in case the dispatch request cannot be delivered.
+  # Fallback in case the Apps Script dispatch cannot be delivered.
   schedule:
     - cron: "*/5 * * * *"
 
@@ -15,6 +15,7 @@ on:
       - "automation/page-text-sync-input"
     paths:
       - "page-changes-production.json"
+
   workflow_dispatch:
 
 permissions:
@@ -29,19 +30,25 @@ jobs:
   prepare-review:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out main as the clean base
+      - name: Check out the current production baseline
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
 
-      - name: Fetch and validate latest saved changes
+      - name: Preserve baseline and fetch the latest saved input
         run: |
           set -euo pipefail
+
+          # Keep the JSON from main as the immutable comparison baseline.
+          cp page-changes-production.json page-changes-production.baseline.json
+
           git fetch origin automation/page-text-sync-input
-          git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.json
+          git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.incoming.json
+
           node <<'NODE'
-          const p = require('./page-changes-production.json');
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync('page-changes-production.incoming.json', 'utf8'));
           if (!p || p.success !== true || !Array.isArray(p.changes) || p.changes.length > 500) {
             throw new Error('Invalid page text payload.');
           }
@@ -56,20 +63,25 @@ jobs:
           }
           NODE
 
+          mv page-changes-production.incoming.json page-changes-production.json
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Install HTML parser
-        run: npm install --no-save jsdom@26
+        run: npm install --no-save --no-package-lock jsdom@26
 
-      - name: Apply and validate saved text changes
+      - name: Run page-text synchronization regression tests
+        run: node --test scripts/sync-page-texts.test.mjs
+
+      - name: Apply saved text changes with conflict protection
         run: |
           set -euo pipefail
-          node scripts/sync-page-texts.mjs
+          node scripts/sync-page-texts.mjs page-changes-production.baseline.json
           test -s index.html
-          node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); if(!h.includes('data-page-edit-id=')) process.exit(1);"
+          git diff --check
 
       - name: Create or update a draft review pull request
         env:
@@ -102,10 +114,12 @@ jobs:
 
           - Generated from the dedicated page-text input branch.
           - Updates only page-changes-production.json and matching text in index.html.
-          - The synchronization script validates the HTML structure, saved IDs, and duplicate IDs before proposing changes.
+          - Uses the current main JSON as a baseline to detect direct HTML edits and conflicts.
+          - Requires exact ID equality across HTML, baseline JSON, and incoming JSON.
+          - Never generates edit IDs automatically.
+          - Runs regression tests for no-op, saved edits, mismatches, and duplicate IDs.
           - This pull request is intentionally draft.
-          - No automatic merge, publication, or deployment is performed.
-          - Review the diff and preview manually before approving."
+          - No automatic merge, publication, or deployment is performed."
             pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
           else
             is_draft=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
@@ -119,10 +133,12 @@ jobs:
 
           - Generated from the dedicated page-text input branch.
           - Updates only page-changes-production.json and matching text in index.html.
-          - The synchronization script validates the HTML structure, saved IDs, and duplicate IDs before proposing changes.
+          - Uses the current main JSON as a baseline to detect direct HTML edits and conflicts.
+          - Requires exact ID equality across HTML, baseline JSON, and incoming JSON.
+          - Never generates edit IDs automatically.
+          - Runs regression tests for no-op, saved edits, mismatches, and duplicate IDs.
           - This pull request is intentionally draft.
-          - No automatic merge, publication, or deployment is performed.
-          - Review the diff and preview manually before approving."
+          - No automatic merge, publication, or deployment is performed."
           fi
 
           echo "Draft review PR is ready for human inspection. No merge was attempted."
