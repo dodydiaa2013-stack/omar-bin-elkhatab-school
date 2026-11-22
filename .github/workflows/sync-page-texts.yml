@@ -100,7 +100,9 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const { JSDOM } = require('jsdom');
-          const html = fs.readFileSync('index.html', 'utf8');
+          const rawHtml = fs.readFileSync('index.html', 'utf8');
+          // Strip a leading UTF-8 BOM for DOM parsing only; keep the source file unchanged.
+          const html = rawHtml.charCodeAt(0) === 0xFEFF ? rawHtml.slice(1) : rawHtml;
           const dom = new JSDOM(html);
           const d = dom.window.document;
           if (!d.doctype || !d.head || !d.body ||
