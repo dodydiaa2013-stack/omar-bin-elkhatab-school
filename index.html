@@ -255,6 +255,11 @@
     html[data-current-tab="alerts"] #content-alerts,
     html[data-current-tab="student-queries"] #content-student-queries { display: block !important; }
 
+    /* امنع وميض النصوص القديمة قبل حسم استرجاع التعديلات المحفوظة. */
+    html[data-page-edits-pending="true"] [data-page-edit-id] {
+        visibility: hidden !important;
+    }
+
 </style>
 <script>
     (() => {
@@ -279,6 +284,15 @@
         const endpoint = GOOGLE_SCRIPT_URL;
         window.__pageChangesDomReady = false;
         window.__earlyPageChangesReceived = false;
+        window.__pageChangesInitialLoadSettled = false;
+        document.documentElement.setAttribute("data-page-edits-pending", "true");
+
+        // لا نظهر النصوص الثابتة إلا بعد تطبيق رد الخادم أو اعتماد مسار العرض الاحتياطي.
+        window.finishPageChangesInitialLoad = function() {
+            if (window.__pageChangesInitialLoadSettled) return;
+            window.__pageChangesInitialLoadSettled = true;
+            document.documentElement.removeAttribute("data-page-edits-pending");
+        };
 
         window.receivePageChangesEarly = function(data) {
             if (window.__pageChangesDomReady &&
@@ -1587,7 +1601,7 @@ window.addEventListener('DOMContentLoaded', () => {
         applyCachedPageChangesFallback(window.__pageChangesFallbackPending);
         window.__pageChangesFallbackPending = '';
     }
-    document.documentElement.removeAttribute("data-page-edits-pending");
+    // تظل النصوص القابلة للتحرير مخفية حتى تنتهي استجابة الخادم أو مسارها الاحتياطي.
     updateTeacherUI();
 });
 
@@ -2951,7 +2965,7 @@ function loadSavedPageChanges() {
     script.onerror = () => {
         console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستُستخدم النسخة المحلية للعرض إن كانت صالحة.');
         applyCachedPageChangesFallback('script-error');
-        document.documentElement.removeAttribute('data-page-edits-pending');
+        window.finishPageChangesInitialLoad();
         finish();
     };
     script.onload = () => {
@@ -2959,13 +2973,13 @@ function loadSavedPageChanges() {
             console.error('[PageChanges] تم تحميل الاستجابة دون تأكيد callback؛ سنحاول النسخة المحلية.');
             applyCachedPageChangesFallback('callback-missing');
         }
-        document.documentElement.removeAttribute('data-page-edits-pending');
+        window.finishPageChangesInitialLoad();
         finish();
     };
     pageChangesRequestTimeout = setTimeout(() => {
         console.warn('[PageChanges] انتهت مهلة تحميل تعديلات النصوص.');
         applyCachedPageChangesFallback('request-timeout');
-        document.documentElement.removeAttribute('data-page-edits-pending');
+        window.finishPageChangesInitialLoad();
         finish();
     }, 15000);
     document.body.appendChild(script);
@@ -2978,10 +2992,20 @@ function receivePageChanges(data) {
         const message = data && (data.message || data.error) ? (data.message || data.error) : 'استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.';
         console.error('[PageChanges] تعذر استرجاع تعديلات نصوص الموقع:', message);
         applyCachedPageChangesFallback('invalid-server-response');
+        window.finishPageChangesInitialLoad();
         return false;
     }
     const normalized = normalizeFixedPageChanges(data.changes);
-    const stats = applyPageChangesList(normalized);
+    let stats;
+    try {
+        stats = applyPageChangesList(normalized);
+    } catch (error) {
+        window.__productionPageChangesBackendReady = false;
+        console.error('[PageChanges] تعذر تطبيق تعديلات النصوص المحفوظة:', error);
+        applyCachedPageChangesFallback('server-apply-error');
+        window.finishPageChangesInitialLoad();
+        return false;
+    }
     console.info('[PageChanges] نتيجة استرجاع التعديلات:', {
         serverReceived: data.changes.length, matched: stats.matched, applied: stats.applied,
         unchanged: stats.unchanged, skippedEditing: stats.skippedEditing,
@@ -2993,6 +3017,7 @@ function receivePageChanges(data) {
         window.__productionPageChangesBackendReady = false;
         console.warn('[PageChanges] توجد تعديلات مفقودة أو غير صالحة؛ لن نعتمد الاستجابة أو نحدّث الكاش.');
         applyCachedPageChangesFallback('incomplete-server-apply');
+        window.finishPageChangesInitialLoad();
         return false;
     }
     window.__productionPageChangesBackendReady = true;
@@ -3003,6 +3028,7 @@ function receivePageChanges(data) {
     document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
+    window.finishPageChangesInitialLoad();
     return true;
 }
 
