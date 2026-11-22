@@ -175,14 +175,93 @@ jobs:
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Merge the validated text-only change
+      - name: Wait for successful pull-request checks and deployment preview
         if: steps.proposal.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           pr_number="${{ steps.proposal.outputs.number }}"
+          expected_sha="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
+          if [ -z "$expected_sha" ]; then
+            echo "Could not determine the exact pull-request head SHA."
+            exit 1
+          fi
+
+          echo "Waiting for checks on exact PR head: $expected_sha"
+          checks_ready=false
+          for attempt in $(seq 1 40); do
+            pr_json="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json state,baseRefName,headRefOid)"
+            pr_state="$(printf '%s' "$pr_json" | jq -r '.state')"
+            pr_base="$(printf '%s' "$pr_json" | jq -r '.baseRefName')"
+            current_sha="$(printf '%s' "$pr_json" | jq -r '.headRefOid')"
+
+            if [ "$pr_state" != "OPEN" ] || [ "$pr_base" != "main" ] || [ "$current_sha" != "$expected_sha" ]; then
+              echo "PR state, base branch, or head SHA changed while waiting. Refusing to merge."
+              exit 1
+            fi
+
+            status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
+            checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
+            status_state="$(printf '%s' "$status_json" | jq -r '.state')"
+            status_count="$(printf '%s' "$status_json" | jq -r '.total_count')"
+            check_count="$(printf '%s' "$checks_json" | jq -r '.total_count')"
+
+            if [ "$status_state" = "failure" ] || [ "$status_state" = "error" ]; then
+              echo "A commit status reported failure."
+              printf '%s' "$status_json" | jq -r '.statuses[]? | [.context, .state, (.description // "")] | @tsv'
+              exit 1
+            fi
+
+            bad_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure"))] | length')"
+            if [ "$bad_checks" != "0" ]; then
+              echo "A GitHub check run failed."
+              printf '%s' "$checks_json" | jq -r '.check_runs[]? | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")) | [.name, .conclusion] | @tsv'
+              exit 1
+            fi
+
+            pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')"
+            pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')"
+
+            if [ "$status_count" -gt 0 ] && [ "$check_count" -ge 0 ] &&
+               [ "$status_state" = "success" ] &&
+               [ "$pending_statuses" = "0" ] && [ "$pending_checks" = "0" ]; then
+              checks_ready=true
+              break
+            fi
+
+            echo "Checks are not all successful yet (attempt $attempt/40); waiting 15 seconds."
+            sleep 15
+          done
+
+          if [ "$checks_ready" != "true" ]; then
+            echo "No successful commit-status result was received for the PR head within 10 minutes. Refusing to merge."
+            exit 1
+          fi
+
+      - name: Merge only after all reported checks succeed
+        if: steps.proposal.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr_number="${{ steps.proposal.outputs.number }}"
+          expected_sha="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
+
+          # Re-read checks immediately before merge; do not merge a changed or failed head.
+          pr_json="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json state,baseRefName,headRefOid)"
+          test "$(printf '%s' "$pr_json" | jq -r '.state')" = "OPEN"
+          test "$(printf '%s' "$pr_json" | jq -r '.baseRefName')" = "main"
+          test "$(printf '%s' "$pr_json" | jq -r '.headRefOid')" = "$expected_sha"
+
+          status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
+          checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
+          test "$(printf '%s' "$status_json" | jq -r '.state')" = "success"
+          test "$(printf '%s' "$status_json" | jq -r '.total_count')" -gt 0
+          test "$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')" = "0"
+          test "$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')" = "0"
+
           gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --squash
           gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" \
             --json state,mergedAt,baseRefName \
-            --jq 'if .state == "MERGED" and .mergedAt != null and .baseRefName == "main" then "Validated page-text PR merged into main." else error("Page-text PR was not merged into main.") end'
+            --jq 'if .state == "MERGED" and .mergedAt != null and .baseRefName == "main" then "All reported checks succeeded; page-text PR merged into main." else error("Page-text PR was not merged into main.") end'
