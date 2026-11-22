@@ -6,15 +6,27 @@ const changesPath = "page-changes-production.json";
 const html = fs.readFileSync(htmlPath, "utf8");
 const payload = JSON.parse(fs.readFileSync(changesPath, "utf8"));
 
+if (!payload || payload.success !== true || !Array.isArray(payload.changes)) {
+  throw new Error("page-changes-production.json has an invalid structure.");
+}
+if (payload.changes.length > 500) {
+  throw new Error("Too many page text changes.");
+}
+
+// Parse only for locating nodes. Never serialize the DOM: serialization can
+// normalize or relocate markup and must not rewrite the page structure.
 function parseWithLocations(source) {
+  // The source file starts with a UTF-8 BOM. JSDOM treats a leading BOM in
+  // an already-decoded string as text before the doctype, which moves the
+  // entire head into the body. Strip it only for parsing and shift every
+  // reported source offset by one so edits still target the original source.
   const hasBom = source.charCodeAt(0) === 0xFEFF;
   const dom = new JSDOM(hasBom ? source.slice(1) : source, {
     includeNodeLocations: true
   });
 
   return {
-    dom,
-    document: dom.window.document,
+    window: dom.window,
     nodeLocation(node) {
       const location = dom.nodeLocation(node);
       if (!location || !hasBom) return location;
@@ -37,10 +49,8 @@ function parseWithLocations(source) {
 }
 
 function assertDocumentStructure(document, stage) {
-  if (!document.doctype ||
-      document.documentElement?.tagName !== "HTML" ||
-      !document.head ||
-      !document.body ||
+  if (!document.doctype || document.documentElement?.tagName !== "HTML" ||
+      !document.head || !document.body ||
       !document.head.querySelector("title") ||
       !document.head.querySelector('meta[charset]') ||
       !document.head.querySelector('link[rel="stylesheet"]')) {
@@ -48,6 +58,148 @@ function assertDocumentStructure(document, stage) {
   }
 }
 
+const initialDom = parseWithLocations(html);
+const document = initialDom.window.document;
+assertDocumentStructure(document, "before text synchronization");
+
+const excludedRoots = [
+  "#devControlBar", "#loginBtn", "#adminBadge", "#adminModal",
+  "#scheduleModal", "#passwordRecoveryPanel", "#tabletTeacherUpload",
+  "#tabletImageUploadControls", "#tabletImageManagement", "#tabletGallery",
+  "#googleSignInStatus", "#scheduleOperationStatus", "#scheduleTeacherControl",
+  "#scheduleBulkManagement", "#scheduleBulkSelectionStatus", "#schedulesGrid",
+  "#alertsTeacherControl", "#photoAlbumsStatus", "#photoAlbumsManagement",
+  "#albumsSelectionStatus", "#photoAlbumsGrid", "#photoAlbumViewer",
+  "#photoAlbumImagesGrid", "#photoAlbumEditor", "#photoAlbumUploadProgress",
+  "#photoAlbumUploadStatus", "#photoAlbumUploadProgressText",
+  "#photoAlbumUploadResults", "#albumImagesManagement",
+  "#albumImagesSelectionStatus", "#scheduleClassFiles", "#adminErrorMsg",
+  "#recoveryMessage", "#schoolImageViewer", '[data-page-no-auto-edit="true"]'
+].join(",");
+
+function makeStableId(element, textNodeIndex) {
+  const path = [];
+  let current = element;
+  while (current && current !== document.body) {
+    let position = 1;
+    let previous = current.previousElementSibling;
+    while (previous) {
+      if (previous.tagName === current.tagName) position++;
+      previous = previous.previousElementSibling;
+    }
+    path.unshift(current.tagName.toLowerCase() + position);
+    current = current.parentElement;
+  }
+  const value = path.join("/") +
+    (textNodeIndex === undefined ? "" : "/text-" + textNodeIndex);
+  let hashA = 2166136261;
+  let hashB = 2246822519;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    hashA = Math.imul(hashA ^ code, 16777619);
+    hashB = Math.imul(hashB ^ code, 3266489917);
+  }
+  const hex = number => (number >>> 0).toString(16).padStart(8, "0");
+  return "auto-" + hex(hashA) + hex(hashB);
+}
+
+const usedIds = new Set(
+  Array.from(document.querySelectorAll("[data-page-edit-id]"))
+    .map(element => element.getAttribute("data-page-edit-id"))
+    .filter(Boolean)
+);
+const sourceEdits = [];
+
+function addSourceEdit(start, end, replacement) {
+  if (!Number.isInteger(start) || !Number.isInteger(end) ||
+      start < 0 || end < start || end > html.length) {
+    throw new Error("Invalid HTML source location; refusing to modify index.html.");
+  }
+  sourceEdits.push({ start, end, replacement });
+}
+
+const candidates = Array.from(document.body.querySelectorAll("*"));
+for (const element of candidates) {
+  if (element.hasAttribute("data-page-edit-id")) continue;
+  if (element.parentElement &&
+      element.parentElement.closest("[data-page-edit-id]")) continue;
+  if (element.closest(excludedRoots)) continue;
+
+  const tag = element.tagName;
+  if ([
+    "SCRIPT", "STYLE", "NOSCRIPT", "SVG", "PATH", "CANVAS",
+    "INPUT", "TEXTAREA", "SELECT", "OPTION", "IFRAME"
+  ].includes(tag)) continue;
+
+  if (element.children.length === 0) {
+    if (!element.textContent || !element.textContent.trim()) continue;
+    const id = makeStableId(element);
+    if (usedIds.has(id)) continue;
+
+    const location = initialDom.nodeLocation(element);
+    if (!location?.startTag) {
+      throw new Error("Could not locate an HTML element while creating edit IDs.");
+    }
+    const tagEnd = location.startTag.endOffset;
+    const insertionPoint = html[tagEnd - 2] === "/" ? tagEnd - 2 : tagEnd - 1;
+    addSourceEdit(insertionPoint, insertionPoint, ' data-page-edit-id="' + id + '"');
+    usedIds.add(id);
+    continue;
+  }
+
+  Array.from(element.childNodes).forEach((node, index) => {
+    if (node.nodeType !== initialDom.window.Node.TEXT_NODE ||
+        !node.nodeValue.trim()) return;
+
+    const id = makeStableId(element, index);
+    if (usedIds.has(id)) return;
+    const location = initialDom.nodeLocation(node);
+    if (!location) {
+      throw new Error("Could not locate a text node while creating edit IDs.");
+    }
+    const rawText = html.slice(location.startOffset, location.endOffset);
+    addSourceEdit(
+      location.startOffset,
+      location.endOffset,
+      '<span data-page-edit-id="' + id + '">' + rawText + "</span>"
+    );
+    usedIds.add(id);
+  });
+}
+
+// Apply non-overlapping source edits from right to left so every original
+// offset remains valid. The original doctype, head, body, comments and scripts
+// remain byte-for-byte unchanged except for the intended edit markers.
+sourceEdits.sort((a, b) => b.start - a.start || b.end - a.end);
+let markedHtml = html;
+let previousStart = html.length + 1;
+for (const edit of sourceEdits) {
+  if (edit.end > previousStart) {
+    throw new Error("Overlapping HTML source edits detected; refusing to write.");
+  }
+  markedHtml =
+    markedHtml.slice(0, edit.start) +
+    edit.replacement +
+    markedHtml.slice(edit.end);
+  previousStart = edit.start;
+}
+
+const markedDom = parseWithLocations(markedHtml);
+const markedDocument = markedDom.window.document;
+assertDocumentStructure(markedDocument, "after adding edit markers");
+
+const seen = new Set();
+const targets = new Map();
+for (const element of markedDocument.querySelectorAll("[data-page-edit-id]")) {
+  const id = element.getAttribute("data-page-edit-id");
+  if (id) {
+    if (targets.has(id)) throw new Error("Duplicate HTML edit id: " + id);
+    targets.set(id, element);
+  }
+}
+
+const missing = [];
+const textEdits = [];
 function escapeHtml(value) {
   return value.replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -56,316 +208,61 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function updateVirtualTextPreservingMarkup(element, savedText) {
-  if (!element.children.length) {
-    element.textContent = savedText;
-    return true;
-  }
-
-  const protectedChildren = Array.from(element.children)
-    .filter(child => (child.textContent || "").length > 0);
-  const segments = [];
-  let cursor = 0;
-
-  for (const child of protectedChildren) {
-    const childText = child.textContent || "";
-    const at = savedText.indexOf(childText, cursor);
-    if (at < 0) return false;
-    segments.push(savedText.slice(cursor, at));
-    cursor = at + childText.length;
-  }
-  segments.push(savedText.slice(cursor));
-
-  let segmentIndex = 0;
-  let pending = [];
-  let used = false;
-
-  const flush = beforeNode => {
-    const value = used ? "" : (segments[segmentIndex] || "");
-    if (pending.length) {
-      pending[0].nodeValue = value;
-      pending.slice(1).forEach(node => { node.nodeValue = ""; });
-      used = true;
-    } else if (value) {
-      const textNode = element.ownerDocument.createTextNode(value);
-      if (beforeNode) element.insertBefore(textNode, beforeNode);
-      else element.appendChild(textNode);
-      used = true;
-    }
-    pending = [];
-  };
-
-  for (const node of Array.from(element.childNodes)) {
-    if (node.nodeType === 3) {
-      pending.push(node);
-      continue;
-    }
-    if (node.nodeType === 1) {
-      if ((node.textContent || "").length) {
-        flush(node);
-        segmentIndex++;
-        used = false;
-      } else if (pending.length) {
-        flush(node);
-      }
-    }
-  }
-  flush(null);
-  return true;
-}
-
-function planSourceTextEdits(originalElement, virtualElement, savedText, parsed) {
-  const edits = [];
-  const originalLocation = parsed.nodeLocation(originalElement);
-
-  if (!originalLocation?.startTag || !originalLocation?.endTag) {
-    throw new Error("Could not safely locate the HTML element for a saved text ID.");
-  }
-
-  if (!originalElement.children.length) {
-    edits.push({
-      start: originalLocation.startTag.endOffset,
-      end: originalLocation.endTag.startOffset,
-      replacement: escapeHtml(savedText)
-    });
-    return edits;
-  }
-
-  const virtualChildren = Array.from(virtualElement.children);
-  const protectedChildren = virtualChildren
-    .filter(child => (child.textContent || "").length > 0);
-  const segments = [];
-  let cursor = 0;
-
-  for (const child of protectedChildren) {
-    const childText = child.textContent || "";
-    const at = savedText.indexOf(childText, cursor);
-    if (at < 0) {
-      throw new Error("Saved text conflicts with nested markup for ID: " +
-        originalElement.getAttribute("data-page-edit-id"));
-    }
-    segments.push(savedText.slice(cursor, at));
-    cursor = at + childText.length;
-  }
-  segments.push(savedText.slice(cursor));
-
-  let segmentIndex = 0;
-  let pending = [];
-  let used = false;
-  let childIndex = 0;
-
-  const flush = beforeNode => {
-    const value = used ? "" : (segments[segmentIndex] || "");
-
-    if (pending.length) {
-      pending.forEach((node, index) => {
-        const location = parsed.nodeLocation(node);
-        if (!location) {
-          throw new Error("Could not locate an HTML text node for a saved edit.");
-        }
-        edits.push({
-          start: location.startOffset,
-          end: location.endOffset,
-          replacement: index === 0 ? escapeHtml(value) : ""
-        });
-      });
-      used = true;
-    } else if (value) {
-      let insertionPoint;
-      if (beforeNode) {
-        const location = parsed.nodeLocation(beforeNode);
-        if (!location?.startTag) {
-          throw new Error("Could not locate an insertion point before nested markup.");
-        }
-        insertionPoint = location.startTag.startOffset;
-      } else {
-        insertionPoint = originalLocation.endTag.startOffset;
-      }
-      edits.push({
-        start: insertionPoint,
-        end: insertionPoint,
-        replacement: escapeHtml(value)
-      });
-      used = true;
-    }
-
-    pending = [];
-  };
-
-  for (const node of Array.from(originalElement.childNodes)) {
-    if (node.nodeType === 3) {
-      pending.push(node);
-      continue;
-    }
-
-    if (node.nodeType === 1) {
-      const virtualChild = virtualChildren[childIndex++];
-      if (!virtualChild) {
-        throw new Error("The virtual HTML structure changed unexpectedly.");
-      }
-
-      if ((virtualChild.textContent || "").length) {
-        flush(node);
-        segmentIndex++;
-        used = false;
-      } else if (pending.length) {
-        flush(node);
-      }
-    }
-  }
-
-  flush(null);
-  return edits;
-}
-
-if (!payload ||
-    payload.success !== true ||
-    !Array.isArray(payload.changes) ||
-    payload.changes.length > 500) {
-  throw new Error("page-changes-production.json has an invalid structure.");
-}
-
-const parsed = parseWithLocations(html);
-const document = parsed.document;
-assertDocumentStructure(document, "before text synchronization");
-
-const originalTargets = new Map();
-for (const element of document.querySelectorAll("[data-page-edit-id]")) {
-  const id = (element.getAttribute("data-page-edit-id") || "").trim();
-  if (!id || id.length > 200) {
-    throw new Error("The HTML contains an empty or invalid page edit ID.");
-  }
-  if (originalTargets.has(id)) {
-    throw new Error("Duplicate HTML page edit ID: " + id);
-  }
-  originalTargets.set(id, element);
-}
-
-const changesById = new Map();
 for (const item of payload.changes) {
-  if (!item ||
-      typeof item.id !== "string" ||
-      typeof item.text !== "string" ||
-      !item.id.trim() ||
-      item.id.length > 200 ||
-      item.text.length > 10000) {
-    throw new Error("A saved page text item has invalid id/text values.");
+  if (!item || typeof item.id !== "string" || typeof item.text !== "string" ||
+      item.id.length > 200 || item.text.length > 10000) {
+    throw new Error("A change item has invalid id/text values.");
   }
-  if (changesById.has(item.id)) {
-    throw new Error("Duplicate saved page edit ID: " + item.id);
+  if (seen.has(item.id)) throw new Error("Duplicate edit id: " + item.id);
+  seen.add(item.id);
+
+  const target = targets.get(item.id);
+  if (!target) {
+    missing.push(item.id);
+    continue;
   }
-  changesById.set(item.id, item.text);
+  const location = markedDom.nodeLocation(target);
+  if (!location?.startTag || !location?.endTag ||
+      location.endTag.startOffset < location.startTag.endOffset) {
+    throw new Error("Could not safely locate the content for edit id: " + item.id);
+  }
+  textEdits.push({
+    start: location.startTag.endOffset,
+    end: location.endTag.startOffset,
+    replacement: escapeHtml(item.text)
+  });
 }
 
-if (changesById.size !== originalTargets.size) {
+if (missing.length) {
   throw new Error(
-    "Saved page text IDs do not match index.html. HTML IDs: " +
-    originalTargets.size + "; saved IDs: " + changesById.size +
-    ". Refusing to generate or remove IDs automatically."
+    "Refusing to write index.html because these saved edit IDs were not found: " +
+    missing.join(", ")
   );
 }
 
-for (const id of originalTargets.keys()) {
-  if (!changesById.has(id)) {
-    throw new Error("Saved page text is missing HTML edit ID: " + id);
+textEdits.sort((a, b) => b.start - a.start);
+let output = markedHtml;
+let previousTextStart = markedHtml.length + 1;
+for (const edit of textEdits) {
+  if (edit.end > previousTextStart) {
+    throw new Error("Overlapping text replacements detected; refusing to write.");
   }
-}
-for (const id of changesById.keys()) {
-  if (!originalTargets.has(id)) {
-    throw new Error("Saved page text contains an unknown HTML edit ID: " + id);
-  }
-}
-
-const virtualDom = parseWithLocations(html);
-const virtualTargets = new Map();
-for (const element of virtualDom.document.querySelectorAll("[data-page-edit-id]")) {
-  virtualTargets.set(element.getAttribute("data-page-edit-id"), element);
-}
-
-const depthOf = element => {
-  let depth = 0;
-  for (let node = element; node; node = node.parentElement) depth++;
-  return depth;
-};
-
-const orderedChanges = Array.from(changesById, ([id, text]) => ({
-  id,
-  text,
-  depth: depthOf(virtualTargets.get(id))
-})).sort((a, b) => b.depth - a.depth);
-
-for (const item of orderedChanges) {
-  const target = virtualTargets.get(item.id);
-  if (!target || !updateVirtualTextPreservingMarkup(target, item.text)) {
-    throw new Error("Saved text cannot be applied without changing nested markup: " + item.id);
-  }
-}
-
-for (const item of orderedChanges) {
-  if (virtualTargets.get(item.id).textContent !== item.text) {
-    throw new Error("Virtual text verification failed for ID: " + item.id);
-  }
-}
-
-const sourceEdits = [];
-for (const item of orderedChanges) {
-  sourceEdits.push(...planSourceTextEdits(
-    originalTargets.get(item.id),
-    virtualTargets.get(item.id),
-    item.text,
-    parsed
-  ));
-}
-
-sourceEdits.sort((a, b) => b.start - a.start || b.end - a.end);
-let output = html;
-let previousStart = html.length + 1;
-
-for (const edit of sourceEdits) {
-  if (!Number.isInteger(edit.start) ||
-      !Number.isInteger(edit.end) ||
-      edit.start < 0 ||
-      edit.end < edit.start ||
-      edit.end > html.length ||
-      edit.end > previousStart) {
-    throw new Error("Overlapping or invalid HTML source edits detected.");
-  }
-
   output =
     output.slice(0, edit.start) +
     edit.replacement +
     output.slice(edit.end);
-  previousStart = edit.start;
+  previousTextStart = edit.start;
 }
 
-const finalParsed = parseWithLocations(output);
-assertDocumentStructure(finalParsed.document, "after text synchronization");
-
-const finalTargets = new Map();
-for (const element of finalParsed.document.querySelectorAll("[data-page-edit-id]")) {
-  const id = (element.getAttribute("data-page-edit-id") || "").trim();
-  if (!id || finalTargets.has(id)) {
-    throw new Error("The final HTML contains an empty or duplicate page edit ID.");
-  }
-  finalTargets.set(id, element);
+const finalDom = parseWithLocations(output);
+assertDocumentStructure(finalDom.window.document, "after text synchronization");
+if (finalDom.window.document.head.querySelectorAll("meta").length < 5) {
+  throw new Error("The document head appears incomplete; refusing to write index.html.");
 }
-
-if (finalTargets.size !== changesById.size) {
-  throw new Error("The final HTML page edit ID count changed unexpectedly.");
+if (finalDom.window.document.body.querySelectorAll("script").length < 1) {
+  throw new Error("The document body appears incomplete; refusing to write index.html.");
 }
-
-for (const [id, text] of changesById) {
-  const target = finalTargets.get(id);
-  if (!target || target.textContent !== text) {
-    throw new Error("Final HTML text verification failed for ID: " + id);
-  }
-}
-
-virtualDom.dom.window.close();
-parsed.dom.window.close();
-finalParsed.dom.window.close();
 
 fs.writeFileSync(htmlPath, output, "utf8");
-console.log("Verified and synchronized " + changesById.size + " saved page text entries.");
-console.log("HTML edit IDs were preserved exactly; no IDs were generated or removed.");
-console.log("Nested icons, links, and child markup were preserved.");
+console.log("Updated " + payload.changes.length + " text nodes in index.html.");
+console.log("Preserved the original HTML source structure without DOM serialization.");
