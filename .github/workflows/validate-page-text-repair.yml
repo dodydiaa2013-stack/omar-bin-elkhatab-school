@@ -15,7 +15,7 @@ permissions:
 jobs:
   syntax-check:
     name: syntax-check-page-text-repair
-    if: github.event.pull_request.head.ref == 'fix/strict-page-text-sync-2026-11-22'
+    if: github.event.pull_request.head.ref == 'fix/strict-page-text-sync-2026-11-22' || github.event.pull_request.head.ref == 'fix/page-text-validation-trigger-fallback-2026-11-22'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repair branch
