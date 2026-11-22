@@ -1,0 +1,38 @@
+name: Validate page text repair code
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-check:
+    name: syntax-check-page-text-repair
+    if: github.event.pull_request.head.ref == 'fix/strict-page-text-sync-2026-11-22'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check synchronization script syntax
+        run: node --check scripts/sync-page-texts.mjs
+
+      - name: Check Apps Script reference syntax
+        run: |
+          cp reference-only/Code-production-GitHub-only.gs /tmp/Code-production-GitHub-only.js
+          node --check /tmp/Code-production-GitHub-only.js
