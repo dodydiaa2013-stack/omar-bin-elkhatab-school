@@ -8,9 +8,12 @@ import { spawnSync } from "node:child_process";
 const root = process.cwd();
 const scriptPath = path.join(root, "scripts", "sync-page-texts.mjs");
 const sourceHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
-const sourcePayload = JSON.parse(
-  fs.readFileSync(path.join(root, "page-changes-production.json"), "utf8")
-);
+const baselinePayloadPath = fs.existsSync(
+  path.join(root, "page-changes-production.baseline.json")
+)
+  ? path.join(root, "page-changes-production.baseline.json")
+  : path.join(root, "page-changes-production.json");
+const sourcePayload = JSON.parse(fs.readFileSync(baselinePayloadPath, "utf8"));
 
 function createFixture() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "page-text-sync-"));
