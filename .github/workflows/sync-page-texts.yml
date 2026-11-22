@@ -85,7 +85,7 @@ jobs:
 
       - name: Create or update a draft review pull request
         env:
-          GH_TOKEN: \${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
