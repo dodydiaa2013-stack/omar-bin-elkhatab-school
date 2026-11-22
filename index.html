@@ -1571,8 +1571,6 @@ window.addEventListener('DOMContentLoaded', () => {
     loadSchedulesFromDrive();
     renderTabletGallery();
     assignPageEditIds();
-    // لا نطبّق كاش النصوص القديم؛ نسخة الخادم هي المرجع الوحيد.
-
     // أصبحت عناصر الصفحة جاهزة؛ طبّق الاستجابة المبكرة إن كانت وصلت بالفعل.
     window.__pageChangesDomReady = true;
     if (window.__earlyPageChangesReceived) {
@@ -1582,10 +1580,6 @@ window.addEventListener('DOMContentLoaded', () => {
         receivePageChanges(earlyData);
     } else if (window.__earlyPageChangesFailed) {
         loadSavedPageChanges();
-    }
-    if (window.__pageChangesFallbackPending) {
-        applyCachedPageChangesFallback(window.__pageChangesFallbackPending);
-        window.__pageChangesFallbackPending = '';
     }
     document.documentElement.removeAttribute("data-page-edits-pending");
     updateTeacherUI();
@@ -2506,7 +2500,7 @@ async function saveAllPageChanges() {
         alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
         return;
     }
-    if (window.__productionPageChangesUsingLocalFallback || window.__productionPageChangesBackendReady !== true) { alert('الحفظ متوقف مؤقتًا: لم يتم تأكيد تحميل النصوص من الخادم. حدّث الصفحة وحاول بعد عودة الاتصال.'); return; }
+    if (window.__productionPageChangesBackendReady !== true) { alert('الحفظ متوقف مؤقتًا: لم يتم تأكيد تحميل النصوص من الخادم. حدّث الصفحة وحاول بعد عودة الاتصال.'); return; }
     if (assignPageEditIds() !== true) { alert('تعذر الحفظ: توجد معرّفات نصوص ناقصة أو مكررة.'); return; }
     const editableElements = Array.from(
         document.querySelectorAll('[data-page-edit-id]')
@@ -2737,8 +2731,6 @@ window.addEventListener('message', function(event) {
                 }
             });
         }
-        // احتفظ بكاش كامل للصفحة؛ الطلب المرسل أصبح جزئيًا فقط.
-        cacheCurrentPageChanges();
         pendingPageChangesSnapshot = null;
 
         if (isLiveEditing) toggleLiveEditing();
@@ -2789,7 +2781,6 @@ function assignPageEditIds() {
     return true;
 }
 
-const PAGE_CHANGES_CACHE_KEY = "obk_page_changes_cache_v1";
 let pageChangesRequestInFlight = false;
 let pageChangesRequestTimeout = null;
 let pendingPageChangesSnapshot = null;
@@ -2816,34 +2807,6 @@ function validatePageChangesForClient(changes) {
         seen.add(item.id); return true;
     }) && seen.size === expectedIds.size;
 }
-
-// الكاش نسخة عرض احتياطية فقط؛ لا يسمح بالحفظ منها قبل تأكيد الخادم.
-function applyCachedPageChangesFallback(reason) {
-    if (!window.__pageChangesDomReady) {
-        window.__pageChangesFallbackPending = reason || 'server-unavailable';
-        return false;
-    }
-    if (window.__productionPageChangesUsingLocalFallback) return true;
-    try {
-        const raw = localStorage.getItem(PAGE_CHANGES_CACHE_KEY);
-        if (!raw) return false;
-        const cached = JSON.parse(raw);
-        if (!cached || !validatePageChangesForClient(cached.changes) || !cached.changes.length) return false;
-        const stats = applyPageChangesList(cached.changes);
-        if (stats.matched === 0 || stats.missing > 0 || stats.invalid > 0 || stats.skippedEditing > 0) {
-            console.warn('[PageChanges] النسخة المحلية لا تطابق الصفحة بالكامل؛ لم يتم اعتمادها.', stats);
-            return false;
-        }
-        window.__productionPageChangesUsingLocalFallback = true;
-        window.__productionPageChangesBackendReady = false;
-        console.warn('[PageChanges] عُرضت آخر نسخة محلية مؤقتًا؛ الحفظ معطل حتى تأكيد الخادم.', reason || '');
-        return true;
-    } catch (error) {
-        console.warn('[PageChanges] تعذر قراءة النسخة المحلية البديلة.', error);
-        return false;
-    }
-}
-window.applyCachedPageChangesFallback = applyCachedPageChangesFallback;
 
 function updateTextPreservingMarkup(element, savedText) {
     if (!element.children.length) { element.textContent = savedText; return true; }
@@ -2932,29 +2895,6 @@ function applyPageChangesList(changes) {
     return stats;
 }
 
-function cacheCurrentPageChanges(changesSnapshot) {
-    try {
-        const changesById = new Map(
-            (Array.isArray(changesSnapshot) ? changesSnapshot :
-                Array.from(document.querySelectorAll("[data-page-edit-id]")).map(element => ({
-                    id: element.getAttribute("data-page-edit-id"),
-                    text: element.textContent.trim()
-                })))
-                .filter(item => item && item.id && typeof item.text === "string" && item.text.length <= 10000)
-                .map(item => [item.id, item.text])
-        );
-        // Preserve newer edits made while the submitted snapshot was in flight.
-        unsavedPageTextChanges.forEach((text, id) => {
-            if (changesById.has(id)) changesById.set(id, text);
-        });
-        const changes = Array.from(changesById, ([id, text]) => ({ id, text }));
-        const payload = JSON.stringify({ changes });
-        if (payload.length <= 90000) localStorage.setItem(PAGE_CHANGES_CACHE_KEY, payload);
-    } catch (error) {
-        console.warn("تعذر تحديث النسخة المحلية من تعديلات النصوص.", error);
-    }
-}
-
 function loadSavedPageChanges() {
     if (pageChangesRequestInFlight) return;
     const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
@@ -2971,22 +2911,19 @@ function loadSavedPageChanges() {
     };
     script.src = endpoint + "?action=pageChanges&environment=PRODUCTION&callback=receivePageChanges&_=" + Date.now();
     script.onerror = () => {
-        console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستُستخدم النسخة المحلية للعرض إن كانت صالحة.');
-        applyCachedPageChangesFallback('script-error');
+        console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستظل الصفحة على النص الموجود في HTML دون استبداله بنسخة محلية قديمة.');
         document.documentElement.removeAttribute('data-page-edits-pending');
         finish();
     };
     script.onload = () => {
         if (!pageChangesResponseReceived) {
-            console.error('[PageChanges] تم تحميل الاستجابة دون تأكيد callback؛ سنحاول النسخة المحلية.');
-            applyCachedPageChangesFallback('callback-missing');
+            console.error('[PageChanges] تم تحميل الاستجابة دون تأكيد callback؛ ستظل الصفحة على نص HTML الحالي.');
         }
         document.documentElement.removeAttribute('data-page-edits-pending');
         finish();
     };
     pageChangesRequestTimeout = setTimeout(() => {
-        console.warn('[PageChanges] انتهت مهلة تحميل تعديلات النصوص.');
-        applyCachedPageChangesFallback('request-timeout');
+        console.warn('[PageChanges] انتهت مهلة تحميل تعديلات النصوص؛ لن تُستخدم نسخة محلية قديمة.');
         document.documentElement.removeAttribute('data-page-edits-pending');
         finish();
     }, 15000);
@@ -2999,7 +2936,6 @@ function receivePageChanges(data) {
         window.__productionPageChangesBackendReady = false;
         const message = data && (data.message || data.error) ? (data.message || data.error) : 'استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.';
         console.error('[PageChanges] تعذر استرجاع تعديلات نصوص الموقع:', message);
-        applyCachedPageChangesFallback('invalid-server-response');
         return false;
     }
     const normalized = normalizeFixedPageChanges(data.changes);
@@ -3013,16 +2949,12 @@ function receivePageChanges(data) {
     // They do not invalidate an otherwise valid server response.
     if (stats.missing > 0 || stats.invalid > 0) {
         window.__productionPageChangesBackendReady = false;
-        console.warn('[PageChanges] توجد تعديلات مفقودة أو غير صالحة؛ لن نعتمد الاستجابة أو نحدّث الكاش.');
-        applyCachedPageChangesFallback('incomplete-server-apply');
+        console.warn('[PageChanges] توجد تعديلات مفقودة أو غير صالحة؛ لن نعتمد الاستجابة ولن نستبدل نصوص الصفحة بنسخة محلية.');
         return false;
     }
     rememberConfirmedPageChanges(normalized);
     window.__productionPageChangesBackendReady = true;
     window.__productionPageChangesUsingLocalFallback = false;
-    window.__pageChangesFallbackPending = '';
-    // Merge the server snapshot with any local edits still awaiting confirmation.
-    cacheCurrentPageChanges(normalized);
     document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
