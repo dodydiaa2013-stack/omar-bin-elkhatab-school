@@ -223,8 +223,13 @@ jobs:
             pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')"
             pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')"
 
-            if [ "$status_count" -gt 0 ] && [ "$check_count" -ge 0 ] &&
-               [ "$status_state" = "success" ] &&
+            status_ready=true
+            if [ "$status_count" -gt 0 ] && [ "$status_state" != "success" ]; then
+              status_ready=false
+            fi
+
+            if { [ "$status_count" -gt 0 ] || [ "$check_count" -gt 0 ]; } &&
+               [ "$status_ready" = "true" ] &&
                [ "$pending_statuses" = "0" ] && [ "$pending_checks" = "0" ]; then
               checks_ready=true
               break
@@ -256,8 +261,12 @@ jobs:
 
           status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
           checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
-          test "$(printf '%s' "$status_json" | jq -r '.state')" = "success"
-          test "$(printf '%s' "$status_json" | jq -r '.total_count')" -gt 0
+          status_count="$(printf '%s' "$status_json" | jq -r '.total_count')"
+          check_count="$(printf '%s' "$checks_json" | jq -r '.total_count')"
+          test "$status_count" -gt 0 -o "$check_count" -gt 0
+          if [ "$status_count" -gt 0 ]; then
+            test "$(printf '%s' "$status_json" | jq -r '.state')" = "success"
+          fi
           test "$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')" = "0"
           test "$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')" = "0"
 
