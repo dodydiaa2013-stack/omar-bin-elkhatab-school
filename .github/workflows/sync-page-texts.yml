@@ -168,8 +168,9 @@ jobs:
           - HTML structure and stable edit-ID checks.
           - Exact changed-file scope: index.html and page-changes-production.json only.
           - Whitespace/error check with git diff --check.
+          - Successful PR checks and a successful Netlify deploy-preview status/check on the exact PR head SHA.
 
-          The workflow merges this PR only after these validations pass. No scripts, styles, images, or unrelated files are included."
+          The workflow refuses to merge if checks fail, remain pending, or no successful Netlify deploy-preview result is reported. No scripts, styles, images, or unrelated files are included."
             pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
           fi
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
@@ -222,6 +223,12 @@ jobs:
 
             pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')"
             pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')"
+            preview_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i"))] | length')"
+            preview_statuses_success="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i")) and .state == "success")] | length')"
+            preview_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i"))] | length')"
+            preview_checks_success="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i")) and .status == "completed" and .conclusion == "success")] | length')"
+            preview_total=$((preview_statuses + preview_checks))
+            preview_success=$((preview_statuses_success + preview_checks_success))
 
             status_ready=true
             if [ "$status_count" -gt 0 ] && [ "$status_state" != "success" ]; then
@@ -229,6 +236,8 @@ jobs:
             fi
 
             if { [ "$status_count" -gt 0 ] || [ "$check_count" -gt 0 ]; } &&
+               [ "$preview_total" -gt 0 ] &&
+               [ "$preview_success" -eq "$preview_total" ] &&
                [ "$status_ready" = "true" ] &&
                [ "$pending_statuses" = "0" ] && [ "$pending_checks" = "0" ]; then
               checks_ready=true
@@ -240,7 +249,7 @@ jobs:
           done
 
           if [ "$checks_ready" != "true" ]; then
-            echo "No successful commit-status result was received for the PR head within 10 minutes. Refusing to merge."
+            echo "All checks and a successful Netlify deploy-preview result were not confirmed for the exact PR head within 10 minutes. Refusing to merge."
             exit 1
           fi
 
@@ -269,6 +278,14 @@ jobs:
           fi
           test "$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')" = "0"
           test "$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')" = "0"
+          preview_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i"))] | length')"
+          preview_statuses_success="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i")) and .state == "success")] | length')"
+          preview_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i"))] | length')"
+          preview_checks_success="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i")) and .status == "completed" and .conclusion == "success")] | length')"
+          preview_total=$((preview_statuses + preview_checks))
+          preview_success=$((preview_statuses_success + preview_checks_success))
+          test "$preview_total" -gt 0
+          test "$preview_success" -eq "$preview_total"
 
           gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --squash
           gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" \
