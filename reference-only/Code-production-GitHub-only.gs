@@ -368,18 +368,19 @@ function checkProductionPageReviewStatus(p) {
     const apiRoot = "https://api.github.com/repos/" + settings.repository;
     const owner = settings.repository.split("/")[0];
     const reviewBranch = "automation/page-text-sync";
+    const headers = {
+      Authorization: "Bearer " + settings.token,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    };
     const pullsUrl = apiRoot +
       "/pulls?state=all&head=" +
       encodeURIComponent(owner + ":" + reviewBranch) +
-      "&base=main&per_page=20";
+      "&base=main&per_page=100";
 
     const pullsResponse = UrlFetchApp.fetch(pullsUrl, {
       method: "get",
-      headers: {
-        Authorization: "Bearer " + settings.token,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      },
+      headers: headers,
       muteHttpExceptions: true
     });
 
@@ -389,9 +390,8 @@ function checkProductionPageReviewStatus(p) {
     }
 
     const pulls = JSON.parse(pullsResponse.getContentText() || "[]");
-    const reviewPR = (Array.isArray(pulls) ? pulls : []).find(function(pr) {
+    const matchingPRs = (Array.isArray(pulls) ? pulls : []).filter(function(pr) {
       return pr &&
-        (pr.state === "open" || Boolean(pr.merged_at)) &&
         pr.head &&
         pr.head.ref === reviewBranch &&
         pr.base &&
@@ -399,73 +399,96 @@ function checkProductionPageReviewStatus(p) {
         pr.html_url;
     });
 
-    if (!reviewPR) {
+    const mergedPRs = matchingPRs.filter(function(pr) {
+      return Boolean(pr.merged_at) &&
+        pr.merged === true &&
+        pr.merge_commit_sha;
+    }).sort(function(a, b) {
+      return String(b.merged_at).localeCompare(String(a.merged_at));
+    });
+
+    const openPRs = matchingPRs.filter(function(pr) {
+      return pr.state === "open";
+    }).sort(function(a, b) {
+      return Number(b.number || 0) - Number(a.number || 0);
+    });
+
+    const latestMergedPR = mergedPRs.length ? mergedPRs[0] : null;
+    const latestOpenPR = openPRs.length ? openPRs[0] : null;
+    const statusPR = latestMergedPR || latestOpenPR;
+
+    if (!latestMergedPR) {
       return productionPageReviewStatusPostMessage(p, {
         success: true,
         status: "pending",
-        created: false,
+        created: Boolean(latestOpenPR),
         published: false,
-        message: "لم يظهر طلب النشر بعد."
+        number: statusPR ? statusPR.number : null,
+        url: statusPR ? statusPR.html_url : null,
+        message: latestOpenPR
+          ? "طلب النشر موجود، ولم يتم دمجه في main بعد."
+          : "لم يظهر طلب نشر مدمج لتعديلات النصوص بعد."
       });
     }
 
-    const fileUrl = apiRoot + "/contents/" + settings.path +
-      "?ref=" + encodeURIComponent(reviewBranch);
-    const fileResponse = UrlFetchApp.fetch(fileUrl, {
+    // لا نثق بملف فرع طلب النشر لإعلان نجاح النشر.
+    // المرجع الوحيد لتأكيد النشر هو ملف النصوص الموجود فعليًا في main بعد الدمج.
+    const mainFileUrl = apiRoot + "/contents/" + settings.path +
+      "?ref=main";
+    const mainFileResponse = UrlFetchApp.fetch(mainFileUrl, {
       method: "get",
-      headers: {
-        Authorization: "Bearer " + settings.token,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      },
+      headers: headers,
       muteHttpExceptions: true
     });
 
-    if (fileResponse.getResponseCode() !== 200) {
+    const mainFileStatus = mainFileResponse.getResponseCode();
+    if (mainFileStatus !== 200) {
       return productionPageReviewStatusPostMessage(p, {
         success: true,
         status: "pending",
-        created: false,
+        created: true,
         published: false,
-        message: "طلب النشر موجود، لكن ملف النصوص لم يصبح متاحًا للتحقق بعد."
+        number: latestMergedPR.number,
+        url: latestMergedPR.html_url,
+        mergedAt: latestMergedPR.merged_at,
+        message: "تم العثور على طلب مدمج، لكن تعذرت قراءة ملف النصوص من main للتحقق النهائي."
       });
     }
 
-    const file = JSON.parse(fileResponse.getContentText() || "{}");
-    if (file.encoding !== "base64" || !file.content) {
-      throw new Error("استجابة ملف النصوص داخل طلب النشر غير مكتملة.");
+    const mainFile = JSON.parse(mainFileResponse.getContentText() || "{}");
+    if (mainFile.encoding !== "base64" || !mainFile.content || !mainFile.sha) {
+      throw new Error("استجابة ملف النصوص من main غير مكتملة.");
     }
 
-    const raw = Utilities.newBlob(
-      Utilities.base64Decode(String(file.content).replace(/\s/g, ""))
+    const mainRaw = Utilities.newBlob(
+      Utilities.base64Decode(String(mainFile.content).replace(/\s/g, ""))
     ).getDataAsString("UTF-8");
-    const actualPayload = validateProductionPageChangesPayload_(JSON.parse(raw));
-    const actualHash = getPageChangesSyncHash_(actualPayload);
+    const mainPayload = validateProductionPageChangesPayload_(JSON.parse(mainRaw));
+    const mainHash = getPageChangesSyncHash_(mainPayload);
 
-    if (actualHash !== expectedHash) {
+    if (mainHash !== expectedHash) {
       return productionPageReviewStatusPostMessage(p, {
         success: true,
         status: "pending",
-        created: false,
+        created: true,
         published: false,
-        number: reviewPR.number,
-        url: reviewPR.html_url,
-        message: "طلب النشر موجود، لكنه لم يتضمن أحدث نسخة محفوظة من النصوص بعد."
+        number: latestMergedPR.number,
+        url: latestMergedPR.html_url,
+        mergedAt: latestMergedPR.merged_at,
+        message: "تم دمج طلب نصوص سابق، لكن محتوى main لا يطابق آخر تعديلات محفوظة؛ لم نؤكد النشر."
       });
     }
 
-    const isMerged = Boolean(reviewPR.merged_at);
     return productionPageReviewStatusPostMessage(p, {
       success: true,
-      status: isMerged ? "confirmed" : "pending",
+      status: "confirmed",
       created: true,
-      published: isMerged,
-      mergedAt: reviewPR.merged_at || null,
-      number: reviewPR.number,
-      url: reviewPR.html_url,
-      message: isMerged
-        ? "تم دمج التعديلات النصية والتحقق من مطابقتها؛ أصبحت منشورة في main."
-        : "تم التحقق من طلب التعديلات النصية، وجارٍ إتمام الدمج التلقائي."
+      published: true,
+      number: latestMergedPR.number,
+      url: latestMergedPR.html_url,
+      mergedAt: latestMergedPR.merged_at,
+      verifiedFrom: "main",
+      message: "تم التحقق من مطابقة النصوص الموجودة في main لبصمة التعديلات المحفوظة؛ النشر مؤكد."
     });
 
   } catch (error) {
