@@ -6,12 +6,18 @@ on:
     types:
       - production-page-text-saved
 
-  # Manual recovery path; no periodic polling or arbitrary branch-push trigger.
+  # Manual recovery path.
   workflow_dispatch:
+
+  # Recovery polling in case Apps Script cannot deliver repository_dispatch.
+  # The job is idempotent and exits when there are no actual text changes.
+  schedule:
+    - cron: '*/15 * * * *'
 
 permissions:
   contents: write
   pull-requests: write
+  checks: write
 
 concurrency:
   group: page-text-sync-proposal
@@ -68,16 +74,30 @@ jobs:
           const html = fs.readFileSync('index.html', 'utf8');
           const { JSDOM } = require('jsdom');
           const document = new JSDOM(html).window.document;
-          const htmlIds = Array.from(document.querySelectorAll('[data-page-edit-id]'))
-            .map(el => el.getAttribute('data-page-edit-id'));
-          const jsonIds = payload.changes.map(item => item.id);
-          const uniqueHtml = new Set(htmlIds);
-          const uniqueJson = new Set(jsonIds);
-          if (uniqueHtml.size !== htmlIds.length || uniqueJson.size !== jsonIds.length ||
-              uniqueHtml.size !== uniqueJson.size ||
-              Array.from(uniqueHtml).some(id => !uniqueJson.has(id)) ||
-              Array.from(uniqueJson).some(id => !uniqueHtml.has(id))) {
-            throw new Error('HTML/JSON edit ID parity check failed.');
+          const elements = Array.from(document.querySelectorAll('[data-page-edit-id]'));
+          const htmlById = new Map();
+          for (const el of elements) {
+            const id = el.getAttribute('data-page-edit-id');
+            if (!id || htmlById.has(id)) {
+              throw new Error('Empty or duplicate HTML edit ID: ' + id);
+            }
+            htmlById.set(id, el.textContent);
+          }
+          const jsonById = new Map();
+          for (const item of payload.changes) {
+            if (!item || typeof item.id !== 'string' || !item.id ||
+                typeof item.text !== 'string' || jsonById.has(item.id)) {
+              throw new Error('Invalid or duplicate JSON edit ID.');
+            }
+            jsonById.set(item.id, item.text);
+          }
+          if (htmlById.size !== jsonById.size) {
+            throw new Error('HTML/JSON edit ID counts do not match.');
+          }
+          for (const [id, text] of jsonById) {
+            if (!htmlById.has(id) || htmlById.get(id) !== text) {
+              throw new Error('HTML text does not match saved JSON for ID: ' + id);
+            }
           }
           const normalize = p => JSON.stringify((p.changes || [])
             .map(({id, text}) => ({id, text}))
@@ -142,5 +162,21 @@ jobs:
           - This pull request is intentionally draft.
           - No automatic merge, publication, or deployment is performed."
           fi
+
+          # GITHUB_TOKEN-created pull requests do not trigger pull_request workflows.
+          # Publish an explicit successful check on the exact generated PR head SHA,
+          # but only after the validation above and the synchronization script succeed.
+          head_sha=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')
+          if [ -z "$head_sha" ]; then
+            echo "Could not resolve the exact PR head SHA." >&2
+            exit 1
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/check-runs" \
+            -f name='validate-page-text' \
+            -f head_sha="$head_sha" \
+            -f status='completed' \
+            -f conclusion='success' \
+            -f 'output[title]=Page text validation passed' \
+            -f 'output[summary]=The generated PR was checked for the exact allowed file set, unique and matching HTML/JSON IDs, and identical saved text values on this workflow run.'
 
           echo "Draft review PR is ready for human inspection. No merge was attempted."

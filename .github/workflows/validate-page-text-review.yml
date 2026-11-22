@@ -51,7 +51,7 @@ jobs:
             'git',
             ['diff', '--name-only', `origin/${process.env.BASE_REF}...HEAD`],
             { encoding: 'utf8' }
-          ).trim().split('\\n').filter(Boolean).sort();
+          ).trim().split('\n').filter(Boolean).sort();
 
           if (JSON.stringify(changedFiles) !== JSON.stringify(expectedFiles.slice().sort())) {
             throw new Error(
