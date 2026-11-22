@@ -2450,6 +2450,19 @@ let reviewExpectedHash = '';
 // Polling responses must never overwrite text that has not yet been confirmed saved.
 const unsavedPageTextChanges = new Map();
 
+// آخر نسخة مؤكدة من الخادم هي baseline للمقارنة.
+// لا نرسل في الحفظ إلا العناصر التي تختلف عنها، حتى لا تعيد صفحة قديمة
+// كتابة نصوص أخرى لم يجر تعديلها فوق أحدث نسخة محفوظة.
+let confirmedPageChangesBaseline = new Map();
+
+function rememberConfirmedPageChanges(changes) {
+    confirmedPageChangesBaseline = new Map(
+        (Array.isArray(changes) ? changes : [])
+            .filter(item => item && typeof item.id === 'string' && typeof item.text === 'string')
+            .map(item => [item.id, item.text.trim()])
+    );
+}
+
 document.addEventListener('input', function(event) {
     const target = event.target;
     if (!target || !target.closest) return;
@@ -2529,9 +2542,15 @@ async function saveAllPageChanges() {
     unsavedPageTextChanges.forEach((text, id) => {
         if (changesById.has(id)) changesById.set(id, { id, text });
     });
-    const changes = Array.from(changesById.values());
+
+    // أرسل التغييرات الفعلية فقط. إرسال القائمة كاملة يسمح لعلامة تبويب
+    // قديمة بإرجاع نصوص أخرى إلى قيمها السابقة عند حفظ عنصر واحد.
+    const changes = Array.from(changesById.values()).filter(item =>
+        !confirmedPageChangesBaseline.has(item.id) ||
+        item.text.trim() !== confirmedPageChangesBaseline.get(item.id)
+    );
     if (!changes.length) {
-        alert('لا توجد نصوص قابلة للحفظ.');
+        alert('لا توجد تغييرات جديدة للحفظ.');
         return;
     }
     const payload = JSON.stringify({ changes });
@@ -2711,12 +2730,15 @@ window.addEventListener('message', function(event) {
     ) {
         if (pendingPageChangesSnapshot) {
             pendingPageChangesSnapshot.forEach(item => {
+                // حدّث baseline بالقيم التي أكد الخادم حفظها فقط.
+                confirmedPageChangesBaseline.set(item.id, item.text.trim());
                 if (unsavedPageTextChanges.get(item.id) === item.text) {
                     unsavedPageTextChanges.delete(item.id);
                 }
             });
         }
-        cacheCurrentPageChanges(pendingPageChangesSnapshot);
+        // احتفظ بكاش كامل للصفحة؛ الطلب المرسل أصبح جزئيًا فقط.
+        cacheCurrentPageChanges();
         pendingPageChangesSnapshot = null;
 
         if (isLiveEditing) toggleLiveEditing();
@@ -2995,6 +3017,7 @@ function receivePageChanges(data) {
         applyCachedPageChangesFallback('incomplete-server-apply');
         return false;
     }
+    rememberConfirmedPageChanges(normalized);
     window.__productionPageChangesBackendReady = true;
     window.__productionPageChangesUsingLocalFallback = false;
     window.__pageChangesFallbackPending = '';
