@@ -36,42 +36,84 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch and validate latest saved changes
+        id: fetch_saved
         run: |
           set -euo pipefail
           git fetch origin automation/page-text-sync-input
-          git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.json
+          git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.incoming.json
           node <<'NODE'
-          const p = require('./page-changes-production.json');
-          if (!p || p.success !== true || !Array.isArray(p.changes) || p.changes.length > 500) {
+          const fs = require('node:fs');
+          const incomingPath = 'page-changes-production.incoming.json';
+          const incoming = JSON.parse(fs.readFileSync(incomingPath, 'utf8'));
+          if (!incoming || incoming.success !== true ||
+              !Array.isArray(incoming.changes) || incoming.changes.length > 500) {
             throw new Error('Invalid page text payload.');
           }
+
           const ids = new Set();
-          for (const item of p.changes) {
-            if (!item || typeof item.id !== 'string' || !item.id ||
+          for (const item of incoming.changes) {
+            if (!item || typeof item.id !== 'string' || !item.id.trim() ||
                 item.id.length > 200 || typeof item.text !== 'string' ||
                 item.text.length > 10000 || ids.has(item.id)) {
               throw new Error('Invalid or duplicate page text item.');
             }
             ids.add(item.id);
           }
+
+          let hasChanges = true;
+          try {
+            const current = JSON.parse(fs.readFileSync('page-changes-production.json', 'utf8'));
+            if (current && Array.isArray(current.changes)) {
+              const canonical = changes => changes
+                .map(item => ({ id: item.id, text: item.text }))
+                .sort((a, b) => a.id.localeCompare(b.id));
+              hasChanges = JSON.stringify(canonical(current.changes)) !==
+                JSON.stringify(canonical(incoming.changes));
+            }
+          } catch (_) {
+            hasChanges = true;
+          }
+
+          if (hasChanges) {
+            fs.copyFileSync(incomingPath, 'page-changes-production.json');
+            console.log('New saved text content detected.');
+          } else {
+            console.log('No text content changes; timestamp-only updates will not create a PR.');
+          }
+
+          fs.unlinkSync(incomingPath);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'has_changes=' + hasChanges + '\n');
           NODE
 
       - name: Set up Node.js
+        if: steps.fetch_saved.outputs.has_changes == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Install HTML parser
+        if: steps.fetch_saved.outputs.has_changes == 'true'
         run: npm install --no-save jsdom@26
 
+      - name: Run page-text synchronization regression tests
+        if: steps.fetch_saved.outputs.has_changes == 'true'
+        run: |
+          set -euo pipefail
+          node --check scripts/sync-page-texts.mjs
+          node --check scripts/sync-page-texts.test.mjs
+          node --test scripts/sync-page-texts.test.mjs
+
       - name: Apply and validate saved text changes
+        if: steps.fetch_saved.outputs.has_changes == 'true'
         run: |
           set -euo pipefail
           node scripts/sync-page-texts.mjs
+          node scripts/verify-page-texts.mjs
           test -s index.html
-          node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); if(!h.includes('data-page-edit-id=')) process.exit(1);"
+          git diff --check
 
       - name: Create or update a draft review pull request
+        if: steps.fetch_saved.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
