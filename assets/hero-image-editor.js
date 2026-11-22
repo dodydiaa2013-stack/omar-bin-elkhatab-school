@@ -61,28 +61,43 @@
   function tryDriveFallback(img, source) {
     if (!img) return;
     const fallback = source || state.fallbackSrc;
+    state.fallbackAttempted = true;
     if (!fallback) {
+      // قد تصل بيانات رابط Drive بعد فشل النسخة المحلية؛ أخفِ الصورة مؤقتًا
+      // وأعد المحاولة فور وصول الرابط بدل ترك مساحة بصورة مكسورة.
+      img.dataset.entranceImageSource = 'drive-pending';
       setEntrancePhotoVisible(false);
       return;
     }
 
-    state.fallbackAttempted = true;
     img.dataset.entranceImageSource = 'drive-fallback';
     img.onerror = () => {
       img.onerror = null;
       setEntrancePhotoVisible(false);
-      console.warn('تعذر تحميل صورة مدخل المدرسة من المصدر المحلي وGoogle Drive.');
+      console.warn('تعذر تحميل صورة مدخل المدرسة من النسخة المحلية وGoogle Drive.');
     };
     setResponsiveImageSource(img, fallback);
   }
 
   function handleEntranceImageError(img) {
     if (!img) return;
-    if (img.dataset.entranceImageSource === 'drive-fallback') {
+
+    const source = img.dataset.entranceImageSource || 'local-responsive';
+    if (source === 'local-responsive') {
+      // عند تعذر WebP، جرّب ملف JPG المحلي الأصلي قبل الاتصال بـ Google Drive.
+      img.removeAttribute('srcset');
+      img.removeAttribute('sizes');
+      img.dataset.entranceImageSource = 'local-original';
+      img.src = state.originalSrc || './assets/school.jpg';
+      return;
+    }
+
+    if (source === 'drive-fallback') {
       img.onerror = null;
       setEntrancePhotoVisible(false);
       return;
     }
+
     tryDriveFallback(img, state.fallbackSrc);
   }
 
@@ -533,7 +548,9 @@
 
         // تظل الصورة المحلية هي المصدر الأول؛ نحتفظ برابط Drive كبديل فقط.
         // إذا كان المصدر المحلي قد فشل بالفعل، نجرّب رابط الصورة المحفوظة.
-        if (img && state.fallbackAttempted && img.dataset.entranceImageSource === 'drive-fallback') {
+        if (img && state.fallbackAttempted &&
+            (img.dataset.entranceImageSource === 'drive-fallback' ||
+             img.dataset.entranceImageSource === 'drive-pending')) {
           tryDriveFallback(img, data.image);
         }
       }
@@ -660,7 +677,7 @@
     if (!stage || !img) return;
 
     state.originalSrc = img.getAttribute('src') || img.src || '';
-    img.dataset.entranceImageSource = 'local';
+    img.dataset.entranceImageSource = 'local-responsive';
     img.addEventListener('load', () => {
       setEntrancePhotoVisible(true);
       setSavedAspectFromImage(img);
