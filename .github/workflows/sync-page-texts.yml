@@ -122,19 +122,9 @@ jobs:
           NODE
 
       - name: Enforce text-only file scope
-        id: scope
         run: |
           set -euo pipefail
-          echo "changed=false" >> "$GITHUB_OUTPUT"
           git add page-changes-production.json index.html
-
-          # The payload timestamp can change even when every saved text value
-          # already matches production. Do not create a PR for that no-op.
-          if git diff --cached --quiet -- index.html; then
-            echo "No page text changes are needed; saved values already match production."
-            exit 0
-          fi
-
           changed="$(git diff --cached --name-only)"
           if ! printf '%s\n' "$changed" | grep -qx 'page-changes-production.json'; then
             echo "The saved page-text payload must be part of the change."
@@ -146,11 +136,13 @@ jobs:
               *) echo "Unexpected changed file: $file"; exit 1 ;;
             esac
           done <<< "$changed"
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+          if git diff --cached --quiet; then
+            echo "No page text changes are needed."
+            exit 0
+          fi
 
       - name: Create or update validated text-only pull request
         id: proposal
-        if: steps.scope.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -164,7 +156,6 @@ jobs:
           git switch --create automation/page-text-sync
           git commit -m "Publish validated production page text"
           git push --force origin HEAD:automation/page-text-sync
-          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
           pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number // empty')
           if [ -z "$pr_number" ]; then
@@ -194,9 +185,9 @@ jobs:
         run: |
           set -euo pipefail
           pr_number="${{ steps.proposal.outputs.number }}"
-          expected_sha="${{ steps.proposal.outputs.head_sha }}"
+          expected_sha="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
           if [ -z "$expected_sha" ]; then
-            echo "Could not determine the exact pushed commit SHA."
+            echo "Could not determine the exact pull-request head SHA."
             exit 1
           fi
 
@@ -208,17 +199,9 @@ jobs:
             pr_base="$(printf '%s' "$pr_json" | jq -r '.baseRefName')"
             current_sha="$(printf '%s' "$pr_json" | jq -r '.headRefOid')"
 
-            if [ "$pr_state" != "OPEN" ] || [ "$pr_base" != "main" ]; then
-              echo "PR state or base branch changed while waiting. Refusing to merge."
+            if [ "$pr_state" != "OPEN" ] || [ "$pr_base" != "main" ] || [ "$current_sha" != "$expected_sha" ]; then
+              echo "PR state, base branch, or head SHA changed while waiting. Refusing to merge."
               exit 1
-            fi
-
-            # GitHub may briefly return the PR's previous head immediately
-            # after a force-push. Wait for the PR API to catch up to our pushed SHA.
-            if [ "$current_sha" != "$expected_sha" ]; then
-              echo "PR head has not caught up to pushed commit yet (attempt $attempt/40); waiting 15 seconds."
-              sleep 15
-              continue
             fi
 
             status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
@@ -279,7 +262,7 @@ jobs:
         run: |
           set -euo pipefail
           pr_number="${{ steps.proposal.outputs.number }}"
-          expected_sha="${{ steps.proposal.outputs.head_sha }}"
+          expected_sha="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
 
           # Re-read checks immediately before merge; do not merge a changed or failed head.
           pr_json="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json state,baseRefName,headRefOid)"
