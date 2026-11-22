@@ -39,6 +39,22 @@ function validatePayload(value, label) {
 const payloadRecords = validatePayload(payload, "Incoming page text payload");
 const baselineRecords = validatePayload(baseline, "Main-branch baseline payload");
 
+const incomingTimestamp = Date.parse(payload.updatedAt || "");
+const baselineTimestamp = Date.parse(baseline.updatedAt || "");
+if (!Number.isFinite(incomingTimestamp) || !Number.isFinite(baselineTimestamp)) {
+  throw new Error("Both incoming and baseline payloads must contain a valid updatedAt timestamp.");
+}
+const incomingHasTextChanges = [...payloadRecords].some(
+  ([id, text]) => baselineRecords.get(id) !== text
+);
+if (incomingHasTextChanges && incomingTimestamp <= baselineTimestamp) {
+  throw new Error(
+    "Stale or conflicting page text payload: incoming updatedAt must be newer " +
+    "than the main-branch baseline before any saved text can be applied. " +
+    "No files were written."
+  );
+}
+
 function parseWithLocations(source) {
   const hasBom = source.charCodeAt(0) === 0xFEFF;
   const dom = new JSDOM(hasBom ? source.slice(1) : source, {
