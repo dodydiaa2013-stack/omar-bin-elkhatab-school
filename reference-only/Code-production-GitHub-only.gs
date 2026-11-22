@@ -511,7 +511,9 @@ function checkProductionPageReviewStatus(p) {
       ? checks.check_runs.find(function(check) {
           return check &&
             check.name === "validate-page-text" &&
-            check.head_sha === reviewPR.head.sha;
+            check.head_sha === reviewPR.head.sha &&
+            check.app &&
+            check.app.slug === "github-actions";
         })
       : null;
 
