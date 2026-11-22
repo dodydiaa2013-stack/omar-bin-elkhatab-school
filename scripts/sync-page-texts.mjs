@@ -62,131 +62,14 @@ const initialDom = parseWithLocations(html);
 const document = initialDom.window.document;
 assertDocumentStructure(document, "before text synchronization");
 
-const excludedRoots = [
-  "#devControlBar", "#loginBtn", "#adminBadge", "#adminModal",
-  "#scheduleModal", "#passwordRecoveryPanel", "#tabletTeacherUpload",
-  "#tabletImageUploadControls", "#tabletImageManagement", "#tabletGallery",
-  "#googleSignInStatus", "#scheduleOperationStatus", "#scheduleTeacherControl",
-  "#scheduleBulkManagement", "#scheduleBulkSelectionStatus", "#schedulesGrid",
-  "#alertsTeacherControl", "#photoAlbumsStatus", "#photoAlbumsManagement",
-  "#albumsSelectionStatus", "#photoAlbumsGrid", "#photoAlbumViewer",
-  "#photoAlbumImagesGrid", "#photoAlbumEditor", "#photoAlbumUploadProgress",
-  "#photoAlbumUploadStatus", "#photoAlbumUploadProgressText",
-  "#photoAlbumUploadResults", "#albumImagesManagement",
-  "#albumImagesSelectionStatus", "#scheduleClassFiles", "#adminErrorMsg",
-  "#recoveryMessage", "#schoolImageViewer", '[data-page-no-auto-edit="true"]'
-].join(",");
 
-function makeStableId(element, textNodeIndex) {
-  const path = [];
-  let current = element;
-  while (current && current !== document.body) {
-    let position = 1;
-    let previous = current.previousElementSibling;
-    while (previous) {
-      if (previous.tagName === current.tagName) position++;
-      previous = previous.previousElementSibling;
-    }
-    path.unshift(current.tagName.toLowerCase() + position);
-    current = current.parentElement;
-  }
-  const value = path.join("/") +
-    (textNodeIndex === undefined ? "" : "/text-" + textNodeIndex);
-  let hashA = 2166136261;
-  let hashB = 2246822519;
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i);
-    hashA = Math.imul(hashA ^ code, 16777619);
-    hashB = Math.imul(hashB ^ code, 3266489917);
-  }
-  const hex = number => (number >>> 0).toString(16).padStart(8, "0");
-  return "auto-" + hex(hashA) + hex(hashB);
-}
 
-const usedIds = new Set(
-  Array.from(document.querySelectorAll("[data-page-edit-id]"))
-    .map(element => element.getAttribute("data-page-edit-id"))
-    .filter(Boolean)
-);
-const sourceEdits = [];
-
-function addSourceEdit(start, end, replacement) {
-  if (!Number.isInteger(start) || !Number.isInteger(end) ||
-      start < 0 || end < start || end > html.length) {
-    throw new Error("Invalid HTML source location; refusing to modify index.html.");
-  }
-  sourceEdits.push({ start, end, replacement });
-}
-
-const candidates = Array.from(document.body.querySelectorAll("*"));
-for (const element of candidates) {
-  if (element.hasAttribute("data-page-edit-id")) continue;
-  if (element.parentElement &&
-      element.parentElement.closest("[data-page-edit-id]")) continue;
-  if (element.closest(excludedRoots)) continue;
-
-  const tag = element.tagName;
-  if ([
-    "SCRIPT", "STYLE", "NOSCRIPT", "SVG", "PATH", "CANVAS",
-    "INPUT", "TEXTAREA", "SELECT", "OPTION", "IFRAME"
-  ].includes(tag)) continue;
-
-  if (element.children.length === 0) {
-    if (!element.textContent || !element.textContent.trim()) continue;
-    const id = makeStableId(element);
-    if (usedIds.has(id)) continue;
-
-    const location = initialDom.nodeLocation(element);
-    if (!location?.startTag) {
-      throw new Error("Could not locate an HTML element while creating edit IDs.");
-    }
-    const tagEnd = location.startTag.endOffset;
-    const insertionPoint = html[tagEnd - 2] === "/" ? tagEnd - 2 : tagEnd - 1;
-    addSourceEdit(insertionPoint, insertionPoint, ' data-page-edit-id="' + id + '"');
-    usedIds.add(id);
-    continue;
-  }
-
-  Array.from(element.childNodes).forEach((node, index) => {
-    if (node.nodeType !== initialDom.window.Node.TEXT_NODE ||
-        !node.nodeValue.trim()) return;
-
-    const id = makeStableId(element, index);
-    if (usedIds.has(id)) return;
-    const location = initialDom.nodeLocation(node);
-    if (!location) {
-      throw new Error("Could not locate a text node while creating edit IDs.");
-    }
-    const rawText = html.slice(location.startOffset, location.endOffset);
-    addSourceEdit(
-      location.startOffset,
-      location.endOffset,
-      '<span data-page-edit-id="' + id + '">' + rawText + "</span>"
-    );
-    usedIds.add(id);
-  });
-}
-
-// Apply non-overlapping source edits from right to left so every original
-// offset remains valid. The original doctype, head, body, comments and scripts
-// remain byte-for-byte unchanged except for the intended edit markers.
-sourceEdits.sort((a, b) => b.start - a.start || b.end - a.end);
-let markedHtml = html;
-let previousStart = html.length + 1;
-for (const edit of sourceEdits) {
-  if (edit.end > previousStart) {
-    throw new Error("Overlapping HTML source edits detected; refusing to write.");
-  }
-  markedHtml =
-    markedHtml.slice(0, edit.start) +
-    edit.replacement +
-    markedHtml.slice(edit.end);
-  previousStart = edit.start;
-}
-
-const markedDom = parseWithLocations(markedHtml);
-const markedDocument = markedDom.window.document;
-assertDocumentStructure(markedDocument, "after adding edit markers");
+// Only update edit IDs that already exist in the production HTML.
+// Never create or wrap elements while synchronizing text: missing IDs are
+// rejected below, leaving the page structure byte-for-byte unchanged.
+const markedHtml = html;
+const markedDom = initialDom;
+const markedDocument = document;
 
 const seen = new Set();
 const targets = new Map();
