@@ -394,7 +394,7 @@ function checkProductionPageReviewStatus(p) {
         throw new Error("استجابة الملف " + path + " من GitHub غير مكتملة.");
       }
       return Utilities.newBlob(
-        Utilities.base64Decode(String(file.content).replace(/\\s/g, ""))
+        Utilities.base64Decode(String(file.content).replace(/\s/g, ""))
       ).getDataAsString("UTF-8");
     }
 
@@ -476,7 +476,7 @@ function checkProductionPageReviewStatus(p) {
     // فحص تطابق معرّفات HTML وJSON من نفس نسخة فرع طلب المراجعة.
     const html = readGithubTextFile_("index.html", reviewBranch);
     const htmlIds = [];
-    const idPattern = /data-page-edit-id\\s*=\\s*(["'])(.*?)\\1/g;
+    const idPattern = /data-page-edit-id\s*=\s*(["'])(.*?)\\1/g;
     let match;
     while ((match = idPattern.exec(html)) !== null) {
       const id = String(match[2] || "").trim();
