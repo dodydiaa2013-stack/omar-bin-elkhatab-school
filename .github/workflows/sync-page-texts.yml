@@ -1,15 +1,12 @@
-name: Prepare saved page text review pull request
-# The workflow prepares a reviewable text-only change. It never merges or publishes.
+name: Validate and auto-publish saved page text
+# Only page text saved by the authenticated production admin flow is processed.
+# A generated PR is merged only after the text payload and resulting HTML pass validation.
 on:
-  # Apps Script dispatches this event only after GitHub save verification succeeds.
   repository_dispatch:
     types:
       - production-page-text-saved
-
-  # Fallback in case the dispatch request cannot be delivered.
   schedule:
     - cron: "*/5 * * * *"
-
   push:
     branches:
       - "automation/page-text-sync-input"
@@ -26,31 +23,61 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  prepare-review:
+  validate-and-publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out main as the clean base
+      - name: Check out clean production main
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
 
-      - name: Fetch and validate latest saved changes
+      - name: Fetch and strictly validate saved text payload
         run: |
           set -euo pipefail
           git fetch origin automation/page-text-sync-input
           git show origin/automation/page-text-sync-input:page-changes-production.json > page-changes-production.json
           node <<'NODE'
           const p = require('./page-changes-production.json');
-          if (!p || p.success !== true || !Array.isArray(p.changes) || p.changes.length > 500) {
-            throw new Error('Invalid page text payload.');
+          const allowed = new Set([
+            "school-title", "school-administration", "home-title",
+            "home-vision-text", "home-mission-text",
+            "results-card-title", "results-card-description",
+            "support-card-title", "support-card-description",
+            "schedules-card-title", "schedules-card-description",
+            "tablet-title", "tablet-description", "server-title",
+            "tablet-support-title", "schedules-title",
+            "schedules-description", "alerts-title", "alerts-description",
+            "republic-header", "academic-year", "header-manager",
+            "home-intro", "footer-leadership", "footer-school-name",
+            "quick-links-title", "quick-results-link", "quick-tablet-link",
+            "quick-schedules-link", "quick-gallery-link",
+            "quick-student-queries-link", "quick-leaders-link",
+            "support-section-title", "footer-manager",
+            "support-responsibles-title", "support-diaa-name",
+            "support-mona-name", "motto-tablet-title",
+            "motto-tablet-description", "motto-dev-title",
+            "motto-dev-description", "student-queries-title",
+            "student-queries-description", "student-query-one-title",
+            "student-query-two-title", "server-tip-1", "server-tip-2",
+            "server-tip-3", "server-tip-4", "tablet-support-tip-1",
+            "tablet-support-tip-2", "tablet-support-tip-3",
+            "tablet-support-tip-4", "ticker-message-1",
+            "ticker-message-2", "ticker-message-3", "ticker-message-4",
+            "footer-copyright"
+          ]);
+          if (!p || p.success !== true || !Array.isArray(p.changes) ||
+              p.changes.length < 1 || p.changes.length > 500) {
+            throw new Error("Invalid page text payload.");
           }
           const ids = new Set();
           for (const item of p.changes) {
-            if (!item || typeof item.id !== 'string' || !item.id ||
-                item.id.length > 200 || typeof item.text !== 'string' ||
-                item.text.length > 10000 || ids.has(item.id)) {
-              throw new Error('Invalid or duplicate page text item.');
+            if (!item || typeof item.id !== "string" ||
+                typeof item.text !== "string" || !item.id ||
+                item.id.length > 200 || item.text.length > 10000 ||
+                ids.has(item.id) ||
+                (!allowed.has(item.id) && !/^auto-[0-9a-f]{16}$/.test(item.id))) {
+              throw new Error("Invalid, duplicate, or unauthorized page text item.");
             }
             ids.add(item.id);
           }
@@ -64,65 +91,203 @@ jobs:
       - name: Install HTML parser
         run: npm install --no-save jsdom@26
 
-      - name: Apply and validate saved text changes
+      - name: Apply text changes and validate resulting page
         run: |
           set -euo pipefail
           node scripts/sync-page-texts.mjs
           test -s index.html
-          node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); if(!h.includes('data-page-edit-id=')) process.exit(1);"
+          git diff --check
+          node <<'NODE'
+          const fs = require('fs');
+          const { JSDOM } = require('jsdom');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const dom = new JSDOM(html);
+          const d = dom.window.document;
+          if (!d.doctype || !d.head || !d.body ||
+              !d.head.querySelector('title') ||
+              !d.head.querySelector('meta[charset]') ||
+              !d.head.querySelector('link[rel="stylesheet"]') ||
+              d.head.querySelectorAll('meta').length < 5 ||
+              d.body.querySelectorAll('script').length < 1) {
+            throw new Error('Production HTML structural validation failed.');
+          }
+          const ids = new Set();
+          for (const el of d.querySelectorAll('[data-page-edit-id]')) {
+            const id = el.getAttribute('data-page-edit-id');
+            if (!id || ids.has(id)) throw new Error('Missing or duplicate HTML text edit ID.');
+            ids.add(id);
+          }
+          NODE
 
-      - name: Create or update a draft review pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Enforce text-only file scope
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git switch --create automation/page-text-sync
           git add page-changes-production.json index.html
-
+          changed="$(git diff --cached --name-only)"
+          if ! printf '%s\n' "$changed" | grep -qx 'page-changes-production.json'; then
+            echo "The saved page-text payload must be part of the change."
+            exit 1
+          fi
+          while IFS= read -r file; do
+            case "$file" in
+              index.html|page-changes-production.json) ;;
+              *) echo "Unexpected changed file: $file"; exit 1 ;;
+            esac
+          done <<< "$changed"
           if git diff --cached --quiet; then
             echo "No page text changes are needed."
             exit 0
           fi
 
-          git commit -m "Prepare saved school page text review"
+      - name: Create or update validated text-only pull request
+        id: proposal
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --create automation/page-text-sync
+          git commit -m "Publish validated production page text"
           git push --force origin HEAD:automation/page-text-sync
 
           pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number // empty')
-
           if [ -z "$pr_number" ]; then
-            gh pr create --draft \
-              --repo "$GITHUB_REPOSITORY" \
-              --base main \
+            gh pr create --repo "$GITHUB_REPOSITORY" --base main \
               --head automation/page-text-sync \
-              --title "Review saved school page text update" \
-              --body "## Saved page-text review
+              --title "Publish validated school page text" \
+              --body "## Automatic page-text publication
 
-          - Generated from the dedicated page-text input branch.
-          - Updates only page-changes-production.json and matching text in index.html.
-          - The synchronization script validates the HTML structure, saved IDs, and duplicate IDs before proposing changes.
-          - This pull request is intentionally draft.
-          - No automatic merge, publication, or deployment is performed.
-          - Review the diff and preview manually before approving."
+          This PR is generated only from the authenticated production admin save flow.
+          Validation completed before this PR was created:
+          - Strict payload structure, allowed IDs, duplicate-ID and length checks.
+          - HTML structure and stable edit-ID checks.
+          - Exact changed-file scope: index.html and page-changes-production.json only.
+          - Whitespace/error check with git diff --check.
+          - Successful PR checks and a successful Netlify deploy-preview status/check on the exact PR head SHA.
+
+          The workflow refuses to merge if checks fail, remain pending, or no successful Netlify deploy-preview result is reported. No scripts, styles, images, or unrelated files are included."
             pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
-          else
-            is_draft=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
-            if [ "$is_draft" != "true" ]; then
-              pr_node_id=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json id --jq '.id')
-              gh api graphql -f query='mutation($pullRequestId: ID!) { convertPullRequestToDraft(input: {pullRequestId: $pullRequestId}) { pullRequest { isDraft } } }' -F pullRequestId="$pr_node_id"
-            fi
-            gh pr edit "$pr_number" --repo "$GITHUB_REPOSITORY" \
-              --title "Review saved school page text update" \
-              --body "## Saved page-text review
+          fi
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
-          - Generated from the dedicated page-text input branch.
-          - Updates only page-changes-production.json and matching text in index.html.
-          - The synchronization script validates the HTML structure, saved IDs, and duplicate IDs before proposing changes.
-          - This pull request is intentionally draft.
-          - No automatic merge, publication, or deployment is performed.
-          - Review the diff and preview manually before approving."
+      - name: Wait for successful pull-request checks and deployment preview
+        if: steps.proposal.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr_number="${{ steps.proposal.outputs.number }}"
+          expected_sha="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
+          if [ -z "$expected_sha" ]; then
+            echo "Could not determine the exact pull-request head SHA."
+            exit 1
           fi
 
-          echo "Draft review PR is ready for human inspection. No merge was attempted."
+          echo "Waiting for checks on exact PR head: $expected_sha"
+          checks_ready=false
+          for attempt in $(seq 1 40); do
+            pr_json="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json state,baseRefName,headRefOid)"
+            pr_state="$(printf '%s' "$pr_json" | jq -r '.state')"
+            pr_base="$(printf '%s' "$pr_json" | jq -r '.baseRefName')"
+            current_sha="$(printf '%s' "$pr_json" | jq -r '.headRefOid')"
+
+            if [ "$pr_state" != "OPEN" ] || [ "$pr_base" != "main" ] || [ "$current_sha" != "$expected_sha" ]; then
+              echo "PR state, base branch, or head SHA changed while waiting. Refusing to merge."
+              exit 1
+            fi
+
+            status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
+            checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
+            status_state="$(printf '%s' "$status_json" | jq -r '.state')"
+            status_count="$(printf '%s' "$status_json" | jq -r '.total_count')"
+            check_count="$(printf '%s' "$checks_json" | jq -r '.total_count')"
+
+            if [ "$status_state" = "failure" ] || [ "$status_state" = "error" ]; then
+              echo "A commit status reported failure."
+              printf '%s' "$status_json" | jq -r '.statuses[]? | [.context, .state, (.description // "")] | @tsv'
+              exit 1
+            fi
+
+            bad_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure"))] | length')"
+            if [ "$bad_checks" != "0" ]; then
+              echo "A GitHub check run failed."
+              printf '%s' "$checks_json" | jq -r '.check_runs[]? | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")) | [.name, .conclusion] | @tsv'
+              exit 1
+            fi
+
+            pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')"
+            pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')"
+            preview_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i"))] | length')"
+            preview_statuses_success="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i")) and .state == "success")] | length')"
+            preview_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i"))] | length')"
+            preview_checks_success="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i")) and .status == "completed" and .conclusion == "success")] | length')"
+            preview_total=$((preview_statuses + preview_checks))
+            preview_success=$((preview_statuses_success + preview_checks_success))
+
+            status_ready=true
+            if [ "$status_count" -gt 0 ] && [ "$status_state" != "success" ]; then
+              status_ready=false
+            fi
+
+            if { [ "$status_count" -gt 0 ] || [ "$check_count" -gt 0 ]; } &&
+               [ "$preview_total" -gt 0 ] &&
+               [ "$preview_success" -eq "$preview_total" ] &&
+               [ "$status_ready" = "true" ] &&
+               [ "$pending_statuses" = "0" ] && [ "$pending_checks" = "0" ]; then
+              checks_ready=true
+              break
+            fi
+
+            echo "Checks are not all successful yet (attempt $attempt/40); waiting 15 seconds."
+            sleep 15
+          done
+
+          if [ "$checks_ready" != "true" ]; then
+            echo "All checks and a successful Netlify deploy-preview result were not confirmed for the exact PR head within 10 minutes. Refusing to merge."
+            exit 1
+          fi
+
+      - name: Merge only after all reported checks succeed
+        if: steps.proposal.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr_number="${{ steps.proposal.outputs.number }}"
+          expected_sha="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
+
+          # Re-read checks immediately before merge; do not merge a changed or failed head.
+          pr_json="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json state,baseRefName,headRefOid)"
+          test "$(printf '%s' "$pr_json" | jq -r '.state')" = "OPEN"
+          test "$(printf '%s' "$pr_json" | jq -r '.baseRefName')" = "main"
+          test "$(printf '%s' "$pr_json" | jq -r '.headRefOid')" = "$expected_sha"
+
+          status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
+          checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
+          status_count="$(printf '%s' "$status_json" | jq -r '.total_count')"
+          check_count="$(printf '%s' "$checks_json" | jq -r '.total_count')"
+          test "$status_count" -gt 0 -o "$check_count" -gt 0
+          if [ "$status_count" -gt 0 ]; then
+            test "$(printf '%s' "$status_json" | jq -r '.state')" = "success"
+          fi
+          test "$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')" = "0"
+          test "$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')" = "0"
+          preview_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i"))] | length')"
+          preview_statuses_success="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i")) and .state == "success")] | length')"
+          preview_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i"))] | length')"
+          preview_checks_success="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i")) and .status == "completed" and .conclusion == "success")] | length')"
+          preview_total=$((preview_statuses + preview_checks))
+          preview_success=$((preview_statuses_success + preview_checks_success))
+          test "$preview_total" -gt 0
+          test "$preview_success" -eq "$preview_total"
+
+          gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --squash
+          gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" \
+            --json state,mergedAt,baseRefName \
+            --jq 'if .state == "MERGED" and .mergedAt != null and .baseRefName == "main" then "All reported checks succeeded; page-text PR merged into main." else error("Page-text PR was not merged into main.") end'
