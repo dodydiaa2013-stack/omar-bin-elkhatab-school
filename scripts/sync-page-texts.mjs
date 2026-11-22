@@ -44,16 +44,6 @@ const baselineTimestamp = Date.parse(baseline.updatedAt || "");
 if (!Number.isFinite(incomingTimestamp) || !Number.isFinite(baselineTimestamp)) {
   throw new Error("Both incoming and baseline payloads must contain a valid updatedAt timestamp.");
 }
-const incomingHasTextChanges = [...payloadRecords].some(
-  ([id, text]) => baselineRecords.get(id) !== text
-);
-if (incomingHasTextChanges && incomingTimestamp <= baselineTimestamp) {
-  throw new Error(
-    "Stale or conflicting page text payload: incoming updatedAt must be newer " +
-    "than the main-branch baseline before any saved text can be applied. " +
-    "No files were written."
-  );
-}
 
 function parseWithLocations(source) {
   const hasBom = source.charCodeAt(0) === 0xFEFF;
@@ -132,6 +122,17 @@ const htmlTargets = collectHtmlTargets(initial.document);
 // describe exactly the same editable elements. The script never invents IDs.
 assertSameIds(htmlTargets, baselineRecords, "HTML IDs versus main baseline JSON IDs");
 assertSameIds(htmlTargets, payloadRecords, "HTML IDs versus incoming JSON IDs");
+
+const incomingHasTextChanges = [...payloadRecords].some(
+  ([id, text]) => baselineRecords.get(id) !== text
+);
+if (incomingHasTextChanges && incomingTimestamp <= baselineTimestamp) {
+  throw new Error(
+    "Stale or conflicting page text payload: incoming updatedAt must be newer " +
+    "than the main-branch baseline before any saved text can be applied. " +
+    "No files were written."
+  );
+}
 
 // A mismatch between the checked-out HTML and the main baseline means somebody
 // changed page text directly without updating its saved record. Stop rather
