@@ -86,6 +86,8 @@ test("an admin-saved text change updates only its existing HTML target", t => {
 
   const html = fs.readFileSync(fixture.htmlPath, "utf8");
   assert.ok(html.includes("قوائم فصول الصف الأول الثانوي"));
+  const titleLine = html.split("\n").find(line => line.includes('data-page-edit-id="schedules-title"'));
+  assert.ok(titleLine && !/[ \t]+$/.test(titleLine), "Updated title line must not retain trailing whitespace");
   assert.ok(!html.includes('data-page-edit-id="auto-new'));
   assert.equal((html.match(/data-page-edit-id=/g) || []).length,
     (sourceHtml.match(/data-page-edit-id=/g) || []).length);
