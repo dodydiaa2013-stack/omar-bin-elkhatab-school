@@ -369,7 +369,7 @@ function checkProductionPageReviewStatus(p) {
     const owner = settings.repository.split("/")[0];
     const reviewBranch = "automation/page-text-sync";
     const pullsUrl = apiRoot +
-      "/pulls?state=open&head=" +
+      "/pulls?state=all&head=" +
       encodeURIComponent(owner + ":" + reviewBranch) +
       "&base=main&per_page=20";
 
@@ -385,13 +385,13 @@ function checkProductionPageReviewStatus(p) {
 
     const pullsStatus = pullsResponse.getResponseCode();
     if (pullsStatus !== 200) {
-      throw new Error("تعذرت قراءة طلب المراجعة من GitHub (HTTP " + pullsStatus + ").");
+      throw new Error("تعذرت قراءة طلب النشر من GitHub (HTTP " + pullsStatus + ").");
     }
 
     const pulls = JSON.parse(pullsResponse.getContentText() || "[]");
     const reviewPR = (Array.isArray(pulls) ? pulls : []).find(function(pr) {
       return pr &&
-        pr.state === "open" &&
+        (pr.state === "open" || Boolean(pr.merged_at)) &&
         pr.head &&
         pr.head.ref === reviewBranch &&
         pr.base &&
@@ -404,7 +404,8 @@ function checkProductionPageReviewStatus(p) {
         success: true,
         status: "pending",
         created: false,
-        message: "لم يظهر طلب المراجعة بعد."
+        published: false,
+        message: "لم يظهر طلب النشر بعد."
       });
     }
 
@@ -425,17 +426,18 @@ function checkProductionPageReviewStatus(p) {
         success: true,
         status: "pending",
         created: false,
-        message: "طلب المراجعة موجود، لكن ملف النصوص لم يصبح متاحًا للتحقق بعد."
+        published: false,
+        message: "طلب النشر موجود، لكن ملف النصوص لم يصبح متاحًا للتحقق بعد."
       });
     }
 
     const file = JSON.parse(fileResponse.getContentText() || "{}");
     if (file.encoding !== "base64" || !file.content) {
-      throw new Error("استجابة ملف النصوص داخل طلب المراجعة غير مكتملة.");
+      throw new Error("استجابة ملف النصوص داخل طلب النشر غير مكتملة.");
     }
 
     const raw = Utilities.newBlob(
-      Utilities.base64Decode(String(file.content).replace(/\s/g, ""))
+      Utilities.base64Decode(String(file.content).replace(/\\s/g, ""))
     ).getDataAsString("UTF-8");
     const actualPayload = validateProductionPageChangesPayload_(JSON.parse(raw));
     const actualHash = getPageChangesSyncHash_(actualPayload);
@@ -445,19 +447,25 @@ function checkProductionPageReviewStatus(p) {
         success: true,
         status: "pending",
         created: false,
+        published: false,
         number: reviewPR.number,
         url: reviewPR.html_url,
-        message: "طلب المراجعة موجود، لكنه لم يتضمن أحدث نسخة محفوظة من النصوص بعد."
+        message: "طلب النشر موجود، لكنه لم يتضمن أحدث نسخة محفوظة من النصوص بعد."
       });
     }
 
+    const isMerged = Boolean(reviewPR.merged_at);
     return productionPageReviewStatusPostMessage(p, {
       success: true,
-      status: "confirmed",
+      status: isMerged ? "confirmed" : "pending",
       created: true,
+      published: isMerged,
+      mergedAt: reviewPR.merged_at || null,
       number: reviewPR.number,
       url: reviewPR.html_url,
-      message: "تم التأكد من وجود طلب المراجعة ومطابقة محتواه مع آخر نصوص محفوظة."
+      message: isMerged
+        ? "تم دمج التعديلات النصية والتحقق من مطابقتها؛ أصبحت منشورة في main."
+        : "تم التحقق من طلب التعديلات النصية، وجارٍ إتمام الدمج التلقائي."
     });
 
   } catch (error) {
@@ -465,10 +473,12 @@ function checkProductionPageReviewStatus(p) {
       success: false,
       status: "error",
       created: false,
-      message: error.message || "تعذر التحقق من حالة طلب المراجعة."
+      published: false,
+      message: error.message || "تعذر التحقق من حالة نشر النصوص."
     });
   }
 }
+
 function photoAlbumPostMessage(p, result) {
   p = p || {};
 
