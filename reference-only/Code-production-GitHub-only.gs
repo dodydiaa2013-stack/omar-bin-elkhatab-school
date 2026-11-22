@@ -1540,7 +1540,7 @@ if (action === "photoAlbums") {
       p.callback
     );
   }
-    return ContentService.createTextOutput(
+  return ContentService.createTextOutput(
     "خدمة صور مدرسة عمر بن الخطاب تعمل"
   );
 }
