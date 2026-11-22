@@ -40,12 +40,8 @@
     <!-- تحميل Cairo محليًا: تحميل المجموعة العربية مبكرًا لتقليل وميض الخط -->
     <link rel="preload" href="./assets/fonts/cairo/cairo-arabic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preconnect" href="https://accounts.google.com" crossorigin>
-    <!-- تحميل صورة المدخل مبكرًا بنفس خيارات srcset لتقليل الوميض عند تحديث الصفحة -->
-    <link rel="preload" as="image"
-          href="https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w1200"
-          imagesrcset="https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w640 640w, https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w960 960w, https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w1200 1200w"
-          imagesizes="(max-width: 456px) calc(100vw - 1.6rem), 430px"
-          fetchpriority="high">
+    <!-- الصورة المحلية لمدخل المدرسة هي المصدر الأول، وGoogle Drive بديل عند تعذرها -->
+    <link rel="preload" as="image" href="./assets/school.jpg" fetchpriority="high">
     <title>مدرسة عمر بن الخطاب ث بنين - إدارة المستقبل التعليمية</title>
     <!-- Tailwind CSS v4 - Locally compiled stylesheet -->
     <link rel="stylesheet" href="./assets/tailwind.css">
@@ -565,6 +561,8 @@
                 .home-hero-results { background:linear-gradient(180deg,#ffd33e,#f5a900); color:#092654; border:1px solid #ffe17b; }
                 .home-hero-tablet { background:linear-gradient(180deg,#1682e8,#0753ae); color:#fff; border:1px solid #48a9ff; text-shadow:0 1px 2px #002c66; }
                 .home-hero-photo { min-height:0; padding:.65rem; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:.65rem; position:relative; }
+                .home-hero-photo[hidden] { display:none !important; }
+                .home-hero.image-unavailable { grid-template-columns:minmax(0,1fr); }
                 .home-hero-image-stage { position:relative; width:min(100%,430px); aspect-ratio:5 / 6; overflow:hidden; border-radius:1.1rem; background:#071b43; box-shadow:0 8px 24px #0005; }
                 .home-hero-image-stage > img { display:block; width:100%; height:100%; object-fit:contain; object-position:center; border:0; border-radius:0; transform:none; filter:none; }
                 .home-feature-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1.15rem; }
@@ -676,7 +674,7 @@
                 </div>
                 <div class="home-hero-photo">
                     <div id="schoolEntranceStage" class="home-hero-image-stage">
-                        <img id="schoolEntranceImage" src="https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w1200" srcset="https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w640 640w, https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w960 960w, https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&amp;sz=w1200 1200w" sizes="(max-width: 456px) calc(100vw - 1.6rem), 430px" alt="مدخل مدرسة عمر بن الخطاب ث بنين" loading="eager" fetchpriority="high" width="220" height="264">
+                        <img id="schoolEntranceImage" src="./assets/school.jpg" alt="مدخل مدرسة عمر بن الخطاب ث بنين" loading="eager" fetchpriority="high" width="1296" height="1553">
                     </div>
 
                 </div>

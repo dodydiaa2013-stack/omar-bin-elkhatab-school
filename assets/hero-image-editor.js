@@ -10,6 +10,8 @@
     file: null,
     objectUrl: '',
     originalSrc: '',
+    fallbackSrc: 'https://drive.google.com/thumbnail?id=1n2AdjGXVlOm8UbDvtUfC4OgjFhxVyI1I&sz=w1200',
+    fallbackAttempted: false,
     zoom: 1,
     brightness: 100,
     aspectRatio: '5/6',
@@ -47,6 +49,41 @@
     state.brightness = 100;
     if ($('heroImageZoom')) $('heroImageZoom').value = '1';
     if ($('heroImageBrightness')) $('heroImageBrightness').value = '100';
+  }
+
+  function setEntrancePhotoVisible(visible) {
+    const photo = $('schoolEntranceImage')?.closest('.home-hero-photo');
+    const hero = photo?.closest('.home-hero');
+    if (photo) photo.hidden = !visible;
+    if (hero) hero.classList.toggle('image-unavailable', !visible);
+  }
+
+  function tryDriveFallback(img, source) {
+    if (!img) return;
+    const fallback = source || state.fallbackSrc;
+    if (!fallback) {
+      setEntrancePhotoVisible(false);
+      return;
+    }
+
+    state.fallbackAttempted = true;
+    img.dataset.entranceImageSource = 'drive-fallback';
+    img.onerror = () => {
+      img.onerror = null;
+      setEntrancePhotoVisible(false);
+      console.warn('تعذر تحميل صورة مدخل المدرسة من المصدر المحلي وGoogle Drive.');
+    };
+    setResponsiveImageSource(img, fallback);
+  }
+
+  function handleEntranceImageError(img) {
+    if (!img) return;
+    if (img.dataset.entranceImageSource === 'drive-fallback') {
+      img.onerror = null;
+      setEntrancePhotoVisible(false);
+      return;
+    }
+    tryDriveFallback(img, state.fallbackSrc);
   }
 
   function setSavedAspectFromImage(img) {
@@ -492,11 +529,12 @@
       if (data && data.success && data.image) {
         const img = $('schoolEntranceImage');
         state.originalSrc = data.image;
+        state.fallbackSrc = data.image;
 
-        // لا تعِد تعيين src إذا كانت الصورة الابتدائية هي الملف المحفوظ نفسه.
-        // هذا يمنع إيقاف الطلب الأول وإظهار مساحة فارغة أثناء إعادة التحميل.
-        if (img && !isSameDisplayedImage(img, data.image)) {
-          setResponsiveImageSource(img, data.image);
+        // تظل الصورة المحلية هي المصدر الأول؛ نحتفظ برابط Drive كبديل فقط.
+        // إذا كان المصدر المحلي قد فشل بالفعل، نجرّب رابط الصورة المحفوظة.
+        if (img && state.fallbackAttempted && img.dataset.entranceImageSource === 'drive-fallback') {
+          tryDriveFallback(img, data.image);
         }
       }
     };
@@ -622,7 +660,12 @@
     if (!stage || !img) return;
 
     state.originalSrc = img.getAttribute('src') || img.src || '';
-    img.addEventListener('load', () => setSavedAspectFromImage(img));
+    img.dataset.entranceImageSource = 'local';
+    img.addEventListener('load', () => {
+      setEntrancePhotoVisible(true);
+      setSavedAspectFromImage(img);
+    });
+    img.addEventListener('error', () => handleEntranceImageError(img));
     setSavedAspectFromImage(img);
 
     $('heroImageEditTrigger')?.addEventListener('click', open);
