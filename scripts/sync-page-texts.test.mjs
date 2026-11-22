@@ -202,7 +202,7 @@ test("duplicate JSON IDs are rejected", t => {
 test("editable text stays hidden until the server response or fallback is applied", () => {
   assert.match(
     sourceHtml,
-    /html\\[data-page-edits-pending="true"\\]\\s+\\[data-page-edit-id\\]\\s*\\{\\s*visibility:\\s*hidden\\s*!important;/
+    /html\[data-page-edits-pending="true"\]\s+\[data-page-edit-id\]\s*\{\s*visibility:\s*hidden\s*!important;/
   );
 
   const earlyStart = sourceHtml.indexOf("window.__pageChangesDomReady = false;");
@@ -213,14 +213,14 @@ test("editable text stays hidden until the server response or fallback is applie
   const requestAppend = sourceHtml.indexOf("document.head.appendChild(request);", earlyStart);
   assert.ok(earlyStart >= 0 && pendingMarker > earlyStart && requestAppend > pendingMarker,
     "The pending state must be set before the early request is started.");
-  assert.match(sourceHtml, /window\\.finishPageChangesInitialLoad = function\\(\\)/);
+  assert.match(sourceHtml, /window\.finishPageChangesInitialLoad = function\(\)/);
 
   const domReadyStart = sourceHtml.indexOf("window.addEventListener('DOMContentLoaded', () =>");
   const domReadyEnd = sourceHtml.indexOf("function initLocalStorage()", domReadyStart);
   assert.ok(domReadyStart >= 0 && domReadyEnd > domReadyStart);
   assert.doesNotMatch(
     sourceHtml.slice(domReadyStart, domReadyEnd),
-    /removeAttribute\\(["']data-page-edits-pending["']\\)/,
+    /removeAttribute\(["']data-page-edits-pending["']\)/,
     "DOMContentLoaded must not reveal stale text while the request is still pending."
   );
 
@@ -228,7 +228,7 @@ test("editable text stays hidden until the server response or fallback is applie
   const receiveEnd = sourceHtml.indexOf("function exportUpdatedHTML()", receiveStart);
   const receiveBlock = sourceHtml.slice(receiveStart, receiveEnd);
   assert.equal(
-    (receiveBlock.match(/finishPageChangesInitialLoad\\(\\)/g) || []).length,
+    (receiveBlock.match(/finishPageChangesInitialLoad\(\)/g) || []).length,
     4,
     "Every server-response outcome must release the initial visibility lock."
   );
@@ -237,7 +237,7 @@ test("editable text stays hidden until the server response or fallback is applie
   const fallbackEnd = sourceHtml.indexOf("function receivePageChanges(data)", fallbackStart);
   const fallbackBlock = sourceHtml.slice(fallbackStart, fallbackEnd);
   assert.equal(
-    (fallbackBlock.match(/finishPageChangesInitialLoad\\(\\)/g) || []).length,
+    (fallbackBlock.match(/finishPageChangesInitialLoad\(\)/g) || []).length,
     3,
     "Fallback network error, missing callback, and timeout must release the visibility lock."
   );
