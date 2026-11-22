@@ -401,8 +401,7 @@ function checkProductionPageReviewStatus(p) {
 
     const mergedPRs = matchingPRs.filter(function(pr) {
       return Boolean(pr.merged_at) &&
-        pr.merged === true &&
-        pr.merge_commit_sha;
+        Boolean(pr.merge_commit_sha);
     }).sort(function(a, b) {
       return String(b.merged_at).localeCompare(String(a.merged_at));
     });
