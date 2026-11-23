@@ -170,15 +170,15 @@ jobs:
           - HTML structure and stable edit-ID checks.
           - Exact changed-file scope: index.html and page-changes-production.json only.
           - Whitespace/error check with git diff --check.
-          - Successful PR checks and a successful Netlify deploy-preview status/check on the exact PR head SHA.
+          - Successful GitHub Actions validation checks on the exact PR head SHA.
 
-          The workflow refuses to merge if checks fail, remain pending, or no successful Netlify deploy-preview result is reported. No scripts, styles, images, or unrelated files are included."
+          Netlify deploy previews are optional and are not a publication requirement. The workflow refuses to merge if any non-Netlify validation check fails or remains pending. No scripts, styles, images, or unrelated files are included."
             pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
           fi
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for successful pull-request checks and deployment preview
+      - name: Wait for successful GitHub Actions pull-request checks
         if: steps.proposal.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -191,7 +191,7 @@ jobs:
             exit 1
           fi
 
-          echo "Waiting for checks on exact PR head: $expected_sha"
+          echo "Waiting for non-Netlify validation checks on exact PR head: $expected_sha"
           checks_ready=false
           for attempt in $(seq 1 40); do
             pr_json="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json state,baseRefName,headRefOid)"
@@ -206,56 +206,45 @@ jobs:
 
             status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
             checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
-            status_state="$(printf '%s' "$status_json" | jq -r '.state')"
-            status_count="$(printf '%s' "$status_json" | jq -r '.total_count')"
-            check_count="$(printf '%s' "$checks_json" | jq -r '.total_count')"
 
-            if [ "$status_state" = "failure" ] || [ "$status_state" = "error" ]; then
-              echo "A commit status reported failure."
-              printf '%s' "$status_json" | jq -r '.statuses[]? | [.context, .state, (.description // "")] | @tsv'
+            # Netlify is optional. Ignore its contexts in every state, but enforce all other checks.
+            bad_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i") | not) and (.state == "failure" or .state == "error"))] | length')"
+            if [ "$bad_statuses" != "0" ]; then
+              echo "A non-Netlify commit status reported failure."
+              printf '%s' "$status_json" | jq -r '.statuses[]? | select((.context | test("netlify|deploy-preview"; "i") | not) and (.state == "failure" or .state == "error")) | [.context, .state, (.description // "")] | @tsv'
               exit 1
             fi
 
-            bad_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure"))] | length')"
+            bad_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i") | not) and .status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure"))] | length')"
             if [ "$bad_checks" != "0" ]; then
-              echo "A GitHub check run failed."
-              printf '%s' "$checks_json" | jq -r '.check_runs[]? | select(.status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")) | [.name, .conclusion] | @tsv'
+              echo "A non-Netlify GitHub Actions check failed."
+              printf '%s' "$checks_json" | jq -r '.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i") | not) and .status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")) | [.name, .conclusion] | @tsv'
               exit 1
             fi
 
-            pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')"
-            pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')"
-            preview_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i"))] | length')"
-            preview_statuses_success="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i")) and .state == "success")] | length')"
-            preview_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i"))] | length')"
-            preview_checks_success="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i")) and .status == "completed" and .conclusion == "success")] | length')"
-            preview_total=$((preview_statuses + preview_checks))
-            preview_success=$((preview_statuses_success + preview_checks_success))
+            relevant_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i") | not)] | length')"
+            pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i") | not) and .state != "success")] | length')"
+            relevant_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i") | not)] | length')"
+            pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i") | not) and (.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")))] | length')"
+            relevant_total=$((relevant_statuses + relevant_checks))
 
-            status_ready=true
-            if [ "$status_count" -gt 0 ] && [ "$status_state" != "success" ]; then
-              status_ready=false
-            fi
-
-            if { [ "$status_count" -gt 0 ] || [ "$check_count" -gt 0 ]; } &&
-               [ "$preview_total" -gt 0 ] &&
-               [ "$preview_success" -eq "$preview_total" ] &&
-               [ "$status_ready" = "true" ] &&
-               [ "$pending_statuses" = "0" ] && [ "$pending_checks" = "0" ]; then
+            if [ "$relevant_total" -gt 0 ] &&
+               [ "$pending_statuses" = "0" ] &&
+               [ "$pending_checks" = "0" ]; then
               checks_ready=true
               break
             fi
 
-            echo "Checks are not all successful yet (attempt $attempt/40); waiting 15 seconds."
+            echo "Non-Netlify validation checks are not all complete yet (attempt $attempt/40); waiting 15 seconds."
             sleep 15
           done
 
           if [ "$checks_ready" != "true" ]; then
-            echo "All checks and a successful Netlify deploy-preview result were not confirmed for the exact PR head within 10 minutes. Refusing to merge."
+            echo "Non-Netlify GitHub validation checks were not all confirmed successful within 10 minutes. Refusing to merge."
             exit 1
           fi
 
-      - name: Merge only after all reported checks succeed
+      - name: Merge only after all non-Netlify checks succeed
         if: steps.proposal.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -264,7 +253,7 @@ jobs:
           pr_number="${{ steps.proposal.outputs.number }}"
           expected_sha="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq '.headRefOid')"
 
-          # Re-read checks immediately before merge; do not merge a changed or failed head.
+          # Re-read PR identity and checks immediately before merge.
           pr_json="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json state,baseRefName,headRefOid)"
           test "$(printf '%s' "$pr_json" | jq -r '.state')" = "OPEN"
           test "$(printf '%s' "$pr_json" | jq -r '.baseRefName')" = "main"
@@ -272,24 +261,18 @@ jobs:
 
           status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
           checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
-          status_count="$(printf '%s' "$status_json" | jq -r '.total_count')"
-          check_count="$(printf '%s' "$checks_json" | jq -r '.total_count')"
-          test "$status_count" -gt 0 -o "$check_count" -gt 0
-          if [ "$status_count" -gt 0 ]; then
-            test "$(printf '%s' "$status_json" | jq -r '.state')" = "success"
-          fi
-          test "$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.state != "success")] | length')" = "0"
-          test "$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length')" = "0"
-          preview_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i"))] | length')"
-          preview_statuses_success="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i")) and .state == "success")] | length')"
-          preview_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i"))] | length')"
-          preview_checks_success="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i")) and .status == "completed" and .conclusion == "success")] | length')"
-          preview_total=$((preview_statuses + preview_checks))
-          preview_success=$((preview_statuses_success + preview_checks_success))
-          test "$preview_total" -gt 0
-          test "$preview_success" -eq "$preview_total"
+          relevant_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i") | not)] | length')"
+          pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i") | not) and .state != "success")] | length')"
+          relevant_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i") | not)] | length')"
+          pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i") | not) and (.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")))] | length')"
+          relevant_total=$((relevant_statuses + relevant_checks))
 
+          test "$relevant_total" -gt 0
+          test "$pending_statuses" = "0"
+          test "$pending_checks" = "0"
+
+          # GitHub itself still enforces any configured branch-protection requirements.
           gh pr merge "$pr_number" --repo "$GITHUB_REPOSITORY" --squash
           gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" \
             --json state,mergedAt,baseRefName \
-            --jq 'if .state == "MERGED" and .mergedAt != null and .baseRefName == "main" then "All reported checks succeeded; page-text PR merged into main." else error("Page-text PR was not merged into main.") end'
+            --jq 'if .state == "MERGED" and .mergedAt != null and .baseRefName == "main" then "All non-Netlify validation checks succeeded; page-text PR merged into main." else error("Page-text PR was not merged into main.") end'
