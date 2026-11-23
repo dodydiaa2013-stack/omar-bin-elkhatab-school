@@ -2495,41 +2495,34 @@ async function saveAllPageChanges() {
     }
     if (window.__productionPageChangesUsingLocalFallback || window.__productionPageChangesBackendReady !== true) { alert('الحفظ متوقف مؤقتًا: لم يتم تأكيد تحميل النصوص من الخادم. حدّث الصفحة وحاول بعد عودة الاتصال.'); return; }
     if (assignPageEditIds() !== true) { alert('تعذر الحفظ: توجد معرّفات نصوص ناقصة أو مكررة.'); return; }
-    const editableElements = Array.from(
-        document.querySelectorAll('[data-page-edit-id]')
-    );
-    // قد تظهر عناصر متكررة بالمعرّف نفسه بعد إعادة إنشاء بعض مكوّنات الواجهة.
-    // لا نرسل المعرّف أكثر من مرة حتى لا يرفض الخادم قائمة التعديلات.
-    // نحتفظ بأول عنصر، ونفضّل العنصر النشط إذا كان أحد العناصر المكررة.
-    const changesById = new Map();
-    const duplicateIds = new Set();
+    // أرسل النصوص التي عدّلها المستخدم في هذه الجلسة فقط.
+    // إرسال لقطة الصفحة كاملة قد يجعل تبويبًا قديمًا يعيد نصوصًا سابقة
+    // فوق تعديلات أحدث حفظها تبويب آخر.
+    const changes = [];
+    const invalidPendingIds = [];
 
-    editableElements.forEach(el => {
-        const id = el.getAttribute('data-page-edit-id');
-        const text = el.textContent.trim();
-        if (!id || text.length > 10000) return;
-
-        if (!changesById.has(id)) {
-            changesById.set(id, { id, text });
+    unsavedPageTextChanges.forEach((trackedText, id) => {
+        const found = document.querySelectorAll(
+            '[data-page-edit-id="' + CSS.escape(id) + '"]'
+        );
+        if (found.length !== 1) {
+            invalidPendingIds.push(id);
             return;
         }
 
-        duplicateIds.add(id);
-        if (document.activeElement === el) {
-            changesById.set(id, { id, text });
+        const text = found[0].textContent.trim();
+        if (text.length > 10000) {
+            invalidPendingIds.push(id);
+            return;
         }
+        changes.push({ id, text });
     });
 
-    if (duplicateIds.size) {
-        alert('تعذر الحفظ: توجد معرّفات نصوص مكررة. لم يتم استبعاد أي نص تلقائيًا.');
-        console.error('[PageChanges] duplicate IDs blocked:', Array.from(duplicateIds));
+    if (invalidPendingIds.length) {
+        alert('تعذر الحفظ: بعض النصوص المعدلة لم تعد مرتبطة بمعرّفات فريدة وصحيحة. لم يتم إرسال أي تعديل.');
+        console.error('[PageChanges] invalid pending IDs blocked:', invalidPendingIds);
         return;
     }
-    // Local edits take precedence if a previous poll arrived while editing.
-    unsavedPageTextChanges.forEach((text, id) => {
-        if (changesById.has(id)) changesById.set(id, { id, text });
-    });
-    const changes = Array.from(changesById.values());
     if (!changes.length) {
         alert('لا توجد نصوص قابلة للحفظ.');
         return;
@@ -2716,7 +2709,8 @@ window.addEventListener('message', function(event) {
                 }
             });
         }
-        cacheCurrentPageChanges(pendingPageChangesSnapshot);
+        // حدّث الكاش الكامل من الصفحة بعد تأكيد الحفظ؛ لقطة الإرسال أصبحت جزئية.
+        cacheCurrentPageChanges();
         pendingPageChangesSnapshot = null;
 
         if (isLiveEditing) toggleLiveEditing();
