@@ -2501,7 +2501,7 @@ async function saveAllPageChanges() {
     const changes = [];
     const invalidPendingIds = [];
 
-    unsavedPageTextChanges.forEach((trackedText, id) => {
+    unsavedPageTextChanges.forEach((_, id) => {
         const found = document.querySelectorAll(
             '[data-page-edit-id="' + CSS.escape(id) + '"]'
         );
