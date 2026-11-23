@@ -75,6 +75,7 @@ for (const element of document.querySelectorAll("[data-page-edit-id]")) {
 const seen = new Set();
 const missing = [];
 const textEdits = [];
+const changedIds = new Set();
 function escapeHtml(value) {
   return value.replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -101,6 +102,7 @@ for (const item of payload.changes) {
       location.endTag.startOffset < location.startTag.endOffset) {
     throw new Error("Could not safely locate the content for edit id: " + item.id);
   }
+  if (target.textContent !== item.text) changedIds.add(item.id);
   textEdits.push({
     start: location.startTag.endOffset,
     end: location.endTag.startOffset,
@@ -131,6 +133,21 @@ for (const edit of textEdits) {
     edit.replacement +
     output.slice(edit.end);
   previousTextStart = edit.start;
+}
+
+// Text replacement can make a pre-existing end-of-line space appear as newly
+// added whitespace to git diff --check. Remove trailing horizontal whitespace
+// only from source lines whose page-edit text actually changed; preserve every
+// other line, newline style, and the original HTML structure.
+if (changedIds.size) {
+  const changedMarkers = [...changedIds].map(id => `data-page-edit-id="${id}"`);
+  const lines = output.split(/(\r\n|\n|\r)/);
+  for (let index = 0; index < lines.length; index += 2) {
+    if (changedMarkers.some(marker => lines[index].includes(marker))) {
+      lines[index] = lines[index].replace(/[ \t]+$/, "");
+    }
+  }
+  output = lines.join("");
 }
 
 const finalDom = parseWithLocations(output);
