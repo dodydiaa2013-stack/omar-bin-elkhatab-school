@@ -175,6 +175,23 @@ jobs:
           Netlify deploy previews are optional and are not a publication requirement. The workflow refuses to merge if any non-Netlify validation check fails or remains pending. No scripts, styles, images, or unrelated files are included."
             pr_number=$(gh pr list --repo "$GITHUB_REPOSITORY" --head automation/page-text-sync --base main --state open --json number --jq '.[0].number')
           fi
+
+          # Existing page-text PRs may have been created as drafts by the
+          # earlier review-only workflow. This publisher owns this exact
+          # generated head/base pair, so make that PR ready before checking it.
+          pr_json="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json state,baseRefName,headRefName,isDraft)"
+          test "$(printf '%s' "$pr_json" | jq -r '.state')" = "OPEN"
+          test "$(printf '%s' "$pr_json" | jq -r '.baseRefName')" = "main"
+          test "$(printf '%s' "$pr_json" | jq -r '.headRefName')" = "automation/page-text-sync"
+          if [ "$(printf '%s' "$pr_json" | jq -r '.isDraft')" = "true" ]; then
+            gh pr ready "$pr_number" --repo "$GITHUB_REPOSITORY"
+          fi
+          pr_is_draft="$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+          if [ "$pr_is_draft" != "false" ]; then
+            echo "The page-text PR could not be marked ready for review."
+            exit 1
+          fi
+
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
