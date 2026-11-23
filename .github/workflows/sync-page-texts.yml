@@ -215,17 +215,17 @@ jobs:
               exit 1
             fi
 
-            bad_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i") | not) and .status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure"))] | length')"
+            bad_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not)) and .status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure"))] | length')"
             if [ "$bad_checks" != "0" ]; then
               echo "A non-Netlify GitHub Actions check failed."
-              printf '%s' "$checks_json" | jq -r '.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i") | not) and .status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")) | [.name, .conclusion] | @tsv'
+              printf '%s' "$checks_json" | jq -r '.check_runs[]? | select(((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not)) and .status == "completed" and (.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")) | [.name, .conclusion] | @tsv'
               exit 1
             fi
 
             relevant_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i") | not)] | length')"
             pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i") | not) and .state != "success")] | length')"
-            relevant_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i") | not)] | length')"
-            pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i") | not) and (.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")))] | length')"
+            relevant_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not))] | length')"
+            pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not)) and (.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")))] | length')"
             relevant_total=$((relevant_statuses + relevant_checks))
 
             # The workflow already ran strict payload/HTML/scope validation before opening this PR.
@@ -265,8 +265,8 @@ jobs:
           checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
           relevant_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i") | not)] | length')"
           pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i") | not) and .state != "success")] | length')"
-          relevant_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(.name | test("netlify|deploy-preview"; "i") | not)] | length')"
-          pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.name | test("netlify|deploy-preview"; "i") | not) and (.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")))] | length')"
+          relevant_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not))] | length')"
+          pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not)) and (.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")))] | length')"
           relevant_total=$((relevant_statuses + relevant_checks))
 
           # No non-Netlify checks may be pending or failing. An empty list is valid
