@@ -108,11 +108,11 @@ for (const item of payload.changes) {
   });
 }
 
-const payloadOnlyIds = [...seen].filter(id => !targets.has(id));
-if (missing.length || payloadOnlyIds.length) {
+const htmlOnlyIds = [...targets.keys()].filter(id => !seen.has(id));
+if (missing.length || htmlOnlyIds.length) {
   const details = [];
   if (missing.length) details.push("missing from HTML: " + missing.join(", "));
-  if (payloadOnlyIds.length) details.push("missing from JSON: " + payloadOnlyIds.join(", "));
+  if (htmlOnlyIds.length) details.push("missing from JSON: " + htmlOnlyIds.join(", "));
   throw new Error(
     "Refusing to publish because HTML and saved JSON edit IDs do not match (" +
     details.join("; ") + ")."
