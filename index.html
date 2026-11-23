@@ -1,7 +1,13 @@
 ﻿<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-page-edits-pending>
 <head>
     <meta charset="UTF-8">
+    <style id="page-edits-initial-visibility">
+        /* احتفظ بمساحة النصوص كما هي، لكن لا تعرض القيم القديمة قبل استرجاع المحفوظ. */
+        html[data-page-edits-pending] [data-page-edit-id] {
+            visibility: hidden !important;
+        }
+    </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="الموقع الرسمي لمدرسة عمر بن الخطاب ث بنين بإدارة المستقبل التعليمية بمحافظة القاهرة. تابعوا أخبار المدرسة ونتائج الطلاب وأوائل المدرسة وقوائم الفصول ومعرض الصور والأنشطة.">
     <meta name="theme-color" content="#0B132B">
@@ -1586,8 +1592,9 @@ window.addEventListener('DOMContentLoaded', () => {
     if (window.__pageChangesFallbackPending) {
         applyCachedPageChangesFallback(window.__pageChangesFallbackPending);
         window.__pageChangesFallbackPending = '';
+        finishPageChangesInitialLoad();
     }
-    document.documentElement.removeAttribute("data-page-edits-pending");
+    // تظل النصوص القابلة للتحرير مخفية حتى تصل استجابة الخادم أو ينتهي المسار الاحتياطي.
     updateTeacherUI();
 });
 
@@ -2933,6 +2940,10 @@ function cacheCurrentPageChanges(changesSnapshot) {
     }
 }
 
+function finishPageChangesInitialLoad() {
+    document.documentElement.removeAttribute('data-page-edits-pending');
+}
+
 function loadSavedPageChanges() {
     if (pageChangesRequestInFlight) return;
     const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
@@ -2951,7 +2962,7 @@ function loadSavedPageChanges() {
     script.onerror = () => {
         console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستُستخدم النسخة المحلية للعرض إن كانت صالحة.');
         applyCachedPageChangesFallback('script-error');
-        document.documentElement.removeAttribute('data-page-edits-pending');
+        finishPageChangesInitialLoad();
         finish();
     };
     script.onload = () => {
@@ -2959,13 +2970,13 @@ function loadSavedPageChanges() {
             console.error('[PageChanges] تم تحميل الاستجابة دون تأكيد callback؛ سنحاول النسخة المحلية.');
             applyCachedPageChangesFallback('callback-missing');
         }
-        document.documentElement.removeAttribute('data-page-edits-pending');
+        finishPageChangesInitialLoad();
         finish();
     };
     pageChangesRequestTimeout = setTimeout(() => {
         console.warn('[PageChanges] انتهت مهلة تحميل تعديلات النصوص.');
         applyCachedPageChangesFallback('request-timeout');
-        document.documentElement.removeAttribute('data-page-edits-pending');
+        finishPageChangesInitialLoad();
         finish();
     }, 15000);
     document.body.appendChild(script);
@@ -2978,6 +2989,7 @@ function receivePageChanges(data) {
         const message = data && (data.message || data.error) ? (data.message || data.error) : 'استجابة الخادم لا تحتوي على قائمة تعديلات صحيحة.';
         console.error('[PageChanges] تعذر استرجاع تعديلات نصوص الموقع:', message);
         applyCachedPageChangesFallback('invalid-server-response');
+        finishPageChangesInitialLoad();
         return false;
     }
     const normalized = normalizeFixedPageChanges(data.changes);
@@ -3003,6 +3015,7 @@ function receivePageChanges(data) {
     document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
+    finishPageChangesInitialLoad();
     return true;
 }
 
