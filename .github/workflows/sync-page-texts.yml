@@ -222,11 +222,8 @@ jobs:
               exit 1
             fi
 
-            relevant_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i") | not)] | length')"
             pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i") | not) and .state != "success")] | length')"
-            relevant_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not))] | length')"
             pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not)) and (.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")))] | length')"
-            relevant_total=$((relevant_statuses + relevant_checks))
 
             # The workflow already ran strict payload/HTML/scope validation before opening this PR.
             # A PR created with GITHUB_TOKEN may not trigger other GitHub Actions workflows,
@@ -263,11 +260,8 @@ jobs:
 
           status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/status")"
           checks_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$expected_sha/check-runs")"
-          relevant_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select(.context | test("netlify|deploy-preview"; "i") | not)] | length')"
           pending_statuses="$(printf '%s' "$status_json" | jq -r '[.statuses[]? | select((.context | test("netlify|deploy-preview"; "i") | not) and .state != "success")] | length')"
-          relevant_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not))] | length')"
           pending_checks="$(printf '%s' "$checks_json" | jq -r '[.check_runs[]? | select(((.app.slug // "") != "netlify" and (.name | test("netlify|deploy-preview"; "i") | not)) and (.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")))] | length')"
-          relevant_total=$((relevant_statuses + relevant_checks))
 
           # No non-Netlify checks may be pending or failing. An empty list is valid
           # because strict payload/HTML/scope validation ran before this PR was opened.
