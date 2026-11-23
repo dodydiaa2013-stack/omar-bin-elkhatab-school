@@ -141,10 +141,10 @@ for (const edit of textEdits) {
 // other line, newline style, and the original HTML structure.
 if (changedIds.size) {
   const changedMarkers = [...changedIds].map(id => `data-page-edit-id="${id}"`);
-  const lines = output.split(/(\\r\\n|\\n|\\r)/);
+  const lines = output.split(/(\r\n|\n|\r)/);
   for (let index = 0; index < lines.length; index += 2) {
     if (changedMarkers.some(marker => lines[index].includes(marker))) {
-      lines[index] = lines[index].replace(/[ \\t]+$/, "");
+      lines[index] = lines[index].replace(/[ \t]+$/, "");
     }
   }
   output = lines.join("");
