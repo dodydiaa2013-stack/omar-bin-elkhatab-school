@@ -372,108 +372,166 @@ function checkProductionPageReviewStatus(p) {
       Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28"
     };
-    const pullsUrl = apiRoot +
-      "/pulls?state=all&head=" +
-      encodeURIComponent(owner + ":" + reviewBranch) +
-      "&base=main&per_page=100";
 
-    const pullsResponse = UrlFetchApp.fetch(pullsUrl, {
-      method: "get",
-      headers: headers,
-      muteHttpExceptions: true
-    });
-
-    const pullsStatus = pullsResponse.getResponseCode();
-    if (pullsStatus !== 200) {
-      throw new Error("تعذرت قراءة طلب النشر من GitHub (HTTP " + pullsStatus + ").");
+    function getGithubJson_(url, label) {
+      const response = UrlFetchApp.fetch(url, {
+        method: "get",
+        headers: headers,
+        muteHttpExceptions: true
+      });
+      const status = response.getResponseCode();
+      if (status !== 200) {
+        throw new Error("تعذرت قراءة " + label + " من GitHub (HTTP " + status + ").");
+      }
+      return JSON.parse(response.getContentText() || "null");
     }
 
-    const pulls = JSON.parse(pullsResponse.getContentText() || "[]");
-    const matchingPRs = (Array.isArray(pulls) ? pulls : []).filter(function(pr) {
+    function readGithubTextFile_(path, ref) {
+      const url = apiRoot + "/contents/" + path + "?ref=" + encodeURIComponent(ref);
+      const file = getGithubJson_(url, path);
+      if (!file || file.encoding !== "base64" || !file.content) {
+        throw new Error("استجابة الملف " + path + " من GitHub غير مكتملة.");
+      }
+      return Utilities.newBlob(
+        Utilities.base64Decode(String(file.content).replace(/\s/g, ""))
+      ).getDataAsString("UTF-8");
+    }
+
+    function pending_(message, number, url) {
+      return productionPageReviewStatusPostMessage(p, {
+        success: true,
+        status: "pending",
+        created: false,
+        number: number || null,
+        url: url || null,
+        message: message
+      });
+    }
+
+    const pullsUrl = apiRoot +
+      "/pulls?state=open&head=" +
+      encodeURIComponent(owner + ":" + reviewBranch) +
+      "&base=main&per_page=20";
+    const pulls = getGithubJson_(pullsUrl, "قائمة طلبات المراجعة");
+    const reviewPR = (Array.isArray(pulls) ? pulls : []).find(function(pr) {
       return pr &&
+        pr.state === "open" &&
         pr.head &&
         pr.head.ref === reviewBranch &&
         pr.base &&
         pr.base.ref === "main" &&
-        pr.html_url;
+        pr.html_url &&
+        pr.number &&
+        pr.head.sha;
     });
 
-    const mergedPRs = matchingPRs.filter(function(pr) {
-      return Boolean(pr.merged_at) &&
-        Boolean(pr.merge_commit_sha);
-    }).sort(function(a, b) {
-      return String(b.merged_at).localeCompare(String(a.merged_at));
-    });
-
-    const openPRs = matchingPRs.filter(function(pr) {
-      return pr.state === "open";
-    }).sort(function(a, b) {
-      return Number(b.number || 0) - Number(a.number || 0);
-    });
-
-    const latestMergedPR = mergedPRs.length ? mergedPRs[0] : null;
-    const latestOpenPR = openPRs.length ? openPRs[0] : null;
-    const statusPR = latestMergedPR || latestOpenPR;
-
-    if (!latestMergedPR) {
-      return productionPageReviewStatusPostMessage(p, {
-        success: true,
-        status: "pending",
-        created: Boolean(latestOpenPR),
-        published: false,
-        number: statusPR ? statusPR.number : null,
-        url: statusPR ? statusPR.html_url : null,
-        message: latestOpenPR
-          ? "طلب النشر موجود، ولم يتم دمجه في main بعد."
-          : "لم يظهر طلب نشر مدمج لتعديلات النصوص بعد."
-      });
+    if (!reviewPR) {
+      return pending_("لم يظهر طلب المراجعة بعد.");
     }
 
-    // لا نثق بملف فرع طلب النشر لإعلان نجاح النشر.
-    // المرجع الوحيد لتأكيد النشر هو ملف النصوص الموجود فعليًا في main بعد الدمج.
-    const mainFileUrl = apiRoot + "/contents/" + settings.path +
-      "?ref=main";
-    const mainFileResponse = UrlFetchApp.fetch(mainFileUrl, {
-      method: "get",
-      headers: headers,
-      muteHttpExceptions: true
-    });
-
-    const mainFileStatus = mainFileResponse.getResponseCode();
-    if (mainFileStatus !== 200) {
-      return productionPageReviewStatusPostMessage(p, {
-        success: true,
-        status: "pending",
-        created: true,
-        published: false,
-        number: latestMergedPR.number,
-        url: latestMergedPR.html_url,
-        mergedAt: latestMergedPR.merged_at,
-        message: "تم العثور على طلب مدمج، لكن تعذرت قراءة ملف النصوص من main للتحقق النهائي."
-      });
+    if (reviewPR.draft !== true) {
+      return pending_(
+        "طلب المراجعة موجود لكنه ليس في حالة المسودة المطلوبة للمراجعة الآمنة.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
     }
 
-    const mainFile = JSON.parse(mainFileResponse.getContentText() || "{}");
-    if (mainFile.encoding !== "base64" || !mainFile.content || !mainFile.sha) {
-      throw new Error("استجابة ملف النصوص من main غير مكتملة.");
+    // لا نؤكد الطلب إلا إذا اقتصر التغيير على ملفي النصوص والصفحة.
+    const changedFiles = getGithubJson_(
+      apiRoot + "/pulls/" + reviewPR.number + "/files?per_page=100",
+      "الملفات المعدلة في طلب المراجعة"
+    );
+    const allowedFiles = ["index.html", "page-changes-production.json"];
+    if (!Array.isArray(changedFiles) ||
+        changedFiles.length !== allowedFiles.length ||
+        changedFiles.some(function(file) {
+          return !file ||
+            !allowedFiles.includes(file.filename) ||
+            file.status !== "modified";
+        }) ||
+        allowedFiles.some(function(path) {
+          return !changedFiles.some(function(file) { return file.filename === path; });
+        })) {
+      return pending_(
+        "طلب المراجعة لا يقتصر على ملف الصفحة وملف النصوص المتوقعين؛ أوقفنا تأكيده.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
     }
 
-    const mainRaw = Utilities.newBlob(
-      Utilities.base64Decode(String(mainFile.content).replace(/\s/g, ""))
-    ).getDataAsString("UTF-8");
-    const mainPayload = validateProductionPageChangesPayload_(JSON.parse(mainRaw));
-    const mainHash = getPageChangesSyncHash_(mainPayload);
+    const actualPayload = validateProductionPageChangesPayload_(
+      JSON.parse(readGithubTextFile_("page-changes-production.json", reviewBranch))
+    );
+    const actualHash = getPageChangesSyncHash_(actualPayload);
+    if (actualHash !== expectedHash) {
+      return pending_(
+        "طلب المراجعة موجود، لكنه لم يتضمن أحدث نسخة محفوظة من النصوص بعد.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
+    }
 
-    if (mainHash !== expectedHash) {
+    // فحص تطابق معرّفات HTML وJSON من نفس نسخة فرع طلب المراجعة.
+    const html = readGithubTextFile_("index.html", reviewBranch);
+    const htmlIds = [];
+    const idPattern = /data-page-edit-id\s*=\s*(["'])(.*?)\1/g;
+    let match;
+    while ((match = idPattern.exec(html)) !== null) {
+      const id = String(match[2] || "").trim();
+      if (!id || htmlIds.indexOf(id) !== -1) {
+        return pending_(
+          "ملف الصفحة يحتوي على معرّف فارغ أو مكرر؛ لم نؤكد طلب المراجعة.",
+          reviewPR.number,
+          reviewPR.html_url
+        );
+      }
+      htmlIds.push(id);
+    }
+
+    const jsonIds = actualPayload.changes.map(function(item) { return item.id; });
+    if (htmlIds.length !== jsonIds.length ||
+        htmlIds.some(function(id) { return jsonIds.indexOf(id) === -1; }) ||
+        jsonIds.some(function(id) { return htmlIds.indexOf(id) === -1; })) {
+      return pending_(
+        "معرّفات عناصر الصفحة لا تطابق معرّفات ملف النصوص؛ لم نؤكد طلب المراجعة.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
+    }
+
+    // ننتظر فحص التحقق الخاص بطلب النصوص نفسه وعلى نفس SHA، ولا نقبل نتيجة قديمة.
+    const checks = getGithubJson_(
+      apiRoot + "/commits/" + encodeURIComponent(reviewPR.head.sha) +
+        "/check-runs?per_page=100",
+      "نتائج فحص تطابق نصوص الصفحة"
+    );
+    const validationCheck = checks && Array.isArray(checks.check_runs)
+      ? checks.check_runs.find(function(check) {
+          return check &&
+            check.name === "validate-page-text" &&
+            check.head_sha === reviewPR.head.sha &&
+            check.app &&
+            check.app.slug === "github-actions";
+        })
+      : null;
+
+    if (!validationCheck || validationCheck.status !== "completed") {
+      return pending_(
+        "تم العثور على الطلب ومطابقة الملفات، وجارٍ انتظار فحص التحقق الآلي.",
+        reviewPR.number,
+        reviewPR.html_url
+      );
+    }
+
+    if (validationCheck.conclusion !== "success") {
       return productionPageReviewStatusPostMessage(p, {
-        success: true,
-        status: "pending",
-        created: true,
-        published: false,
-        number: latestMergedPR.number,
-        url: latestMergedPR.html_url,
-        mergedAt: latestMergedPR.merged_at,
-        message: "تم دمج طلب نصوص سابق، لكن محتوى main لا يطابق آخر تعديلات محفوظة؛ لم نؤكد النشر."
+        success: false,
+        status: "error",
+        created: false,
+        number: reviewPR.number,
+        url: reviewPR.html_url,
+        message: "فشل فحص تطابق نصوص الصفحة؛ لم نؤكد طلب المراجعة."
       });
     }
 
@@ -481,12 +539,9 @@ function checkProductionPageReviewStatus(p) {
       success: true,
       status: "confirmed",
       created: true,
-      published: true,
-      number: latestMergedPR.number,
-      url: latestMergedPR.html_url,
-      mergedAt: latestMergedPR.merged_at,
-      verifiedFrom: "main",
-      message: "تم التحقق من مطابقة النصوص الموجودة في main لبصمة التعديلات المحفوظة؛ النشر مؤكد."
+      number: reviewPR.number,
+      url: reviewPR.html_url,
+      message: "تم التأكد من تطابق بصمة النصوص ومعرّفات الصفحة والملفات المعدلة ونجاح الفحص الآلي."
     });
 
   } catch (error) {
@@ -494,8 +549,7 @@ function checkProductionPageReviewStatus(p) {
       success: false,
       status: "error",
       created: false,
-      published: false,
-      message: error.message || "تعذر التحقق من حالة نشر النصوص."
+      message: error.message || "تعذر التحقق من حالة طلب المراجعة."
     });
   }
 }
