@@ -2922,6 +2922,16 @@ function parsePageChangesInput_(rawValue) {
     }
   } else if (typeof value !== "object") {
     throw new Error("صيغة بيانات التعديلات غير مدعومة.");
+  } else {
+    let serializedLength = 0;
+    try {
+      serializedLength = JSON.stringify(value).length;
+    } catch (error) {
+      throw new Error("تعذر قراءة بيانات التعديلات.");
+    }
+    if (serializedLength > 100000) {
+      throw new Error("بيانات التعديلات أكبر من الحجم المسموح.");
+    }
   }
 
   // فك أغلفة JSON المتداخلة بحد أقصى ثلاث مرات لمنع الدوران غير المحدود.
