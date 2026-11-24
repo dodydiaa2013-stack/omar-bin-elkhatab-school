@@ -2899,6 +2899,74 @@ function getSavedPageChanges() {
 
 
 
+/**
+ * توحيد صيغ حقل changes القادمة من نماذج POST المختلفة.
+ * يقبل المصفوفة المباشرة أو JSON string أو الغلاف { changes: ... }،
+ * بما في ذلك الغلاف المتداخل كسلسلة JSON، دون تغيير محتوى النصوص.
+ */
+function parsePageChangesInput_(rawValue) {
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    throw new Error("بيانات التعديلات فارغة.");
+  }
+
+  let value = rawValue;
+
+  if (typeof value === "string") {
+    if (value.length > 100000) {
+      throw new Error("بيانات التعديلات أكبر من الحجم المسموح.");
+    }
+    try {
+      value = JSON.parse(value);
+    } catch (error) {
+      throw new Error("صيغة بيانات التعديلات غير صحيحة.");
+    }
+  } else if (typeof value !== "object") {
+    throw new Error("صيغة بيانات التعديلات غير مدعومة.");
+  } else {
+    let serializedLength = 0;
+    try {
+      serializedLength = JSON.stringify(value).length;
+    } catch (error) {
+      throw new Error("تعذر قراءة بيانات التعديلات.");
+    }
+    if (serializedLength > 100000) {
+      throw new Error("بيانات التعديلات أكبر من الحجم المسموح.");
+    }
+  }
+
+  // فك أغلفة JSON المتداخلة بحد أقصى ثلاث مرات لمنع الدوران غير المحدود.
+  for (let depth = 0; depth < 3; depth++) {
+    if (Array.isArray(value)) return value;
+    if (!value || typeof value !== "object") break;
+
+    if (!Object.prototype.hasOwnProperty.call(value, "changes")) {
+      if (Object.prototype.hasOwnProperty.call(value, "data")) {
+        value = value.data;
+        continue;
+      }
+      if (Object.prototype.hasOwnProperty.call(value, "payload")) {
+        value = value.payload;
+        continue;
+      }
+      break;
+    }
+
+    value = value.changes;
+    if (typeof value === "string") {
+      if (value.length > 100000) {
+        throw new Error("بيانات التعديلات أكبر من الحجم المسموح.");
+      }
+      try {
+        value = JSON.parse(value);
+      } catch (error) {
+        throw new Error("صيغة قائمة التعديلات الداخلية غير صحيحة.");
+      }
+    }
+  }
+
+  return Array.isArray(value) ? value : null;
+}
+
 function savePageChanges(p) {
   p = p || {};
 
@@ -2909,43 +2977,11 @@ function savePageChanges(p) {
   verifyAdminToken(p.googleUploadToken || p.token || "");
   verifyAdminSession(p.adminSessionToken || "");
 
-  const rawChanges = p.changes || "";
+  const incomingChanges = parsePageChangesInput_(p.changes);
 
-  if (!rawChanges || rawChanges.length > 100000) {
-    throw new Error("بيانات التعديلات فارغة أو أكبر من الحجم المسموح");
-  }
-
-  let data;
-
-  try {
-    data = JSON.parse(rawChanges);
-  } catch (error) {
-    throw new Error("صيغة بيانات التعديلات غير صحيحة");
-  }
-
-  // دعم الصيغة الأساسية { changes: [...] } وكذلك المصفوفة المباشرة
-  // والتوافق مع العملاء الذين يرسلون changes كسلسلة JSON.
-  let incomingChanges = null;
-
-  if (Array.isArray(data)) {
-    incomingChanges = data;
-  } else if (data && Array.isArray(data.changes)) {
-    incomingChanges = data.changes;
-  } else if (data && typeof data.changes === "string") {
-    try {
-      const nestedChanges = JSON.parse(data.changes);
-      incomingChanges = Array.isArray(nestedChanges)
-        ? nestedChanges
-        : nestedChanges && Array.isArray(nestedChanges.changes)
-          ? nestedChanges.changes
-          : null;
-    } catch (error) {
-      incomingChanges = null;
-    }
-  }
-
-  if (!Array.isArray(incomingChanges) || incomingChanges.length > 500) {
-    throw new Error("قائمة التعديلات غير صحيحة");
+  if (!Array.isArray(incomingChanges) || incomingChanges.length === 0 ||
+      incomingChanges.length > 500) {
+    throw new Error("قائمة التعديلات غير صحيحة: يجب إرسال مصفوفة تضم من 1 إلى 500 تعديل.");
   }
 
   const allowedIds = [
