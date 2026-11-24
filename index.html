@@ -221,7 +221,9 @@
             }
         }
     </style>
-حديث. */
+
+<style>
+    /* ثبّت القسم الحالي قبل تحميل Tailwind حتى لا تظهر الرئيسية أو أقسام أخرى أثناء التحديث. */
     html[data-current-tab] .tab-content { display: none !important; }
 
     /* اضبط لون تبويب القسم المطلوب من أول رسم، دون انتظار switchTab. */
