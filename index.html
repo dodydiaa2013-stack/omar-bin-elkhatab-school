@@ -2268,7 +2268,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
             // أغلق نافذة رفع قوائم الفصول وألغِ أي ملفات اختيرت ولم تُرفع بعد.
             const scheduleModal = document.getElementById('scheduleModal');
-            if (scheduleModal) scheduleModal.classList.add('hidden');
+            if (scheduleModal) closeAccessibleModal(scheduleModal);
 
             document.querySelectorAll(
                 '#scheduleClassFiles input[type="file"], #tabletImgInput'
@@ -4413,7 +4413,7 @@ async function saveScheduleImage() {
 
     // متابعة الرفع برسالة بسيطة أسفل عنوان قوائم الفصول دون لوحة عائمة أو تفاصيل إضافية.
     if (status) status.textContent = 'جارٍ رفع قوائم الفصول...';
-    document.getElementById('scheduleModal').classList.add('hidden');
+    closeAccessibleModal(document.getElementById('scheduleModal'));
 
     let succeeded = 0;
     const failures = [];
