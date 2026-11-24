@@ -125,8 +125,15 @@ jobs:
         run: |
           set -euo pipefail
           git add page-changes-production.json index.html
+
+          # A no-op is valid: stop before requiring the payload file in the staged diff.
+          if git diff --cached --quiet; then
+            echo "No page text changes are needed."
+            exit 0
+          fi
+
           changed="$(git diff --cached --name-only)"
-          if ! printf '%s\n' "$changed" | grep -qx 'page-changes-production.json'; then
+          if ! printf '%s\\n' "$changed" | grep -qx 'page-changes-production.json'; then
             echo "The saved page-text payload must be part of the change."
             exit 1
           fi
@@ -136,9 +143,6 @@ jobs:
               *) echo "Unexpected changed file: $file"; exit 1 ;;
             esac
           done <<< "$changed"
-          if git diff --cached --quiet; then
-            echo "No page text changes are needed."
-            exit 0
           fi
 
       - name: Create or update validated text-only pull request
