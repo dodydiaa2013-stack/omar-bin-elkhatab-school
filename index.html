@@ -1794,10 +1794,19 @@ window.addEventListener('DOMContentLoaded', () => {
         const VALID_TAB_IDS = ['home', 'results', 'leaders', 'tablet', 'schedules', 'alerts', 'student-queries'];
 
         function initializeTabNavigation() {
-            const requested = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+            const decodeRequestedTab = () => {
+                try {
+                    return decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+                } catch (error) {
+                    console.warn('[Navigation] تجاهل عنوان قسم يحتوي على ترميز غير صالح.', error);
+                    return '';
+                }
+            };
+
+            const requested = decodeRequestedTab();
             switchTab(VALID_TAB_IDS.includes(requested) ? requested : 'home', { updateHistory: false, focus: false });
             window.addEventListener('popstate', () => {
-                const tabId = decodeURIComponent((window.location.hash || '').replace(/^#/, ''));
+                const tabId = decodeRequestedTab();
                 switchTab(VALID_TAB_IDS.includes(tabId) ? tabId : 'home', { updateHistory: false, focus: false });
             });
         }
@@ -2283,7 +2292,10 @@ window.addEventListener('DOMContentLoaded', () => {
             renderSchedules();
 
             const albumEditor = document.getElementById('photoAlbumEditor');
-            if (albumEditor) albumEditor.classList.add('hidden');
+            if (albumEditor) {
+                albumEditor.__returnFocus = null;
+                closeAccessibleModal(albumEditor);
+            }
 
             const albumImagesInput = document.getElementById('photoAlbumImagesInput');
             if (albumImagesInput) albumImagesInput.value = '';
@@ -4722,6 +4734,7 @@ async function deleteScheduleImage(cls) {
         let photoAlbumsLoadPromise = null;
         const PHOTO_ALBUMS_CACHE_KEY = 'obk_photo_albums_cache_v1';
         let currentPhotoAlbumId = null;
+        let photoAlbumOpenRequestId = 0;
         let photoAlbumEditId = null;
 
         function photoAlbumEscape(value) {
@@ -4748,6 +4761,12 @@ async function deleteScheduleImage(cls) {
 
         function contentItemId(item) {
             return String(item && (item.id || item.fileId) || '');
+        }
+
+        // Serialize reorder and bulk-delete operations within the same content scope.
+        function contentManagementOperationKey(scope, albumId) {
+            return 'photo-content-' + scope +
+                (scope === 'albumImages' ? '-' + String(albumId || '') : '');
         }
 
         function contentSelectionStatus(scope) {
@@ -4900,69 +4919,97 @@ async function deleteScheduleImage(cls) {
         }
 
         async function reorderContentItemTo(scope, sourceId, targetId) {
-            if (!hasDualAdminAuthorization() || !sourceId || !targetId || sourceId === targetId) return;
-            const items = getContentItems(scope);
-            const from = items.findIndex(item => contentItemId(item) === String(sourceId));
-            const to = items.findIndex(item => contentItemId(item) === String(targetId));
-            if (from < 0 || to < 0 || from === to) return;
-            const reordered = items.slice();
-            const moved = reordered.splice(from, 1)[0];
-            reordered.splice(to, 0, moved);
+            if (!hasDualAdminAuthorization() ||
+                !Object.prototype.hasOwnProperty.call(imageContentSelections, scope) ||
+                !sourceId || !targetId || sourceId === targetId) return;
+
             const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
-            const statusId = scope === 'gallery' ? 'googleSignInStatus'
-                : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
-            const status = document.getElementById(statusId);
+            if (scope === 'albumImages' && !albumId) return;
+            const operationKey = contentManagementOperationKey(scope, albumId);
+            if (!beginImageOperation(operationKey)) return;
+
             try {
-                if (status) status.textContent = 'جارٍ حفظ الترتيب الجديد...';
-                await photoAlbumPost('savePhotoContentOrder', {
-                    scope: scope, albumId: albumId,
-                    ids: JSON.stringify(reordered.map(contentItemId))
-                });
-                if (scope === 'gallery') tabletGalleryCache = reordered;
-                else if (scope === 'albums') photoAlbumsCache = reordered;
-                else {
-                    const album = photoAlbumsCache.find(item => String(item.id) === albumId);
-                    if (album) album.images = reordered;
+                const items = getContentItems(scope);
+                const from = items.findIndex(item => contentItemId(item) === String(sourceId));
+                const to = items.findIndex(item => contentItemId(item) === String(targetId));
+                if (from < 0 || to < 0 || from === to) return;
+
+                const reordered = items.slice();
+                const moved = reordered.splice(from, 1)[0];
+                reordered.splice(to, 0, moved);
+                const statusId = scope === 'gallery' ? 'googleSignInStatus'
+                    : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
+                const status = document.getElementById(statusId);
+
+                try {
+                    if (status) status.textContent = 'جارٍ حفظ الترتيب الجديد...';
+                    await photoAlbumPost('savePhotoContentOrder', {
+                        scope: scope,
+                        albumId: albumId,
+                        ids: JSON.stringify(reordered.map(contentItemId))
+                    });
+                    if (scope === 'gallery') tabletGalleryCache = reordered;
+                    else if (scope === 'albums') photoAlbumsCache = reordered;
+                    else {
+                        const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+                        if (album) album.images = reordered;
+                    }
+                    renderContentScope(scope);
+                    if (status) status.textContent = 'تم حفظ الترتيب الجديد بنجاح.';
+                } catch (error) {
+                    if (status) status.textContent = 'تعذر حفظ الترتيب: ' + error.message;
+                    alert('لم يتم تغيير الترتيب على الموقع: ' + error.message);
                 }
-                renderContentScope(scope);
-                if (status) status.textContent = 'تم حفظ الترتيب الجديد بنجاح.';
-            } catch (error) {
-                if (status) status.textContent = 'تعذر حفظ الترتيب: ' + error.message;
-                alert('لم يتم تغيير الترتيب على الموقع: ' + error.message);
+            } finally {
+                endImageOperation(operationKey);
             }
         }
 
         async function moveContentItem(scope, itemId, direction) {
-            if (!hasDualAdminAuthorization()) return;
-            const items = getContentItems(scope);
-            const from = items.findIndex(item => contentItemId(item) === String(itemId));
-            const to = from + Number(direction);
-            if (from < 0 || to < 0 || to >= items.length) return;
-            const reordered = items.slice();
-            const moved = reordered.splice(from, 1)[0];
-            reordered.splice(to, 0, moved);
+            if (!hasDualAdminAuthorization() ||
+                !Object.prototype.hasOwnProperty.call(imageContentSelections, scope)) return;
+
             const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
-            const statusId = scope === 'gallery' ? 'googleSignInStatus'
-                : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
-            const status = document.getElementById(statusId);
+            if (scope === 'albumImages' && !albumId) return;
+            const operationKey = contentManagementOperationKey(scope, albumId);
+            if (!beginImageOperation(operationKey)) return;
+
             try {
-                if (status) status.textContent = 'جارٍ حفظ الترتيب الجديد...';
-                await photoAlbumPost('savePhotoContentOrder', {
-                    scope: scope,
-                    albumId: albumId,
-                    ids: JSON.stringify(reordered.map(contentItemId))
-                });
-                if (scope === 'gallery') tabletGalleryCache = reordered;
-                else if (scope === 'albums') photoAlbumsCache = reordered;
-                else {
-                    const album = photoAlbumsCache.find(item => String(item.id) === albumId);
-                    if (album) album.images = reordered;
+                const items = getContentItems(scope);
+                const from = items.findIndex(item => contentItemId(item) === String(itemId));
+                const step = Number(direction);
+                if (!Number.isInteger(step) || Math.abs(step) !== 1) return;
+                const to = from + step;
+                if (from < 0 || to < 0 || to >= items.length) return;
+
+                const reordered = items.slice();
+                const moved = reordered.splice(from, 1)[0];
+                reordered.splice(to, 0, moved);
+                const statusId = scope === 'gallery' ? 'googleSignInStatus'
+                    : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
+                const status = document.getElementById(statusId);
+
+                try {
+                    if (status) status.textContent = 'جارٍ حفظ الترتيب الجديد...';
+                    await photoAlbumPost('savePhotoContentOrder', {
+                        scope: scope,
+                        albumId: albumId,
+                        ids: JSON.stringify(reordered.map(contentItemId))
+                    });
+                    if (scope === 'gallery') tabletGalleryCache = reordered;
+                    else if (scope === 'albums') photoAlbumsCache = reordered;
+                    else {
+                        const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+                        if (album) album.images = reordered;
+                    }
+                    renderContentScope(scope);
+                    if (status) status.textContent = 'تم حفظ الترتيب الجديد.';
+                } catch (error) {
+                    if (status) status.textContent = 'تعذر حفظ الترتيب: ' + error.message;
+                    alert('لم يتم تغيير الترتيب على الموقع: ' + error.message);
                 }
-                renderContentScope(scope);
-                if (status) status.textContent = 'تم حفظ الترتيب الجديد.';
-            } catch (error) {
-                if (status) status.textContent = 'تعذر حفظ الترتيب: ' + error.message;
-                alert('لم يتم تغيير الترتيب على الموقع: ' + error.message);
+            } finally {
+                endImageOperation(operationKey);
             }
         }
 
@@ -4971,6 +5018,8 @@ async function deleteScheduleImage(cls) {
                 alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
                 return;
             }
+            if (!Object.prototype.hasOwnProperty.call(imageContentSelections, scope)) return;
+
             const ids = Array.from(imageContentSelections[scope]);
             if (!ids.length) {
                 alert('حدد عنصرًا واحدًا على الأقل أولًا.');
@@ -4979,50 +5028,60 @@ async function deleteScheduleImage(cls) {
             const noun = scope === 'albums' ? 'ألبومًا' : 'صورة';
             if (!confirm('سيتم نقل ' + ids.length + ' ' + noun + ' محدد إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
 
-            if (scope === 'gallery') hideTabletImageUploadProgress();
-
             const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
+            if (scope === 'albumImages' && !albumId) return;
+            const operationKey = contentManagementOperationKey(scope, albumId);
+            if (!beginImageOperation(operationKey)) return;
+
             const statusId = scope === 'gallery' ? 'googleSignInStatus'
                 : scope === 'albums' ? 'photoAlbumsStatus' : 'photoAlbumViewerMeta';
             const status = document.getElementById(statusId);
 
-            // Keep the server deletion result separate from the subsequent UI refresh.
             try {
-                if (status) status.textContent = 'جارٍ حذف العناصر المحددة...';
-                await photoAlbumPost('bulkDeletePhotoContent', {
-                    scope: scope,
-                    albumId: albumId,
-                    ids: JSON.stringify(ids)
-                });
-            } catch (error) {
-                if (status) status.textContent = 'تعذر حذف العناصر المحددة: ' + error.message;
-                alert('تعذر حذف العناصر المحددة: ' + error.message);
-                return;
-            }
+                if (scope === 'gallery') hideTabletImageUploadProgress();
 
-            // The server has confirmed deletion. Never report deletion failure
-            // merely because refreshing the visible list fails afterward.
-            imageContentSelections[scope].clear();
-            if (status) status.textContent = 'تم حذف العناصر المحددة ونقلها إلى سلة مهملات Google Drive.';
-            contentSelectionStatus(scope);
+                // Keep the server deletion result separate from the subsequent UI refresh.
+                try {
+                    if (status) status.textContent = 'جارٍ حذف العناصر المحددة...';
+                    await photoAlbumPost('bulkDeletePhotoContent', {
+                        scope: scope,
+                        albumId: albumId,
+                        ids: JSON.stringify(ids)
+                    });
+                } catch (error) {
+                    if (status) status.textContent = 'تعذر حذف العناصر المحددة: ' + error.message;
+                    alert('تعذر حذف العناصر المحددة: ' + error.message);
+                    return;
+                }
 
-            try {
-                if (scope === 'gallery') {
-                    const images = await fetchTabletGalleryImages();
-                    tabletGalleryCache = images;
-                    await renderTabletGallery(images);
-                } else {
-                    await loadPhotoAlbums();
-                    if (scope === 'albumImages' && albumId) {
-                        const album = photoAlbumsCache.find(item => String(item.id) === albumId);
-                        if (album) openPhotoAlbum(album.id);
+                // The server has confirmed deletion. Never report deletion failure
+                // merely because refreshing the visible list fails afterward.
+                imageContentSelections[scope].clear();
+                if (status) status.textContent = 'تم حذف العناصر المحددة ونقلها إلى سلة مهملات Google Drive.';
+                contentSelectionStatus(scope);
+
+                try {
+                    if (scope === 'gallery') {
+                        const images = await fetchTabletGalleryImages();
+                        tabletGalleryCache = images;
+                        await renderTabletGallery(images);
+                    } else {
+                        await loadPhotoAlbums();
+                        if (scope === 'albumImages' && albumId) {
+                            const album = photoAlbumsCache.find(item => String(item.id) === albumId);
+                            if (album && String(currentPhotoAlbumId || '') === albumId) {
+                                await openPhotoAlbum(album.id);
+                            }
+                        }
+                    }
+                } catch (refreshError) {
+                    console.error('تم الحذف بنجاح، لكن تعذر تحديث عرض المحتوى:', refreshError);
+                    if (status) {
+                        status.textContent = 'تم الحذف بنجاح، لكن تعذر تحديث العرض الآن. أعد تحميل القسم لرؤية التغييرات.';
                     }
                 }
-            } catch (refreshError) {
-                console.error('تم الحذف بنجاح، لكن تعذر تحديث عرض المحتوى:', refreshError);
-                if (status) {
-                    status.textContent = 'تم الحذف بنجاح، لكن تعذر تحديث العرض الآن. أعد تحميل القسم لرؤية التغييرات.';
-                }
+            } finally {
+                endImageOperation(operationKey);
             }
         }
 
@@ -5341,6 +5400,8 @@ async function refreshPhotoAlbums(button) {
             let album = photoAlbumsCache.find(item => String(item.id) === String(albumId));
             if (!album) return;
 
+            const requestId = ++photoAlbumOpenRequestId;
+            const requestedAlbumId = String(album.id);
             currentPhotoAlbumId = album.id;
             const viewer = document.getElementById('photoAlbumViewer');
             const grid = document.getElementById('photoAlbumImagesGrid');
@@ -5361,12 +5422,19 @@ async function refreshPhotoAlbums(button) {
                     photoAlbumsLoadedOnce = true;
                     photoAlbumsFreshFetched = true;
                     savePhotoAlbumsLocalCache(albums);
+
+                    // A later album selection (or closing the viewer) supersedes this request.
+                    if (requestId !== photoAlbumOpenRequestId ||
+                        String(currentPhotoAlbumId || '') !== requestedAlbumId) return;
+
                     renderPhotoAlbums();
-                    album = photoAlbumsCache.find(item => String(item.id) === String(albumId));
+                    album = photoAlbumsCache.find(item => String(item.id) === requestedAlbumId);
                     if (!album) throw new Error('الألبوم لم يعد موجودًا.');
                     document.getElementById('photoAlbumViewerTitle').textContent = album.title || 'ألبوم الصور';
                     document.getElementById('photoAlbumViewerMeta').textContent = album.description || '';
                 } catch (error) {
+                    if (requestId !== photoAlbumOpenRequestId ||
+                        String(currentPhotoAlbumId || '') !== requestedAlbumId) return;
                     grid.innerHTML = '<p class="col-span-full py-8 text-center text-red-600">' +
                         photoAlbumEscape(error.message || 'تعذر تحميل صور الألبوم.') + '</p>';
                     viewer.scrollIntoView({behavior:'smooth',block:'start'});
@@ -5374,11 +5442,14 @@ async function refreshPhotoAlbums(button) {
                 }
             }
 
+            if (requestId !== photoAlbumOpenRequestId ||
+                String(currentPhotoAlbumId || '') !== requestedAlbumId) return;
             renderPhotoAlbumImages(album);
             viewer.scrollIntoView({behavior:'smooth',block:'start'});
         }
 
         function closePhotoAlbumViewer() {
+            photoAlbumOpenRequestId++;
             currentPhotoAlbumId = null;
             document.getElementById('photoAlbumViewer').classList.add('hidden');
             document.getElementById('photoAlbumsGrid').classList.remove('hidden');
