@@ -1585,6 +1585,10 @@ function doGet(e) {
   return getGalleryUploadStatus(p);
 }
 
+  if (action === "scheduleUploadStatus") {
+    return getScheduleUploadStatus(p);
+  }
+
   if (action === "gallery") {
     const images = getGalleryImages();
 
@@ -2106,31 +2110,30 @@ function deleteGalleryImage(p) {
 ========================= */
 
 function uploadScheduleImage(p) {
+  p = p || {};
   const startedAt = Date.now();
   const timings = {};
-  const mark = (name, start) => {
-    timings[name] = Date.now() - start;
-  };
-
+  const mark = (name, start) => { timings[name] = Date.now() - start; };
+  const nonce = String(p.nonce || "");
+  const validNonce = /^[A-Za-z0-9_-]{10,120}$/.test(nonce);
   const lock = LockService.getScriptLock();
   let lockAcquired = false;
   let newFile = null;
   let uploadCompleted = false;
 
   try {
+    if (!validNonce) throw new Error("رقم طلب رفع القائمة غير صالح");
+
     let t = Date.now();
     verifyAdminToken(p.token || "");
     verifyAdminSession(p.adminSessionToken || "");
     mark("التحقق من الصلاحيات", t);
 
-    const className = p.className || "";
+    const className = String(p.className || "").trim();
     const fileName = getSafeFileName(p.fileName);
     const mimeType = p.mimeType || "";
     const data = p.data || "";
-
-    if (!isAllowedClass(className)) {
-      throw new Error("الفصل المحدد غير مسموح به");
-    }
+    if (!isAllowedClass(className)) throw new Error("الفصل المحدد غير مسموح به");
     if (!data) throw new Error("لم يتم إرسال صورة");
 
     t = Date.now();
@@ -2138,14 +2141,29 @@ function uploadScheduleImage(p) {
     mark("فك بيانات الصورة", t);
 
     t = Date.now();
-    lock.waitLock(20000);
+    lock.waitLock(25000);
     lockAcquired = true;
     mark("انتظار القفل", t);
+
+    cleanupOldScheduleUploadResults_();
+    const props = PropertiesService.getScriptProperties();
+    const resultKey = "SCHEDULE_UPLOAD_RESULT_" + nonce;
+    const previous = props.getProperty(resultKey);
+    if (previous) {
+      try {
+        const saved = JSON.parse(previous);
+        if (saved.savedAt && Date.now() - saved.savedAt < 10 * 60 * 1000) {
+          return scheduleUploadPostMessage(p, saved.result || {
+            success: false, message: "تم العثور على نتيجة سابقة غير مكتملة."
+          });
+        }
+      } catch (ignored) {}
+      props.deleteProperty(resultKey);
+    }
 
     t = Date.now();
     const folder = getScheduleFolder();
     const blob = Utilities.newBlob(bytes, mimeType, fileName);
-
     newFile = folder.createFile(blob);
     mark("إنشاء الملف في Drive", t);
 
@@ -2156,23 +2174,16 @@ function uploadScheduleImage(p) {
     t = Date.now();
     setPublicImage(newFile);
     mark("ضبط صلاحيات الصورة", t);
-
     uploadCompleted = true;
 
     t = Date.now();
     const files = folder.getFiles();
-    let scanned = 0;
-    let deleted = 0;
-    let deleteErrors = 0;
-
+    let scanned = 0, deleted = 0, deleteErrors = 0;
     while (files.hasNext()) {
       const oldFile = files.next();
       scanned++;
-
-      if (
-        oldFile.getId() !== newFile.getId() &&
-        (oldFile.getDescription() || "") === "CLASS:" + className
-      ) {
+      if (oldFile.getId() !== newFile.getId() &&
+          (oldFile.getDescription() || "") === "CLASS:" + className) {
         try {
           oldFile.setTrashed(true);
           deleted++;
@@ -2182,20 +2193,12 @@ function uploadScheduleImage(p) {
         }
       }
     }
-
     mark("البحث عن الصور القديمة وحذفها", t);
-
     timings["عدد الملفات التي تم فحصها"] = scanned;
     timings["عدد الملفات القديمة المحذوفة"] = deleted;
     timings["عدد أخطاء الحذف"] = deleteErrors;
 
-    console.log(
-      "تشخيص رفع الفصل " + className + ": " +
-      JSON.stringify(timings)
-    );
-    console.log("إجمالي زمن العملية: " + (Date.now() - startedAt) + " ms");
-
-    return scheduleUploadPostMessage(p, {
+    const result = {
       success: true,
       message: deleteErrors
         ? "تم رفع الصورة الجديدة، وتعذر حذف إحدى الصور القديمة."
@@ -2204,72 +2207,81 @@ function uploadScheduleImage(p) {
       fileId: newFile.getId(),
       fileName: newFile.getName(),
       url: getImageUrl(newFile.getId())
-    });
+    };
+    props.setProperty(resultKey, JSON.stringify({ savedAt: Date.now(), result: result }));
+
+    console.log("تشخيص رفع الفصل " + className + ": " + JSON.stringify(timings));
+    console.log("إجمالي زمن العملية: " + (Date.now() - startedAt) + " ms");
+    return scheduleUploadPostMessage(p, result);
 
   } catch (error) {
     if (newFile && !uploadCompleted) {
-      try {
-        newFile.setTrashed(true);
-      } catch (cleanupError) {
-        console.error(cleanupError);
-      }
+      try { newFile.setTrashed(true); } catch (cleanupError) { console.error(cleanupError); }
     }
-
-    console.error("خطأ رفع الفصل: " + error.message);
-    console.error("الأزمنة: " + JSON.stringify(timings));
-    console.error("إجمالي الزمن: " + (Date.now() - startedAt) + " ms");
-
-    return scheduleUploadPostMessage(p, {
+    const result = {
       success: false,
       message: error.message || "تعذر رفع قائمة الفصل"
-    });
-
+    };
+    if (lockAcquired && validNonce) {
+      try {
+        PropertiesService.getScriptProperties().setProperty(
+          "SCHEDULE_UPLOAD_RESULT_" + nonce,
+          JSON.stringify({ savedAt: Date.now(), result: result })
+        );
+      } catch (saveError) {
+        console.error("تعذر حفظ نتيجة رفع الفصل: " + saveError.message);
+      }
+    }
+    console.error("خطأ رفع الفصل: " + result.message);
+    console.error("الأزمنة: " + JSON.stringify(timings));
+    console.error("إجمالي زمن العملية: " + (Date.now() - startedAt) + " ms");
+    return scheduleUploadPostMessage(p, result);
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
 }
 
+
 function deleteScheduleImage(p) {
-  verifyAdminToken(p.token || "");
-verifyAdminSession(p.adminSessionToken || "");
-  const fileId = p.fileId || "";
-  const className = p.className || "";
+  p = p || {};
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+  try {
+    verifyAdminToken(p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+    const fileId = String(p.fileId || "").trim();
+    const className = String(p.className || "").trim();
+    if (!fileId || !isAllowedClass(className)) {
+      throw new Error("بيانات حذف القائمة غير صحيحة");
+    }
 
-  if (!fileId || !isAllowedClass(className)) {
-    throw new Error("بيانات حذف القائمة غير صحيحة");
+    lock.waitLock(20000);
+    lockAcquired = true;
+    const folder = getScheduleFolder();
+    const file = DriveApp.getFileById(fileId);
+    if (!isFileInsideFolder(file, folder.getId())) {
+      throw new Error("الصورة ليست داخل مجلد قوائم الفصول");
+    }
+    if (!file.getMimeType().startsWith("image/")) {
+      throw new Error("الملف المحدد ليس صورة");
+    }
+    if (file.getDescription() !== "CLASS:" + className) {
+      throw new Error("الصورة لا تخص الفصل المحدد");
+    }
+
+    file.setTrashed(true);
+    if (!file.isTrashed()) throw new Error("لم يتم تأكيد نقل القائمة إلى سلة المهملات");
+    return jsonOutput({
+      success: true,
+      message: "تم حذف قائمة الفصل بنجاح",
+      className: className,
+      fileId: fileId
+    });
+  } finally {
+    if (lockAcquired) lock.releaseLock();
   }
-
-  const folder = getScheduleFolder();
-  const file = DriveApp.getFileById(fileId);
-
-  if (!isFileInsideFolder(file, folder.getId())) {
-    throw new Error("الصورة ليست داخل مجلد قوائم الفصول");
-  }
-
-  if (!file.getMimeType().startsWith("image/")) {
-    throw new Error("الملف المحدد ليس صورة");
-  }
-
-  if (file.getDescription() !== "CLASS:" + className) {
-    throw new Error("الصورة لا تخص الفصل المحدد");
-  }
-
-  file.setTrashed(true);
-
-  return jsonOutput({
-    success: true,
-    message: "تم حذف قائمة الفصل بنجاح",
-    className: className
-  });
 }
 
-
-/* =========================
-   التحقق من وجود الملف داخل مجلد محدد
-========================= */
-/* =========================================
-   الحذف الجماعي الآمن لقوائم الفصول
-========================================= */
 
 function bulkDeleteSchedules(p) {
   p = p || {};
@@ -3961,6 +3973,68 @@ function getGalleryUploadStatus(p) {
     }, callback);
   }
 }
+function cleanupOldScheduleUploadResults_() {
+  const props = PropertiesService.getScriptProperties();
+  const all = props.getProperties();
+  const prefix = "SCHEDULE_UPLOAD_RESULT_";
+  const now = Date.now();
+  const maxAge = 10 * 60 * 1000;
+
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf(prefix) !== 0) return;
+    try {
+      const saved = JSON.parse(all[key]);
+      if (!saved.savedAt || now - saved.savedAt >= maxAge) {
+        props.deleteProperty(key);
+      }
+    } catch (error) {
+      props.deleteProperty(key);
+    }
+  });
+}
+
+function getScheduleUploadStatus(p) {
+  p = p || {};
+  const nonce = String(p.nonce || "");
+  const callback = String(p.callback || "");
+  const origin = String(p.origin || "");
+
+  if (!ALLOWED_PAGE_ORIGINS.includes(origin)) {
+    return outputWithCallback({ success: false, found: false, message: "مصدر الطلب غير مسموح" }, callback);
+  }
+  if (!/^[A-Za-z0-9_-]{10,120}$/.test(nonce)) {
+    return outputWithCallback({ success: false, found: false, message: "رقم الطلب غير صالح" }, callback);
+  }
+
+  try {
+    verifyAdminToken(p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+  } catch (error) {
+    return outputWithCallback({ success: false, found: false, message: error.message || "انتهت جلسة المسؤول" }, callback);
+  }
+
+  cleanupOldScheduleUploadResults_();
+  const props = PropertiesService.getScriptProperties();
+  const key = "SCHEDULE_UPLOAD_RESULT_" + nonce;
+  const savedValue = props.getProperty(key);
+
+  if (!savedValue) {
+    return outputWithCallback({ success: true, found: false }, callback);
+  }
+
+  try {
+    const saved = JSON.parse(savedValue);
+    if (!saved.savedAt || Date.now() - saved.savedAt >= 10 * 60 * 1000) {
+      props.deleteProperty(key);
+      return outputWithCallback({ success: true, found: false }, callback);
+    }
+    return outputWithCallback({ success: true, found: true, result: saved.result || {} }, callback);
+  } catch (error) {
+    props.deleteProperty(key);
+    return outputWithCallback({ success: false, found: false, message: "تعذر قراءة نتيجة الرفع" }, callback);
+  }
+}
+
 function cleanupOldGalleryUploadResults_() {
   const props = PropertiesService.getScriptProperties();
   const all = props.getProperties();

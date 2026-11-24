@@ -3176,6 +3176,70 @@ async function waitForConfirmedImageState(fetchSnapshot, isConfirmed, descriptio
         ' خلال المهلة المحددة. حدّث القسم قبل إعادة المحاولة.' + detail);
 }
 
+function fetchScheduleUploadStatus(nonce) {
+    const callbackName = 'scheduleUploadStatus_' + Date.now() + '_' +
+        Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        let settled = false;
+        const cleanup = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            script.remove();
+            delete window[callbackName];
+        };
+        const timer = setTimeout(() => {
+            cleanup();
+            reject(new Error('انتهت مهلة الاستعلام عن نتيجة رفع قائمة الفصل.'));
+        }, 10000);
+        window[callbackName] = response => {
+            cleanup();
+            if (!response || response.success !== true) {
+                reject(new Error((response && response.message) || 'تعذر الاستعلام عن نتيجة الرفع.'));
+                return;
+            }
+            resolve(response);
+        };
+        script.onerror = () => {
+            cleanup();
+            reject(new Error('تعذر الاتصال بخدمة التحقق من رفع قائمة الفصل.'));
+        };
+        const params = [
+            'action=scheduleUploadStatus',
+            'nonce=' + encodeURIComponent(nonce),
+            'origin=' + encodeURIComponent(window.location.origin),
+            'token=' + encodeURIComponent(googleUploadToken || ''),
+            'adminSessionToken=' + encodeURIComponent(window.adminSessionToken || ''),
+            'callback=' + encodeURIComponent(callbackName),
+            '_=' + Date.now()
+        ].join('&');
+        script.src = GOOGLE_SCRIPT_URL + '?' + params;
+        document.body.appendChild(script);
+    });
+}
+
+async function confirmScheduleUploadAfterTimeout(nonce) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+        try {
+            const response = await fetchScheduleUploadStatus(nonce);
+            if (response.found === true) {
+                if (response.result && response.result.success === true) return response.result;
+                throw new Error((response.result && response.result.message) || 'أكد الخادم فشل رفع القائمة.');
+            }
+        } catch (error) {
+            lastError = error;
+            if (error && /أكد الخادم فشل/.test(error.message || '')) throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+    throw new Error(
+        'لم يصل تأكيد الرفع ولم تظهر نتيجة محفوظة بعد. لا تعِد رفع الصورة الآن؛ حدّث قوائم الفصول أولًا للتحقق من حالتها.' +
+        (lastError && lastError.message ? ' (' + lastError.message + ')' : '')
+    );
+}
+
 function fetchSchedulesSnapshot() {
     const callbackName = 'schoolSchedulesVerify_' + Date.now() + '_' +
         Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
@@ -4341,7 +4405,6 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
             mimeType: file.type,
             data: data
         };
-
         Object.entries(fields).forEach(([name, value]) => {
             const field = document.createElement('input');
             field.type = 'hidden';
@@ -4373,8 +4436,14 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
                 finish(reject, new Error((message.result && message.result.message) || 'فشل رفع الصورة.'));
             }
         };
-        const timeout = setTimeout(() => {
-            finish(reject, new Error('انتهت مهلة انتظار تأكيد رفع ' + file.name));
+        const timeout = setTimeout(async () => {
+            if (settled) return;
+            try {
+                const result = await confirmScheduleUploadAfterTimeout(nonce);
+                finish(resolve, result);
+            } catch (error) {
+                finish(reject, error);
+            }
         }, 90000);
 
         window.addEventListener('message', onMessage);
@@ -4384,13 +4453,13 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
     }));
 }
 
+
 async function saveScheduleImage() {
     const status = document.getElementById('scheduleOperationStatus');
     const button = document.getElementById('scheduleUploadButton');
     const fileInputs = Array.from(document.querySelectorAll('#scheduleClassFiles input[type="file"]'));
 
-    if (isAdminLoggedIn !== true || isDeveloperLoggedIn !== true ||
-        !googleUploadToken || !window.adminSessionToken) {
+    if (!hasDualAdminAuthorization() || !googleUploadToken || !window.adminSessionToken) {
         alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
         return;
     }
@@ -4400,7 +4469,6 @@ async function saveScheduleImage() {
         className: input.dataset.className,
         input: input
     }));
-
     if (!jobs.length) {
         alert('اختر صورة لفصل واحد على الأقل.');
         return;
@@ -4420,57 +4488,61 @@ async function saveScheduleImage() {
     const summary = jobs.map(job => 'فصل ' + job.className + ': ' + job.file.name).join('\n');
     if (!confirm('سيتم حفظ ' + jobs.length + ' قائمة للفصول المحددة، كل صورة في فصلها، بضغطة واحدة.\n\n' + summary + '\n\nهل تريد المتابعة؟')) return;
 
+    const operationKey = 'schedule-management';
+    if (!beginImageOperation(operationKey)) {
+        if (status) status.textContent = 'توجد عملية أخرى لقوائم الفصول قيد التنفيذ. انتظر اكتمالها.';
+        return;
+    }
+
     button.disabled = true;
     fileInputs.forEach(input => input.disabled = true);
-
-    // متابعة الرفع برسالة بسيطة أسفل عنوان قوائم الفصول دون لوحة عائمة أو تفاصيل إضافية.
     if (status) status.textContent = 'جارٍ رفع قوائم الفصول...';
     closeAccessibleModal(document.getElementById('scheduleModal'));
 
     let succeeded = 0;
     const failures = [];
-
-    // تجهيز كل صورة عند دورها فقط لتقليل استهلاك الذاكرة على الهاتف.
-    for (let i = 0; i < jobs.length; i++) {
-        const job = jobs[i];
-        if (status) status.textContent = 'جارٍ حفظ قائمة فصل ' + job.className + ' (' + (i + 1) + ' من ' + jobs.length + ')';
-
-        let preparedImage = null;
-        try {
-            preparedImage = await prepareImageUploadData(job.file, readScheduleFileAsBase64);
-
-            // لا يبدأ الفصل التالي إلا بعد تأكيد نجاح الرفع الحالي.
-            await uploadOneScheduleFile(job.file, job.className, i, preparedImage);
-            succeeded++;
-
-            // تحديث العرض بعد الحفظ، دون تحويل فشل القراءة إلى فشل في عملية الرفع.
+    try {
+        for (let i = 0; i < jobs.length; i++) {
+            const job = jobs[i];
+            if (status) status.textContent = 'جارٍ حفظ قائمة فصل ' + job.className + ' (' + (i + 1) + ' من ' + jobs.length + ')';
+            let preparedImage = null;
             try {
-                const refreshedSchedules = await fetchSchedulesSnapshot();
-                driveSchedules = refreshedSchedules;
-                renderSchedules();
-            } catch (refreshError) {
-                console.warn('تم حفظ قائمة الفصل لكن تعذر تحديث العرض تلقائيًا:', refreshError);
+                preparedImage = await prepareImageUploadData(job.file, readScheduleFileAsBase64);
+                await uploadOneScheduleFile(job.file, job.className, i, preparedImage);
+                succeeded++;
+                try {
+                    const refreshedSchedules = await fetchSchedulesSnapshot();
+                    driveSchedules = refreshedSchedules;
+                    renderSchedules();
+                } catch (refreshError) {
+                    console.warn('تم حفظ قائمة الفصل لكن تعذر تحديث العرض تلقائيًا:', refreshError);
+                }
+            } catch (error) {
+                failures.push(job.className);
+                console.error('تعذر حفظ قائمة فصل ' + job.className + ':', error);
+            } finally {
+                preparedImage = null;
             }
-        } catch (error) {
-            failures.push(job.className);
-            console.error('تعذر حفظ قائمة فصل ' + job.className + ':', error);
-        } finally {
-            // تحرير مرجع بيانات Base64 قبل الانتقال للصورة التالية.
-            preparedImage = null;
         }
-    }
 
-    if (status) {
-        status.textContent = 'اكتمل الحفظ: ' + succeeded + ' ناجح، ' + failures.length + ' فشل.';
-    }
-    fileInputs.forEach(input => input.disabled = false);
-    button.disabled = false;
-    await loadSchedulesFromDrive();
-
-    if (!failures.length) {
-        fileInputs.forEach(input => { input.value = ''; });
+        if (status) {
+            status.textContent = 'اكتمل الحفظ: ' + succeeded + ' ناجح، ' + failures.length + ' فشل.' +
+                (failures.length ? ' راجع حالة الفصول قبل إعادة محاولة أي رفع غير مؤكد.' : '');
+        }
+        try {
+            await loadSchedulesFromDrive();
+        } catch (refreshError) {
+            console.warn('انتهى رفع قوائم الفصول، لكن تعذر تحديث العرض النهائي:', refreshError);
+            if (status) status.textContent += ' تعذر تحديث العرض تلقائيًا؛ استخدم زر تحديث القوائم.';
+        }
+        if (!failures.length) fileInputs.forEach(input => { input.value = ''; });
+    } finally {
+        fileInputs.forEach(input => input.disabled = false);
+        button.disabled = false;
+        endImageOperation(operationKey);
     }
 }
+
 
 async function replaceScheduleImage(className, triggerButton) {
     if (!hasDualAdminAuthorization()) {
@@ -4502,7 +4574,7 @@ async function replaceScheduleImage(className, triggerButton) {
             return;
         }
 
-        const operationKey = 'schedule-replace-' + className;
+        const operationKey = 'schedule-management';
         if (!beginImageOperation(operationKey)) return;
 
         const status = document.getElementById('scheduleOperationStatus');
@@ -4554,7 +4626,7 @@ async function deleteScheduleImage(cls) {
     if (!item || !item.id) { alert('لم يتم العثور على صورة هذا الفصل.'); return; }
     if (!confirm('هل أنت متأكد من حذف قائمة فصل ' + cls + ' نهائياً؟')) return;
 
-    const operationKey = 'schedule-delete-' + cls;
+    const operationKey = 'schedule-management';
     if (!beginImageOperation(operationKey)) return;
     let frame = null;
     let form = null;
@@ -4665,7 +4737,7 @@ async function deleteScheduleImage(cls) {
             if (!confirm('سيتم نقل ' + selections.length + ' قائمة محددة (' + summary +
                 ') إلى سلة مهملات Google Drive. ويمكن استعادتها من درايف. هل تريد المتابعة؟')) return;
 
-            const operationKey = 'schedule-bulk-delete';
+            const operationKey = 'schedule-management';
             if (!beginImageOperation(operationKey)) return;
             let frame = null;
             let form = null;
