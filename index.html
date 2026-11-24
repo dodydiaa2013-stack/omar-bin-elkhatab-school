@@ -181,7 +181,8 @@
         }
 
         body {
-            font-family: 'Cairo', sans-serif;
+            /* Cairo هو الخط الأساسي؛ Tahoma يقلل اختلاف شكل العربية أثناء تحميله. */
+            font-family: 'Cairo', Tahoma, Arial, sans-serif;
             background-color: #f8fafc;
         }
         /* Custom Ticker Animation */
@@ -220,9 +221,7 @@
             }
         }
     </style>
-
-<style>
-    /* ثبّت القسم الحالي قبل تحميل Tailwind حتى لا تظهر الرئيسية أو أقسام أخرى أثناء التحديث. */
+حديث. */
     html[data-current-tab] .tab-content { display: none !important; }
 
     /* اضبط لون تبويب القسم المطلوب من أول رسم، دون انتظار switchTab. */
