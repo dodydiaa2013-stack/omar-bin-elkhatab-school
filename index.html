@@ -1066,8 +1066,8 @@
                     <div id="photoAlbumImagesGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
                 </div>
             </div>
-            <div id="photoAlbumEditor" class="hidden fixed inset-0 z-[80] bg-slate-950/70 p-4 flex items-center justify-center">
-                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div id="photoAlbumEditor" class="hidden fixed inset-0 z-[80] bg-slate-950/70 p-4 flex items-center justify-center" aria-hidden="true">
+                <div role="dialog" aria-modal="true" aria-labelledby="photoAlbumEditorTitle" tabindex="-1" class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
                     <div class="flex justify-between items-center">
                         <h3 id="photoAlbumEditorTitle" class="font-extrabold text-lg text-navy">إضافة ألبوم جديد</h3>
                         <button type="button" onclick="closePhotoAlbumEditor()" class="text-slate-500 text-xl" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
@@ -1129,8 +1129,8 @@
     </footer>
 
     <!-- TEACHER LOGIN MODAL -->
-    <div id="adminModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-2 border-gold space-y-5 relative">
+    <div id="adminModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4" aria-hidden="true">
+        <div role="dialog" aria-modal="true" aria-labelledby="adminModalTitle" tabindex="-1" class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-2 border-gold space-y-5 relative">
             <button type="button" aria-label="إغلاق نافذة تسجيل الدخول" onclick="toggleAdminModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
                 <i class="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -1138,7 +1138,7 @@
                 <div class="w-12 h-12 bg-amber-100 text-gold rounded-full flex items-center justify-center mx-auto text-2xl">
                     <i class="fa-solid fa-lock"></i>
                 </div>
-                <h3 class="text-xl font-extrabold text-navy">تسجيل دخول المعلم / المطور</h3>
+                <h3 id="adminModalTitle" class="text-xl font-extrabold text-navy">تسجيل دخول المعلم / المطور</h3>
                 <p class="text-xs text-slate-500">أدخل الرقم السري لتفعيل لوحة التعديل ورفع النتائج</p>
             </div>
             <form id="adminLoginForm" class="space-y-3" onsubmit="event.preventDefault(); verifyAdminPassword();">
@@ -1180,12 +1180,12 @@
     </div>
 
     <!-- SCHEDULE UPLOAD MODAL FOR TEACHER -->
-    <div id="scheduleModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 relative">
-            <button onclick="toggleScheduleUploadModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
+    <div id="scheduleModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4" aria-hidden="true">
+        <div role="dialog" aria-modal="true" aria-labelledby="scheduleModalTitle" tabindex="-1" class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 relative">
+            <button type="button" aria-label="إغلاق نافذة قوائم الفصول" onclick="toggleScheduleUploadModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
                 <i class="fa-solid fa-xmark text-xl"></i>
             </button>
-            <h3 class="text-lg font-bold text-navy">تعديل أو رفع قائمة فصل</h3>
+            <h3 id="scheduleModalTitle" class="text-lg font-bold text-navy">تعديل أو رفع قائمة فصل</h3>
             <div class="space-y-3 text-xs">
                 <p class="text-xs text-slate-600">اختر صورة مستقلة أمام كل فصل. يمكنك تجهيز الفصول كلها ثم الضغط على زر الحفظ مرة واحدة.</p>
                 <div id="scheduleClassFiles" class="space-y-2 max-h-64 overflow-y-auto">
@@ -1853,24 +1853,85 @@ window.addEventListener('DOMContentLoaded', () => {
             messages[currentNewsIndex].classList.add('active');
         }
 
+        // إدارة موحدة لإتاحة النوافذ المنبثقة بلوحة المفاتيح وقارئات الشاشة.
+        let activeAccessibleModal = null;
+
+        function getAccessibleModalFocusables(modal) {
+            return Array.from(modal.querySelectorAll(
+                'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )).filter(element => element.getClientRects().length > 0 &&
+                !element.closest('[hidden], .hidden'));
+        }
+
+        function openAccessibleModal(modal, initialFocusSelector, closeHandler) {
+            if (!modal) return;
+            if (activeAccessibleModal && activeAccessibleModal !== modal) {
+                closeAccessibleModal(activeAccessibleModal);
+            }
+            if (modal.classList.contains('hidden')) {
+                modal.__returnFocus = document.activeElement instanceof HTMLElement
+                    ? document.activeElement : null;
+            }
+            modal.__closeHandler = closeHandler;
+            activeAccessibleModal = modal;
+            modal.setAttribute('aria-hidden', 'false');
+            modal.classList.remove('hidden');
+
+            requestAnimationFrame(() => {
+                if (activeAccessibleModal !== modal || modal.classList.contains('hidden')) return;
+                const initial = initialFocusSelector ? modal.querySelector(initialFocusSelector) : null;
+                const target = initial && initial.getClientRects().length
+                    ? initial : getAccessibleModalFocusables(modal)[0];
+                (target || modal.querySelector('[role="dialog"]') || modal).focus({ preventScroll: true });
+            });
+        }
+
+        function closeAccessibleModal(modal) {
+            if (!modal || modal.classList.contains('hidden')) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            if (activeAccessibleModal === modal) activeAccessibleModal = null;
+            const returnFocus = modal.__returnFocus;
+            modal.__returnFocus = null;
+            if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') {
+                requestAnimationFrame(() => returnFocus.focus({ preventScroll: true }));
+            }
+        }
+
+        document.addEventListener('keydown', event => {
+            const modal = activeAccessibleModal;
+            if (!modal || modal.classList.contains('hidden')) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                if (typeof modal.__closeHandler === 'function') modal.__closeHandler();
+                else closeAccessibleModal(modal);
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const focusables = getAccessibleModalFocusables(modal);
+            if (!focusables.length) {
+                event.preventDefault();
+                (modal.querySelector('[role="dialog"]') || modal).focus({ preventScroll: true });
+                return;
+            }
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+            if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+                event.preventDefault();
+                first.focus();
+            }
+        });
+
         function toggleAdminModal() {
             const modal = document.getElementById('adminModal');
             if (!modal) return;
-
-            const willOpen = modal.classList.contains('hidden');
-            modal.classList.toggle('hidden');
-
-            // عند فتح نافذة الدخول، انقل تركيز لوحة المفاتيح إلى حقل كلمة المرور
-            // حتى يعمل Enter مباشرة دون الحاجة إلى النقر داخل الحقل أولًا.
-            if (willOpen) {
-                const passwordInput = document.getElementById('adminPasswordInput');
-                if (passwordInput) {
-                    requestAnimationFrame(() => {
-                        if (!modal.classList.contains('hidden')) {
-                            passwordInput.focus({ preventScroll: true });
-                        }
-                    });
-                }
+            if (modal.classList.contains('hidden')) {
+                openAccessibleModal(modal, '#adminPasswordInput', toggleAdminModal);
+            } else {
+                closeAccessibleModal(modal);
             }
         }
 
@@ -1933,7 +1994,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     input.value = '';
 
                     error.classList.add('hidden');
-                    document.getElementById('adminModal').classList.add('hidden');
+                    closeAccessibleModal(document.getElementById('adminModal'));
                     updateTeacherUI();
                     renderSchedules();
                     renderTabletGallery();
@@ -2207,7 +2268,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
             // أغلق نافذة رفع قوائم الفصول وألغِ أي ملفات اختيرت ولم تُرفع بعد.
             const scheduleModal = document.getElementById('scheduleModal');
-            if (scheduleModal) scheduleModal.classList.add('hidden');
+            if (scheduleModal) closeAccessibleModal(scheduleModal);
 
             document.querySelectorAll(
                 '#scheduleClassFiles input[type="file"], #tabletImgInput'
@@ -4140,9 +4201,13 @@ function renderSchedules() {
                 return;
             }
             const modal = document.getElementById('scheduleModal');
-            const willOpen = modal.classList.contains('hidden');
-            modal.classList.toggle('hidden');
-            if (willOpen) renderScheduleClassFileInputs();
+            if (!modal) return;
+            if (modal.classList.contains('hidden')) {
+                renderScheduleClassFileInputs();
+                openAccessibleModal(modal, '#scheduleClassFile_1_1', toggleScheduleUploadModal);
+            } else {
+                closeAccessibleModal(modal);
+            }
         }
 
         
@@ -4348,7 +4413,7 @@ async function saveScheduleImage() {
 
     // متابعة الرفع برسالة بسيطة أسفل عنوان قوائم الفصول دون لوحة عائمة أو تفاصيل إضافية.
     if (status) status.textContent = 'جارٍ رفع قوائم الفصول...';
-    document.getElementById('scheduleModal').classList.add('hidden');
+    closeAccessibleModal(document.getElementById('scheduleModal'));
 
     let succeeded = 0;
     const failures = [];
@@ -5220,7 +5285,7 @@ async function refreshPhotoAlbums(button) {
             document.getElementById('photoAlbumDescriptionInput').value = '';
             document.getElementById('photoAlbumCoverInput').value = '';
             document.getElementById('photoAlbumEditorStatus').textContent = '';
-            document.getElementById('photoAlbumEditor').classList.remove('hidden');
+            openAccessibleModal(document.getElementById('photoAlbumEditor'), '#photoAlbumNameInput', closePhotoAlbumEditor);
         }
 
         function openPhotoAlbumEdit() {
@@ -5232,11 +5297,11 @@ async function refreshPhotoAlbums(button) {
             document.getElementById('photoAlbumDescriptionInput').value = album.description || '';
             document.getElementById('photoAlbumCoverInput').value = '';
             document.getElementById('photoAlbumEditorStatus').textContent = 'اختيار غلاف جديد اختياري؛ اتركه فارغًا للاحتفاظ بالغلاف الحالي.';
-            document.getElementById('photoAlbumEditor').classList.remove('hidden');
+            openAccessibleModal(document.getElementById('photoAlbumEditor'), '#photoAlbumNameInput', closePhotoAlbumEditor);
         }
 
         function closePhotoAlbumEditor() {
-            document.getElementById('photoAlbumEditor').classList.add('hidden');
+            closeAccessibleModal(document.getElementById('photoAlbumEditor'));
         }
 
         async function savePhotoAlbum() {
