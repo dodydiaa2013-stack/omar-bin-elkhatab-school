@@ -44,11 +44,31 @@ jobs:
           mkdir -p assets
           npx @tailwindcss/cli -i ./assets/tailwind.input.css -o ./assets/tailwind.css --minify
 
+      - name: Sync generated CSS into index.html
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const indexPath = 'index.html';
+          const cssPath = 'assets/tailwind.css';
+          const start = '/* TAILWIND_INLINE_START */';
+          const end = '/* TAILWIND_INLINE_END */';
+          const html = fs.readFileSync(indexPath, 'utf8');
+          const css = fs.readFileSync(cssPath, 'utf8').trim();
+          const startAt = html.indexOf(start);
+          const endAt = html.indexOf(end);
+          if (startAt < 0 || endAt < startAt) {
+            throw new Error('Tailwind inline CSS markers are missing or out of order.');
+          }
+          const contentStart = startAt + start.length;
+          const updated = html.slice(0, contentStart) + '\\n' + css + '\\n' + html.slice(endAt);
+          fs.writeFileSync(indexPath, updated);
+          NODE
+
       - name: Commit generated CSS to pull request branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- assets/tailwind.css
+          git add -- assets/tailwind.css index.html
           if git diff --cached --quiet; then
             echo "Compiled CSS is already up to date."
             exit 0
