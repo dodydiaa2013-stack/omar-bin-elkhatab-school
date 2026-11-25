@@ -427,6 +427,7 @@
             <button onclick="saveAllPageChanges()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
             </button>
+            <span id="pageChangesSaveStatus" class="text-xs font-bold" role="status" aria-live="polite"></span>
             <button onclick="exportUpdatedHTML()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                 <i class="fa-solid fa-file-code"></i> تحميل كود HTML المعدل
             </button>
@@ -2555,13 +2556,31 @@ function toggleLiveEditing() {
     else { btn.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي'; btn.className = "bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1"; }
 }
 
+function setPageChangesSaveStatus(message, state) {
+    const status = document.getElementById('pageChangesSaveStatus');
+    if (!status) return;
+    status.textContent = message || '';
+    status.classList.remove('text-amber-700', 'text-emerald-700', 'text-red-700', 'text-slate-600');
+    const stateClass = {
+        pending: 'text-amber-700',
+        success: 'text-emerald-700',
+        error: 'text-red-700',
+        neutral: 'text-slate-600'
+    }[state] || 'text-slate-600';
+    status.classList.add(stateClass);
+}
+
 async function saveAllPageChanges() {
     if (!hasDualAdminAuthorization()) {
         alert('يجب تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به قبل حفظ التعديلات.');
         return;
     }
     if (pendingPageChangesNonce) {
-        alert('يوجد طلب حفظ جارٍ بالفعل. انتظر تأكيده أولاً.');
+        setPageChangesSaveStatus(
+            'طلب الحفظ السابق ما زال قيد المتابعة؛ انتظر تأكيد الخادم قبل إعادة المحاولة.',
+            'pending'
+        );
+        alert('يوجد طلب حفظ جارٍ بالفعل. لم نكرر الإرسال حتى لا تتعارض عمليات الحفظ.');
         return;
     }
     if (window.__productionPageChangesUsingLocalFallback || window.__productionPageChangesBackendReady !== true) { alert('الحفظ متوقف مؤقتًا: لم يتم تأكيد تحميل النصوص من الخادم. حدّث الصفحة وحاول بعد عودة الاتصال.'); return; }
@@ -2606,6 +2625,7 @@ async function saveAllPageChanges() {
     pendingPageChangesSnapshot = changes.map(item => ({ id: item.id, text: item.text }));
     const nonce = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
     pendingPageChangesNonce = nonce;
+    setPageChangesSaveStatus('جارٍ إرسال التعديلات وانتظار تأكيد الخادم...', 'pending');
     let frame = document.getElementById('pageChangesUploadFrame');
     if (!frame) {
         frame = document.createElement('iframe');
@@ -2626,7 +2646,11 @@ async function saveAllPageChanges() {
     document.body.appendChild(form); form.submit(); form.remove();
     pageChangesTimeout=setTimeout(() => {
         if(pendingPageChangesNonce===nonce) {
-            console.warn('[PageChanges] Save response timed out; nonce retained for a late server response. No visible status was shown.');
+            setPageChangesSaveStatus(
+                'لم يصل تأكيد الحفظ بعد. قد يكون الخادم ما زال يعالج الطلب؛ لا تعاود الحفظ الآن. سنحدّث الحالة إذا وصل الرد.',
+                'pending'
+            );
+            console.warn('[PageChanges] Save response timed out; nonce retained for a late server response.');
         }
     },20000);
 }
@@ -2668,7 +2692,8 @@ window.addEventListener('message', function(event) {
 
         if (isLiveEditing) toggleLiveEditing();
 
-        // Show success only after Apps Script confirms GitHub save and verification.
+        // Update the visible status only after Apps Script confirms GitHub save and verification.
+        setPageChangesSaveStatus('تم تأكيد الحفظ والتحقق من التعديلات بنجاح.', 'success');
         alert('تم الحفظ بنجاح في المستودع الأصلي على GitHub، وتم التحقق من التعديلات.');
 
         return;
@@ -2680,6 +2705,7 @@ window.addEventListener('message', function(event) {
         result.error ||
         'لم يتم تأكيد حفظ التعديلات في GitHub.';
 
+    setPageChangesSaveStatus('لم يتم تأكيد الحفظ: ' + message, 'error');
     alert('لم يتم تأكيد حفظ التعديلات: ' + message);
 });
 
