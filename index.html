@@ -1621,78 +1621,78 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         const MANUAL_BACKUP_FORMAT = 'obk-school-site-backup';
-        const MANUAL_BACKUP_VERSION = 1;
-        const MANUAL_BACKUP_KEYS = ['obk_alerts', 'obk_schedules', 'obk_tablet_imgs'];
-        const MANUAL_BACKUP_MAX_BYTES = 20 * 1024 * 1024;
+        const MANUAL_BACKUP_VERSION = 2;
+        const MANUAL_BACKUP_MAX_BYTES = 2 * 1024 * 1024;
+        let manualBackupRestoreNonce = null;
+        let manualBackupRestoreTimeout = null;
+
+        function fetchManualBackupPageChanges() {
+            return new Promise((resolve, reject) => {
+                const callbackName = '__manualBackupPageChanges_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+                const script = document.createElement('script');
+                let settled = false;
+                const timeout = setTimeout(() => finish(new Error('انتهت مهلة قراءة تعديلات النصوص من الخادم.')), 30000);
+                function finish(error, data) {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timeout);
+                    script.remove();
+                    try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+                    if (error) reject(error); else resolve(data);
+                }
+                window[callbackName] = data => finish(null, data);
+                script.onerror = () => finish(new Error('تعذر الاتصال بخادم تعديلات النصوص.'));
+                script.async = true;
+                script.src = GOOGLE_SCRIPT_URL + '?action=pageChanges&environment=PRODUCTION&callback=' + encodeURIComponent(callbackName) + '&_=' + Date.now();
+                document.head.appendChild(script);
+            });
+        }
 
         function downloadManualSiteBackup() {
             if (!hasDualAdminAuthorization()) {
                 alert('يلزم تسجيل الدخول بصلاحية المسؤول وحساب Google المعتمد لإنشاء النسخة الاحتياطية.');
                 return;
             }
+            if (!confirm('سيتم إنشاء نسخة احتياطية من تعديلات نصوص الموقع المحفوظة على الخادم فقط.\\n\\nلن تشمل النسخة التنبيهات أو الجداول أو الصور أو ألبومات الصور أو قوائم الفصول أو كلمات المرور والجلسات.\\n\\nهل تريد قراءة أحدث النصوص من الخادم وإنشاء النسخة؟')) return;
 
-            const backupWarning =
-                'تنبيه مهم قبل إنشاء النسخة الاحتياطية:\n\n' +
-                'سيتم حفظ 3 أنواع من البيانات الموجودة على هذا المتصفح فقط:\n' +
-                '• التنبيهات.\n' +
-                '• الجداول.\n' +
-                '• صور قسم التابلت المحفوظة محليًا.\n\n' +
-                'النسخة لن تشمل:\n' +
-                '• صور وملفات Google Drive.\n' +
-                '• ألبومات الصور وقوائم الفصول المحفوظة على الخادم.\n' +
-                '• تعديلات نصوص الموقع المحفوظة على الخادم.\n' +
-                '• كلمات المرور ورموز الدخول والجلسات.\n\n' +
-                'لذلك فهذه ليست نسخة كاملة من الموقع. هل تريد المتابعة وإنشاء النسخة الاحتياطية؟';
+            const button = document.querySelector('#manualBackupControls button[onclick="downloadManualSiteBackup()"]');
+            if (button) { button.disabled = true; button.classList.add('opacity-60'); }
 
-            if (!confirm(backupWarning)) return;
-
-            try {
-                const storage = {};
-                MANUAL_BACKUP_KEYS.forEach(key => {
-                    const value = localStorage.getItem(key);
-                    if (value === null) {
-                        throw new Error('تعذر العثور على بيانات التخزين: ' + key);
-                    }
-                    JSON.parse(value);
-                    storage[key] = value;
+            fetchManualBackupPageChanges().then(data => {
+                if (!data || data.success !== true || data.environment !== 'PRODUCTION' || !Array.isArray(data.changes) || data.changes.length > 500) {
+                    throw new Error((data && data.message) || 'استجابة النصوص من الخادم غير مكتملة.');
+                }
+                const seen = new Set();
+                data.changes.forEach(item => {
+                    if (!item || typeof item.id !== 'string' || typeof item.text !== 'string' || !item.id || item.id.length > 200 || item.text.length > 10000 || seen.has(item.id)) throw new Error('تحتوي النصوص المسترجعة على عنصر غير صالح أو معرّف مكرر.');
+                    seen.add(item.id);
                 });
-
                 const backup = {
                     format: MANUAL_BACKUP_FORMAT,
                     version: MANUAL_BACKUP_VERSION,
                     createdAt: new Date().toISOString(),
                     site: 'مدرسة عمر بن الخطاب ث بنين',
                     origin: location.origin,
-                    includedStorageKeys: MANUAL_BACKUP_KEYS,
-                    storage: storage,
-                    exclusions: [
-                        'صور وملفات Google Drive الفعلية',
-                        'ألبومات الصور وقوائم الفصول المحفوظة على الخادم',
-                        'تعديلات نصوص الموقع المحفوظة في Google Apps Script',
-                        'كلمات المرور ورموز الدخول والجلسات'
-                    ]
+                    pageChanges: { success: true, changes: data.changes.map(item => ({ id: item.id, text: item.text })), updatedAt: data.updatedAt || null },
+                    exclusions: ['التنبيهات والجداول', 'صور وملفات Google Drive وألبومات الصور', 'قوائم الفصول', 'كلمات المرور ورموز الدخول والجلسات']
                 };
-
-                const json = JSON.stringify(backup, null, 2);
-                const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-                if (blob.size > MANUAL_BACKUP_MAX_BYTES) {
-                    throw new Error('حجم النسخة أكبر من الحد المسموح (20 ميجابايت).');
-                }
-
+                const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json;charset=utf-8' });
+                if (blob.size > MANUAL_BACKUP_MAX_BYTES) throw new Error('حجم ملف تعديلات النصوص أكبر من الحد المسموح (2 ميجابايت).');
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
-                const stamp = new Date().toISOString().replace(/[:.]/g, '-');
                 link.href = url;
-                link.download = 'omar-school-backup-' + stamp + '.json';
+                link.download = 'omar-school-page-text-backup-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
                 setTimeout(() => URL.revokeObjectURL(url), 1500);
-                alert('تم تجهيز النسخة الاحتياطية وتنزيلها. احتفظ بالملف في مكان آمن.');
-            } catch (error) {
-                console.error('Manual backup failed:', error);
-                alert('تعذر إنشاء النسخة الاحتياطية: ' + (error.message || 'خطأ غير معروف'));
-            }
+                alert('تم إنشاء نسخة تعديلات النصوص من أحدث بيانات الخادم وتنزيلها بنجاح.');
+            }).catch(error => {
+                console.error('Manual page-text backup failed:', error);
+                alert('تعذر إنشاء نسخة تعديلات النصوص: ' + (error.message || 'خطأ غير معروف'));
+            }).finally(() => {
+                if (button) { button.disabled = false; button.classList.remove('opacity-60'); }
+            });
         }
 
         function restoreManualSiteBackup(input) {
@@ -1701,95 +1701,98 @@ window.addEventListener('DOMContentLoaded', () => {
                 input.value = '';
                 return;
             }
-
             const file = input.files && input.files[0];
             if (!file) return;
-
             if (file.size > MANUAL_BACKUP_MAX_BYTES) {
-                alert('حجم ملف النسخة أكبر من الحد المسموح (20 ميجابايت).');
+                alert('حجم ملف النسخة أكبر من الحد المسموح (2 ميجابايت).');
                 input.value = '';
                 return;
             }
-
             const reader = new FileReader();
-            reader.onerror = () => {
-                alert('تعذرت قراءة ملف النسخة الاحتياطية.');
-                input.value = '';
-            };
-            reader.onload = () => {
+            reader.onerror = () => { alert('تعذرت قراءة ملف النسخة الاحتياطية.'); input.value = ''; };
+            reader.onload = async () => {
                 try {
                     const backup = JSON.parse(String(reader.result || ''));
-                    if (!backup || backup.format !== MANUAL_BACKUP_FORMAT ||
-                        backup.version !== MANUAL_BACKUP_VERSION ||
-                        !backup.storage || typeof backup.storage !== 'object' ||
-                        Array.isArray(backup.storage)) {
-                        throw new Error('صيغة النسخة الاحتياطية أو إصدارها غير مدعوم.');
-                    }
-
-                    const missing = MANUAL_BACKUP_KEYS.filter(key =>
-                        !Object.prototype.hasOwnProperty.call(backup.storage, key) ||
-                        typeof backup.storage[key] !== 'string'
-                    );
-                    if (missing.length) {
-                        throw new Error('النسخة غير مكتملة؛ البيانات الناقصة: ' + missing.join(', '));
-                    }
-
-                    const parsed = {};
-                    MANUAL_BACKUP_KEYS.forEach(key => {
-                        parsed[key] = JSON.parse(backup.storage[key]);
+                    if (!backup || backup.format !== MANUAL_BACKUP_FORMAT || backup.version !== MANUAL_BACKUP_VERSION || !backup.pageChanges || backup.pageChanges.success !== true || !Array.isArray(backup.pageChanges.changes) || backup.pageChanges.changes.length > 500) throw new Error('صيغة النسخة غير مدعومة. يلزم ملف نسخة نصوص بالإصدار 2.');
+                    const seen = new Set();
+                    backup.pageChanges.changes.forEach(item => {
+                        if (!item || typeof item.id !== 'string' || typeof item.text !== 'string' || !item.id || item.id.length > 200 || item.text.length > 10000 || seen.has(item.id)) throw new Error('محتويات النسخة بها عنصر غير صالح أو معرّف مكرر.');
+                        seen.add(item.id);
                     });
-                    if (!Array.isArray(parsed.obk_alerts) ||
-                        !parsed.obk_schedules || typeof parsed.obk_schedules !== 'object' ||
-                        Array.isArray(parsed.obk_schedules) ||
-                        !Array.isArray(parsed.obk_tablet_imgs)) {
-                        throw new Error('محتويات النسخة لا تطابق بنية بيانات الموقع.');
-                    }
-
                     const created = backup.createdAt ? new Date(backup.createdAt) : null;
-                    const createdLabel = created && !Number.isNaN(created.getTime())
-                        ? created.toLocaleString('ar-EG')
-                        : 'تاريخ غير محدد';
-
-                    const confirmed = confirm(
-                        'سيتم استبدال بيانات هذا المتصفح الثلاثة بالبيانات الموجودة في النسخة.\n\n' +
-                        'تاريخ النسخة: ' + createdLabel + '\n' +
-                        'عدد أقسام البيانات: 3\n\n' +
-                        'لن تتغير صور Google Drive أو بيانات الخادم.\n' +
-                        'هل تريد المتابعة؟'
-                    );
-                    if (!confirmed) {
-                        input.value = '';
-                        return;
-                    }
-
-                    const previous = {};
-                    MANUAL_BACKUP_KEYS.forEach(key => {
-                        previous[key] = localStorage.getItem(key);
-                    });
-
-                    try {
-                        MANUAL_BACKUP_KEYS.forEach(key => {
-                            localStorage.setItem(key, backup.storage[key]);
-                        });
-                    } catch (writeError) {
-                        MANUAL_BACKUP_KEYS.forEach(key => {
-                            if (previous[key] === null) localStorage.removeItem(key);
-                            else localStorage.setItem(key, previous[key]);
-                        });
-                        throw new Error('لم تكتمل الاستعادة بسبب مساحة التخزين. تم إرجاع البيانات السابقة. ' +
-                            (writeError.message || ''));
-                    }
-
-                    alert('تمت استعادة بيانات النسخة الاحتياطية. سيتم تحديث الصفحة لعرض البيانات.');
-                    location.reload();
+                    const createdLabel = created && !Number.isNaN(created.getTime()) ? created.toLocaleString('ar-EG') : 'تاريخ غير محدد';
+                    const confirmed = confirm('سيتم استبدال قائمة تعديلات نصوص الموقع الحالية بالكامل بالنصوص الموجودة في النسخة.\\n\\nتاريخ النسخة: ' + createdLabel + '\\nعدد النصوص: ' + backup.pageChanges.changes.length + '\\n\\nلن تتغير التنبيهات أو الجداول أو الصور أو الألبومات أو قوائم الفصول.\\nسيتم حفظ النصوص على فرع استقبال التعديلات في GitHub ثم إطلاق مسار المراجعة المعتاد.\\n\\nهل تؤكد الاستعادة؟');
+                    if (!confirmed) return;
+                    await restoreManualPageChangesToServer(backup.pageChanges);
+                    alert('تمت استعادة نصوص النسخة إلى GitHub والتحقق من تطابقها. سيجري تحديث الموقع عبر مسار المراجعة المعتاد.');
                 } catch (error) {
-                    console.error('Manual restore failed:', error);
-                    alert('تعذرت استعادة النسخة الاحتياطية: ' + (error.message || 'ملف غير صالح'));
-                } finally {
-                    input.value = '';
-                }
+                    console.error('Manual page-text restore failed:', error);
+                    alert('تعذرت استعادة تعديلات النصوص: ' + (error.message || 'ملف غير صالح'));
+                } finally { input.value = ''; }
             };
             reader.readAsText(file);
+        }
+
+        function restoreManualPageChangesToServer(pageChanges) {
+            return new Promise((resolve, reject) => {
+                if (!hasDualAdminAuthorization()) { reject(new Error('انتهت صلاحية جلسة المسؤول أو حساب Google المعتمد.')); return; }
+                if (manualBackupRestoreNonce) { reject(new Error('توجد عملية استعادة أخرى قيد التنفيذ.')); return; }
+                const nonce = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+                manualBackupRestoreNonce = nonce;
+                let frame = document.getElementById('manualBackupRestoreFrame');
+                if (!frame) {
+                    frame = document.createElement('iframe');
+                    frame.id = 'manualBackupRestoreFrame';
+                    frame.name = 'manualBackupRestoreFrame';
+                    frame.style.display = 'none';
+                    document.body.appendChild(frame);
+                }
+                const cleanup = () => {
+                    window.removeEventListener('message', handleMessage);
+                    clearTimeout(manualBackupRestoreTimeout);
+                    manualBackupRestoreTimeout = null;
+                    manualBackupRestoreNonce = null;
+                };
+                const handleMessage = event => {
+                    if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
+                    const data = event.data;
+                    if (!data || data.type !== 'savePageChangesResult' || data.nonce !== nonce) return;
+                    cleanup();
+                    const result = data.result || {};
+                    if (result.success === true && result.githubSaved === true && result.githubVerified === true && result.environment === 'PRODUCTION') resolve(result);
+                    else reject(new Error(result.message || 'لم يؤكد الخادم استعادة النصوص والتحقق منها.'));
+                };
+                window.addEventListener('message', handleMessage);
+                manualBackupRestoreTimeout = setTimeout(() => {
+                    if (manualBackupRestoreNonce !== nonce) return;
+                    cleanup();
+                    reject(new Error('لم يصل تأكيد الاستعادة من الخادم. لا تكرر العملية قبل التحقق من حالة النصوص.'));
+                }, 60000);
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = GOOGLE_SCRIPT_URL;
+                form.target = 'manualBackupRestoreFrame';
+                form.style.display = 'none';
+                const fields = {
+                    action: 'restorePageChangesBackup',
+                    environment: 'PRODUCTION',
+                    googleUploadToken: googleUploadToken,
+                    adminSessionToken: window.adminSessionToken,
+                    nonce: nonce,
+                    origin: location.origin,
+                    changes: JSON.stringify(pageChanges)
+                };
+                Object.entries(fields).forEach(([name, value]) => {
+                    const field = document.createElement('input');
+                    field.type = 'hidden';
+                    field.name = name;
+                    field.value = String(value == null ? '' : value);
+                    form.appendChild(field);
+                });
+                document.body.appendChild(form);
+                form.submit();
+                form.remove();
+            });
         }
 
         const VALID_TAB_IDS = ['home', 'results', 'leaders', 'tablet', 'schedules', 'alerts', 'student-queries'];
