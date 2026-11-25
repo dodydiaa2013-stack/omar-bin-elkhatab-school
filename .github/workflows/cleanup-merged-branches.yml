@@ -1,0 +1,78 @@
+name: Safe cleanup of merged branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute_delete:
+        description: "Actually delete the allowlisted branches (choose yes only after reviewing the dry run)"
+        required: true
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preview or delete confirmed merged branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXECUTE_DELETE: ${{ inputs.execute_delete }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Strict allowlist: branches whose corresponding PRs were confirmed merged.
+          # main, automation, backup, test, and unresolved branches are deliberately excluded.
+          branches=(
+            "chore/refresh-code-gs-reference-4216"
+            "cleanup/remove-legacy-hero-editor-reference"
+            "cleanup/remove-obsolete-hero-image-editor"
+            "fix/accessibility-modal-dialogs"
+            "fix/index-html-async-state-races"
+            "fix/page-text-save-timeout-status"
+            "fix/page-text-sync-noop-check"
+            "fix/restore-page-changes-input-parser"
+            "fix/schedule-upload-confirmation-locks"
+            "fix/skip-tailwind-for-page-text-sync"
+            "review/remove-confirmed-unused-assets"
+          )
+
+          echo "Mode: ${EXECUTE_DELETE}"
+          echo "Repository: ${REPOSITORY}"
+
+          open_prs="$(gh api --paginate "repos/${REPOSITORY}/pulls?state=open&per_page=100")"
+
+          for branch in "${branches[@]}"; do
+            if [[ "$branch" == "main" ]]; then
+              echo "SKIP protected branch: main"
+              continue
+            fi
+
+            encoded_branch="${branch//\//%2F}"
+            if ! gh api "repos/${REPOSITORY}/branches/${encoded_branch}" >/dev/null 2>&1; then
+              echo "SKIP missing branch: ${branch}"
+              continue
+            fi
+
+            if jq -e --arg branch "$branch" --arg repo "$REPOSITORY" \
+              'any(.[]; .head.ref == $branch and .head.repo.full_name == $repo)' \
+              <<<"$open_prs" >/dev/null; then
+              echo "SKIP branch with an open PR: ${branch}"
+              continue
+            fi
+
+            if [[ "$EXECUTE_DELETE" != "yes" ]]; then
+              echo "DRY RUN - would delete: ${branch}"
+            else
+              gh api --method DELETE "repos/${REPOSITORY}/git/refs/heads/${branch}"
+              echo "DELETED: ${branch}"
+            fi
+          done
