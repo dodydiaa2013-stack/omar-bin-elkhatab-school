@@ -3748,44 +3748,69 @@ async function galleryUploadPost(fields, baselineImages) {
         const pollStatus = () => {
             if (settled) return;
 
-            const callbackName = 'galleryUploadStatus_' + Date.now() + '_' +
-                Math.random().toString(36).slice(2).replace(/[^a-zA-Z0-9_]/g, '');
+            const statusFrame = document.createElement('iframe');
+            const statusTarget = 'galleryUploadStatusFrame_' +
+                nonce.replace(/[^a-zA-Z0-9_]/g, '') + '_' + Date.now();
+            statusFrame.name = statusTarget;
+            statusFrame.style.display = 'none';
 
-            const script = document.createElement('script');
+            const statusForm = document.createElement('form');
+            statusForm.method = 'POST';
+            statusForm.action = GOOGLE_SCRIPT_URL;
+            statusForm.target = statusTarget;
+            statusForm.style.display = 'none';
+
+            const statusPayload = {
+                action: 'galleryUploadStatus',
+                nonce: nonce,
+                token: googleUploadToken || '',
+                adminSessionToken: window.adminSessionToken || '',
+                origin: window.location.origin
+            };
+            Object.entries(statusPayload).forEach(([name, value]) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = name;
+                input.value = String(value == null ? '' : value);
+                statusForm.appendChild(input);
+            });
+
             let completed = false;
-
-            const finishPoll = () => {
+            const finishPoll = (retryDelay, response) => {
                 if (completed) return;
                 completed = true;
-                script.remove();
-                delete window[callbackName];
-            };
+                clearTimeout(statusTimeout);
+                window.removeEventListener('message', onStatusMessage);
+                statusForm.remove();
+                statusFrame.remove();
 
-            window[callbackName] = response => {
-                finishPoll();
-                if (response && response.found && response.result) {
+                if (response && response.success && response.found && response.result) {
                     acceptResult(response.result);
-                } else if (!settled) {
-                    verifyGalleryUpload();
+                    return;
                 }
-                if (!settled) pollTimer = setTimeout(pollStatus, 2500);
-            };
 
-            script.onerror = () => {
-                finishPoll();
                 if (!settled) {
+                    // يظل فحص ظهور الصورة بديلًا إذا انتهت الجلسة أو فُقد رد الخادم.
                     verifyGalleryUpload();
-                    pollTimer = setTimeout(pollStatus, 4000);
+                    if (!settled) pollTimer = setTimeout(pollStatus, retryDelay);
                 }
             };
 
-            script.src = GOOGLE_SCRIPT_URL +
-                '?action=galleryUploadStatus&nonce=' + encodeURIComponent(nonce) +
-                '&origin=' + encodeURIComponent(window.location.origin) +
-                '&callback=' + encodeURIComponent(callbackName) +
-                '&_=' + Date.now();
+            const onStatusMessage = event => {
+                if (!isTrustedAppsScriptMessage(event)) return;
+                const message = event.data;
+                if (!message || message.type !== 'galleryUploadStatusResult' ||
+                    message.nonce !== nonce) return;
 
-            document.body.appendChild(script);
+                const response = message.result || {};
+                finishPoll(response.success === false ? 15000 : 5000, response);
+            };
+
+            const statusTimeout = setTimeout(() => finishPoll(5000, null), 12000);
+            window.addEventListener('message', onStatusMessage);
+            document.body.appendChild(statusFrame);
+            document.body.appendChild(statusForm);
+            statusForm.submit();
         };
 
         window.addEventListener('message', onMessage);
