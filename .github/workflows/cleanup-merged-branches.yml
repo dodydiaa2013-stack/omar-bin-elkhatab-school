@@ -72,7 +72,7 @@ jobs:
             if [[ "$EXECUTE_DELETE" != "yes" ]]; then
               echo "DRY RUN - would delete: ${branch}"
             else
-              gh api --method DELETE "repos/${REPOSITORY}/git/refs/heads/${branch}"
+              gh api --method DELETE "repos/${REPOSITORY}/git/refs/heads/${encoded_branch}"
               echo "DELETED: ${branch}"
             fi
           done
