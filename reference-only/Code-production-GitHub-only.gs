@@ -263,6 +263,38 @@ function galleryUploadPostMessage(p, result) {
     .createHtmlOutput(html)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
+function galleryUploadStatusPostMessage(p, result) {
+  p = p || {};
+  const requestedOrigin = String(p.origin || "");
+  const allowedOrigin = ALLOWED_PAGE_ORIGINS.includes(requestedOrigin)
+    ? requestedOrigin
+    : "";
+
+  if (!allowedOrigin) {
+    return jsonOutput({
+      success: false,
+      found: false,
+      message: "مصدر الطلب غير مسموح"
+    });
+  }
+
+  const payload = JSON.stringify({
+    type: "galleryUploadStatusResult",
+    nonce: String(p.nonce || ""),
+    result: result || {}
+  }).replace(/</g, "\\u003c");
+
+  const html =
+    "<!DOCTYPE html><html><body><script>" +
+    "window.top.postMessage(" + payload + ", " +
+    JSON.stringify(allowedOrigin) + ");" +
+    "</script></body></html>";
+
+  return HtmlService
+    .createHtmlOutput(html)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
 function pageChangesPostMessage(p, result) {
   const nonce = String(p && p.nonce || "");
   const requestedOrigin = String(p && p.origin || "");
@@ -1014,11 +1046,17 @@ function bulkDeletePhotoContent(p) {
 }
 
 function createPhotoAlbum(p) {
+  let lock = null;
+  let lockAcquired = false;
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
     if (!isAuthorized) {
       throw new Error("غير مصرح لك بإنشاء ألبوم");
     }
+
+    lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+    lockAcquired = true;
 
     const title = String(p.title || "").trim();
     const description = String(p.description || "").trim();
@@ -1089,18 +1127,27 @@ updatedAt: metadata.updatedAt
       message: error.message
     });
   }
+  } finally {
+    if (lockAcquired) lock.releaseLock();
+  }
 }
 /* =========================
    تعديل بيانات الألبوم
 ========================= */
 
 function updatePhotoAlbum(p) {
+  let lock = null;
+  let lockAcquired = false;
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
 
     if (!isAuthorized) {
       throw new Error("غير مصرح لك بتعديل الألبوم");
     }
+
+    lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+    lockAcquired = true;
 
     const albumId = String(p.albumId || "").trim();
 
@@ -1160,18 +1207,27 @@ if (p.coverData) {
       message: error.message
     });
   }
+  } finally {
+    if (lockAcquired) lock.releaseLock();
+  }
 }
 /* =========================
    رفع صورة داخل ألبوم
 ========================= */
 
 function uploadPhotoAlbumImage(p) {
+  let lock = null;
+  let lockAcquired = false;
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
 
     if (!isAuthorized) {
       throw new Error("غير مصرح لك برفع الصور");
     }
+
+    lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+    lockAcquired = true;
 
     const albumId = String(p.albumId || "").trim();
 
@@ -1222,18 +1278,27 @@ function uploadPhotoAlbumImage(p) {
       message: error.message
     });
   }
+  } finally {
+    if (lockAcquired) lock.releaseLock();
+  }
 }
 /* =========================
    تغيير غلاف الألبوم
 ========================= */
 
 function updatePhotoAlbumCover(p) {
+  let lock = null;
+  let lockAcquired = false;
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
 
     if (!isAuthorized) {
       throw new Error("غير مصرح لك بتغيير الغلاف");
     }
+
+    lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+    lockAcquired = true;
 
     const albumId = String(p.albumId || "").trim();
     const fileId = String(p.fileId || "").trim();
@@ -1273,18 +1338,27 @@ function updatePhotoAlbumCover(p) {
       message: error.message
     });
   }
+  } finally {
+    if (lockAcquired) lock.releaseLock();
+  }
 }
 /* =========================
    استبدال صورة داخل ألبوم
 ========================= */
 
 function replacePhotoAlbumImage(p) {
+  let lock = null;
+  let lockAcquired = false;
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
 
     if (!isAuthorized) {
       throw new Error("غير مصرح لك باستبدال الصور");
     }
+
+    lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+    lockAcquired = true;
 
     const albumId = String(p.albumId || "").trim();
     const oldFileId = String(p.imageId || p.fileId || "").trim();
@@ -1360,18 +1434,27 @@ function replacePhotoAlbumImage(p) {
       message: error.message
     });
   }
+  } finally {
+    if (lockAcquired) lock.releaseLock();
+  }
 }
 /* =========================
    حذف صورة من ألبوم
 ========================= */
 
 function deletePhotoAlbumImage(p) {
+  let lock = null;
+  let lockAcquired = false;
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
 
     if (!isAuthorized) {
       throw new Error("غير مصرح لك بحذف الصور");
     }
+
+    lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+    lockAcquired = true;
 
     const albumId = String(p.albumId || "").trim();
     const fileId = String(p.imageId || p.fileId || "").trim();
@@ -1415,18 +1498,27 @@ function deletePhotoAlbumImage(p) {
       message: error.message
     });
   }
+  } finally {
+    if (lockAcquired) lock.releaseLock();
+  }
 }
 /* =========================
    حذف ألبوم بالكامل
 ========================= */
 
 function deletePhotoAlbum(p) {
+  let lock = null;
+  let lockAcquired = false;
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
 
     if (!isAuthorized) {
       throw new Error("غير مصرح لك بحذف الألبوم");
     }
+
+    lock = LockService.getScriptLock();
+    lock.waitLock(25000);
+    lockAcquired = true;
 
     const albumId = String(p.albumId || "").trim();
 
@@ -1456,6 +1548,9 @@ function deletePhotoAlbum(p) {
       success: false,
       message: error.message
     });
+  }
+  } finally {
+    if (lockAcquired) lock.releaseLock();
   }
 }
 function isAllowedClass(className) {
@@ -1582,9 +1677,6 @@ function getSchedules() {
 function doGet(e) {
   const p = (e && e.parameter) ? e.parameter : {};
   const action = p.action || "";
-  if (action === "galleryUploadStatus") {
-  return getGalleryUploadStatus(p);
-}
 if (action === "scheduleUploadStatus") {
   return getScheduleUploadStatus(p);
 }
@@ -1689,6 +1781,10 @@ function doPost(e) {
       return checkProductionPageReviewStatus(p);
     }
 
+    if (action === "galleryUploadStatus") {
+      return getGalleryUploadStatus(p);
+    }
+
     if (action === "uploadGalleryImage") {
       return uploadGalleryImage(p);
     }
@@ -1789,6 +1885,14 @@ function doPost(e) {
     if (action === "uploadSchedule") {
       return scheduleUploadPostMessage(p, {
         success: false,
+        message: message
+      });
+    }
+
+    if (action === "galleryUploadStatus") {
+      return galleryUploadStatusPostMessage(p, {
+        success: false,
+        found: false,
         message: message
       });
     }
@@ -3956,23 +4060,34 @@ function getGalleryUploadStatus(p) {
   p = p || {};
 
   const nonce = String(p.nonce || "");
-  const callback = String(p.callback || "");
   const origin = String(p.origin || "");
 
   if (!ALLOWED_PAGE_ORIGINS.includes(origin)) {
-    return outputWithCallback({
+    return galleryUploadStatusPostMessage(p, {
       success: false,
       found: false,
       message: "مصدر الطلب غير مسموح"
-    }, callback);
+    });
   }
 
   if (!/^[A-Za-z0-9_-]{10,120}$/.test(nonce)) {
-    return outputWithCallback({
+    return galleryUploadStatusPostMessage(p, {
       success: false,
       found: false,
       message: "رقم الطلب غير صالح"
-    }, callback);
+    });
+  }
+
+  // بيانات الاعتماد تُرسل داخل POST body ولا تظهر في عنوان URL.
+  try {
+    verifyAdminToken(p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+  } catch (error) {
+    return galleryUploadStatusPostMessage(p, {
+      success: false,
+      found: false,
+      message: error.message || "انتهت جلسة المسؤول"
+    });
   }
 
   cleanupOldGalleryUploadResults_();
@@ -3982,43 +4097,38 @@ function getGalleryUploadStatus(p) {
   const savedValue = props.getProperty(key);
 
   if (!savedValue) {
-    return outputWithCallback({
+    return galleryUploadStatusPostMessage(p, {
       success: true,
       found: false
-    }, callback);
+    });
   }
 
   try {
     const saved = JSON.parse(savedValue);
 
-    if (
-      !saved.savedAt ||
-      Date.now() - saved.savedAt >= 10 * 60 * 1000
-    ) {
+    if (!saved.savedAt || Date.now() - saved.savedAt >= 10 * 60 * 1000) {
       props.deleteProperty(key);
-
-      return outputWithCallback({
+      return galleryUploadStatusPostMessage(p, {
         success: true,
         found: false
-      }, callback);
+      });
     }
 
-    return outputWithCallback({
+    return galleryUploadStatusPostMessage(p, {
       success: true,
       found: true,
       result: saved.result || {}
-    }, callback);
-
+    });
   } catch (error) {
     props.deleteProperty(key);
-
-    return outputWithCallback({
+    return galleryUploadStatusPostMessage(p, {
       success: false,
       found: false,
       message: "تعذر قراءة نتيجة الرفع"
-    }, callback);
+    });
   }
 }
+
 function cleanupOldGalleryUploadResults_() {
   const props = PropertiesService.getScriptProperties();
   const all = props.getProperties();
