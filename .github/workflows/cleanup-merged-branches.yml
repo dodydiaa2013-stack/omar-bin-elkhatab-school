@@ -20,7 +20,7 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Preview or delete confirmed merged branches
+      - name: Preview or delete reviewed branches
         env:
           GH_TOKEN: ${{ github.token }}
           EXECUTE_DELETE: ${{ inputs.execute_delete }}
@@ -29,8 +29,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Strict allowlist: branches whose corresponding PRs were confirmed merged.
-          # Only branches tied to PRs confirmed merged are listed; main, automation, backups, and unresolved branches are excluded.
+          # Strict allowlist: branches individually reviewed as safe to delete.
+          # Includes merged PR branches and three closed, obsolete/unneeded branches.
+          # main, automation, backups, and unresolved feature/transfer branches are excluded.
           branches=(
             "chore/refresh-code-gs-reference-4216"
             "chore/update-code-gs-reference-2026-11-25"
@@ -59,6 +60,9 @@ jobs:
             "test/font-display-optional-2026-11-24"
             "test/fontawesome-inline-2026-11-24"
             "review/remove-confirmed-unused-assets"
+            "fix/gallery-upload-status-auth-album-locks"
+            "fix/cache-admin-id-token-verification"
+            "dodydiaa2013-stack-patch-1"
           )
 
           echo "Mode: ${EXECUTE_DELETE}"
