@@ -6,7 +6,7 @@ const SCHEDULE_FOLDER_NAME = "قوائم فصول مدرسة عمر بن الخ�
 const PHOTO_ALBUMS_FOLDER_NAME = "ألبومات معرض مدرسة عمر بن الخطاب ث بنين";
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ALLOWED_CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
-  const RECOVERY_EMAIL = "";
+const RECOVERY_EMAIL = "";
 const ALLOWED_PAGE_ORIGINS = [
   "https://dodydiaa2013-stack.github.io"
 ];
@@ -2873,7 +2873,6 @@ function syncPageChangesFromGitHub_() {
   };
 }
 
-
 /**
  * يطلب تشغيل مزامنة النصوص فور نجاح الحفظ والتحقق من GitHub.
  * يتطلب GitHub token بصلاحية Contents: write على مستودع الإنتاج.
@@ -2920,7 +2919,6 @@ function triggerProductionPageTextSyncWorkflow_(settings) {
   return true;
 }
 
-
 /**
  * فحص مستقل لحالة طلب المراجعة بعد انتهاء الحفظ.
  * لا ينتظر Workflow داخل طلب الحفظ، ولا يؤكد PR إلا بعد مطابقة بصمة ملفه.
@@ -2940,10 +2938,6 @@ function getSavedPageChanges() {
 }
 
 /** نقطة دخول تحميل النصوص؛ لا توجد مزامنة عكسية أو نسخة Drive. */
-
-
-
-
 
 /**
  * توحيد صيغ حقل changes القادمة من نماذج POST المختلفة.
@@ -3115,10 +3109,17 @@ function savePageChanges(p) {
     // نقرأ أحدث نسخة من GitHub بعد الحصول على القفل.
     // ويُستخدم SHA في طلب PUT لمنع الكتابة فوق تعديل خارجي متزامن.
     const current = readProductionPageChangesFromGitHub_();
-    if (!current.exists || !current.sha) throw new Error("تعذر تأكيد النسخة الحالية من ملف GitHub؛ أوقفنا الحفظ دون إنشاء ملف جديد.");
+
+    if (!current.exists || !current.sha) {
+      throw new Error(
+        "تعذر تأكيد النسخة الحالية من ملف GitHub؛ أوقفنا الحفظ دون إنشاء ملف جديد."
+      );
+    }
+
     const merged = new Map();
 
-    // احتفظ بكل المعرّفات السابقة دائمًا؛ لا يسمح مسار الإنتاج باستبدال القائمة كاملة.
+    // احتفظ بكل المعرّفات السابقة دائمًا؛
+    // لا يسمح مسار الإنتاج باستبدال القائمة كاملة.
     current.payload.changes.forEach(function(item) {
       merged.set(item.id, item.text);
     });
@@ -3128,7 +3129,10 @@ function savePageChanges(p) {
     });
 
     const finalChanges = Array.from(merged.entries()).map(function(entry) {
-      return { id: entry[0], text: entry[1] };
+      return {
+        id: entry[0],
+        text: entry[1]
+      };
     });
 
     if (!finalChanges.length) {
@@ -3142,8 +3146,13 @@ function savePageChanges(p) {
     };
 
     const jsonContent = JSON.stringify(payloadToSave, null, 2) + "\n";
+
     const contentBase64 = Utilities.base64Encode(
-      Utilities.newBlob(jsonContent, "application/json", current.settings.path).getBytes()
+      Utilities.newBlob(
+        jsonContent,
+        "application/json",
+        current.settings.path
+      ).getBytes()
     );
 
     const requestBody = {
@@ -3168,48 +3177,75 @@ function savePageChanges(p) {
 
     if (putStatus !== 200 && putStatus !== 201) {
       let apiMessage = "";
+
       try {
-        const body = JSON.parse(putResponse.getContentText() || "{}");
+        const body = JSON.parse(
+          putResponse.getContentText() || "{}"
+        );
+
         apiMessage = String(body.message || "").slice(0, 180);
       } catch (ignored) {}
 
       if (putStatus === 409 || putStatus === 422) {
-        throw new Error("حدث تعديل متزامن على ملف GitHub. لم نستبدل النسخة الأخرى؛ أعد تحميل النصوص ثم حاول الحفظ.");
+        throw new Error(
+          "حدث تعديل متزامن على ملف GitHub. لم نستبدل النسخة الأخرى؛ أعد تحميل النصوص ثم حاول الحفظ."
+        );
       }
 
       throw new Error(
-        "رفض GitHub حفظ التعديلات. رمز الاستجابة: " + putStatus +
+        "رفض GitHub حفظ التعديلات. رمز الاستجابة: " +
+        putStatus +
         (apiMessage ? " - " + apiMessage : "")
       );
     }
 
     // إعادة القراءة من GitHub نفسه والتحقق من تطابق كل النصوص.
     const verified = readProductionPageChangesFromGitHub_();
+
     if (
       getPageChangesSyncHash_(verified.payload) !==
       getPageChangesSyncHash_(payloadToSave)
     ) {
-      throw new Error("لم تتطابق النصوص بعد إعادة قراءتها من GitHub؛ لم يتم تأكيد الحفظ.");
+      throw new Error(
+        "لم تتطابق النصوص بعد إعادة قراءتها من GitHub؛ لم يتم تأكيد الحفظ."
+      );
     }
 
     // ابدأ Workflow فور تأكيد أن GitHub حفظ النصوص كما هي.
     // فشل إطلاق الحدث لا يلغي نجاح الحفظ؛ يوجد تشغيل مجدول احتياطيًا.
     let workflowTriggered = false;
     let workflowTriggerError = "";
-    let reviewStatus = { status: "not_started", created: false };
+
+    let reviewStatus = {
+      status: "not_started",
+      created: false
+    };
+
     try {
-      workflowTriggered = triggerProductionPageTextSyncWorkflow_(verified.settings);
+      workflowTriggered =
+        triggerProductionPageTextSyncWorkflow_(verified.settings);
+
       if (workflowTriggered) {
         reviewStatus = {
           status: "pending",
           created: false,
-          message: "تم إطلاق Workflow. سيتم التحقق من طلب المراجعة بصورة مستقلة بعد تأكيد الحفظ."
+          message:
+            "تم إطلاق Workflow. سيتم التحقق من طلب المراجعة بصورة مستقلة بعد تأكيد الحفظ."
         };
       }
     } catch (dispatchError) {
-      workflowTriggerError = dispatchError.message || String(dispatchError);
-      reviewStatus = { status: "dispatch_failed", created: false };
-      console.error("تعذر إطلاق أو تأكيد مزامنة نصوص الإنتاج: " + workflowTriggerError);
+      workflowTriggerError =
+        dispatchError.message || String(dispatchError);
+
+      reviewStatus = {
+        status: "dispatch_failed",
+        created: false
+      };
+
+      console.error(
+        "تعذر إطلاق أو تأكيد مزامنة نصوص الإنتاج: " +
+        workflowTriggerError
+      );
     }
 
     return pageChangesPostMessage(p, {
@@ -3227,7 +3263,8 @@ function savePageChanges(p) {
       workflowStatusMessage: reviewStatus.message || "",
       reviewExpectedHash: getPageChangesSyncHash_(payloadToSave),
       htmlUpdatePending: true,
-      message: "تم حفظ النصوص والتحقق منها في مستودع الإنتاج. يجري التحقق من طلب المراجعة بصورة مستقلة.",
+      message:
+        "تم حفظ النصوص والتحقق منها في مستودع الإنتاج. يجري التحقق من طلب المراجعة بصورة مستقلة.",
       count: finalChanges.length
     });
 
@@ -3235,9 +3272,6 @@ function savePageChanges(p) {
     lock.releaseLock();
   }
 }
-
-
-
 
 
 function passwordRecoveryPostMessage(p, result) {
@@ -3275,7 +3309,6 @@ function passwordRecoveryPostMessage(p, result) {
     );
 }
 
-
 function recoveryHash_(salt, code) {
   const digest = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
@@ -3294,8 +3327,6 @@ function recoveryEqual_(a, b) {
   }
   return difference === 0;
 }
-
-
 
 function requestPasswordRecovery(p) {
   p = p || {};
@@ -3418,8 +3449,6 @@ function requestPasswordRecovery(p) {
     });
   }
 }
-
-
 
 function verifyPasswordRecoveryCode(p) {
   p = p || {};
@@ -4262,4 +4291,3 @@ function getScheduleUploadStatus(p) {
     }, callback);
   }
 }
-
