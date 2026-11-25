@@ -997,7 +997,8 @@ function bulkDeletePhotoContent(p) {
       lock.releaseLock();
     }
 
-    return photoAlbumPostMessage(p, {      success: true,
+    return photoAlbumPostMessage(p, {
+      success: true,
       message:
         "تم حذف العناصر المحددة بنجاح ونقلها إلى سلة مهملات Google Drive",
       scope: scope,
@@ -1996,6 +1997,7 @@ function replaceGalleryImage(p) {
     const bytes = decodeImageData(data, mimeType);
     newFile = folder.createFile(Utilities.newBlob(bytes, mimeType, fileName));
     setPublicImage(newFile);
+
     // لا ننقل الصورة القديمة إلى المهملات إلا بعد إنشاء الجديدة وضبط صلاحياتها.
     oldFile.setTrashed(true);
     replacementCompleted = true;
@@ -2995,7 +2997,8 @@ function savePageChanges(p) {
   const allowedIds = [
     "school-title", "school-administration", "home-title",
     "home-vision-text", "home-mission-text",
-    "results-card-title", "results-card-description",    "support-card-title", "support-card-description",
+    "results-card-title", "results-card-description",
+    "support-card-title", "support-card-description",
     "schedules-card-title", "schedules-card-description",
     "tablet-title", "tablet-description", "server-title",
     "tablet-support-title", "schedules-title",
@@ -3994,7 +3997,8 @@ function getGalleryUploadStatus(p) {
     ) {
       props.deleteProperty(key);
 
-      return outputWithCallback({        success: true,
+      return outputWithCallback({
+        success: true,
         found: false
       }, callback);
     }
