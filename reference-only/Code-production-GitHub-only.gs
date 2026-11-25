@@ -3048,7 +3048,7 @@ function restorePageChangesBackup(p) {
         changes: cleanSnapshot.changes,
         updatedAt: cleanSnapshot.updatedAt || new Date().toISOString()
       };
-      const jsonContent = JSON.stringify(payloadToSave, null, 2) + "\\n";
+      const jsonContent = JSON.stringify(payloadToSave, null, 2) + "\n";
       const contentBase64 = Utilities.base64Encode(
         Utilities.newBlob(jsonContent, "application/json", current.settings.path).getBytes()
       );
