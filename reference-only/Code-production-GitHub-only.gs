@@ -2691,6 +2691,53 @@ function verifyAdminToken(token) {
     throw new Error("يجب تسجيل الدخول بحساب المسؤول");
   }
 
+  // استخدم بصمة للرمز في مفتاح الكاش؛ لا تخزن رمز Google نفسه.
+  // تضمين إعدادات العميل والبريد يمنع إعادة استخدام نتيجة تحقق قديمة
+  // إذا تغير CLIENT_ID أو ALLOWED_EMAIL.
+  let cache = null;
+  let cacheKey = "";
+
+  try {
+    const digest = Utilities.computeDigest(
+      Utilities.DigestAlgorithm.SHA_256,
+      token + "|" + CLIENT_ID + "|" + ALLOWED_EMAIL,
+      Utilities.Charset.UTF_8
+    );
+
+    cacheKey = "ADMIN_ID_TOKEN_OK_" +
+      Utilities.base64EncodeWebSafe(digest).replace(/=+$/g, "");
+    cache = CacheService.getScriptCache();
+
+    const cachedValue = cache.get(cacheKey);
+    if (cachedValue) {
+      try {
+        const cachedInfo = JSON.parse(cachedValue);
+        const cachedExpiry = Number(cachedInfo.exp);
+
+        if (
+          cachedInfo.aud === CLIENT_ID &&
+          cachedInfo.email === ALLOWED_EMAIL &&
+          Number.isFinite(cachedExpiry) &&
+          cachedExpiry * 1000 > Date.now()
+        ) {
+          return cachedInfo.email;
+        }
+      } catch (cacheParseError) {
+        // تجاهل أي قيمة كاش تالفة وأعد التحقق من Google.
+      }
+
+      try {
+        cache.remove(cacheKey);
+      } catch (cacheRemoveError) {
+        // تعذر تنظيف الكاش لا يمنع التحقق المباشر.
+      }
+    }
+  } catch (cacheReadError) {
+    // الكاش تحسين للأداء فقط؛ عند تعذره نرجع للتحقق المباشر.
+    cache = null;
+    cacheKey = "";
+  }
+
   const response = UrlFetchApp.fetch(
     "https://oauth2.googleapis.com/tokeninfo?id_token=" +
     encodeURIComponent(token),
@@ -2702,14 +2749,38 @@ function verifyAdminToken(token) {
   }
 
   const info = JSON.parse(response.getContentText());
+  const expirySeconds = Number(info.exp);
+  const remainingSeconds = Math.floor(
+    (expirySeconds * 1000 - Date.now()) / 1000
+  );
 
   if (
     info.aud !== CLIENT_ID ||
     info.email !== ALLOWED_EMAIL ||
     String(info.email_verified) !== "true" ||
-    Number(info.exp) * 1000 <= Date.now()
+    !Number.isFinite(expirySeconds) ||
+    remainingSeconds <= 0
   ) {
     throw new Error("غير مصرح لك بتنفيذ هذا الإجراء");
+  }
+
+  // تخزين نتيجة التحقق الناجح لمدة قصيرة فقط، وبحد أقصى عمر الرمز.
+  // فشل الكتابة في الكاش لا يؤثر على نجاح التحقق أو الحماية.
+  if (cache && cacheKey) {
+    try {
+      const cacheTtl = Math.min(120, remainingSeconds);
+      cache.put(
+        cacheKey,
+        JSON.stringify({
+          aud: info.aud,
+          email: info.email,
+          exp: expirySeconds
+        }),
+        cacheTtl
+      );
+    } catch (cacheWriteError) {
+      // سيظل الطلب التالي قادرًا على التحقق مباشرة من Google.
+    }
   }
 
   return info.email;
