@@ -180,19 +180,26 @@ function savePhotoAlbumCover(folder, p) {
     throw new Error("حجم صورة الغلاف يجب ألا يتجاوز 4 ميجابايت");
   }
 
-  const blob = Utilities.newBlob(
-    bytes,
-    mimeType,
-    fileName
-  );
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+  let file = null;
 
-  const file = folder.createFile(blob);
+  try {
+    file = folder.createFile(blob);
+    setPublicImage(file);
 
-  setPublicImage(file);
-
-  return savePhotoAlbumMetadata(folder, {
-    coverFileId: file.getId()
-  });
+    return savePhotoAlbumMetadata(folder, {
+      coverFileId: file.getId()
+    });
+  } catch (error) {
+    if (file) {
+      try {
+        file.setTrashed(true);
+      } catch (cleanupError) {
+        Logger.log("تعذر تنظيف ملف غلاف غير مكتمل: " + cleanupError.message);
+      }
+    }
+    throw error;
+  }
 }
 
 function jsonOutput(data) {
@@ -1048,9 +1055,11 @@ function bulkDeletePhotoContent(p) {
 function createPhotoAlbum(p) {
   let lock = null;
   let lockAcquired = false;
+  let albumFolder = null;
+  let creationCommitted = false;
+
   try {
-    const isAuthorized = isPhotoAlbumAdminAuthorized(p);
-    if (!isAuthorized) {
+    if (!isPhotoAlbumAdminAuthorized(p)) {
       throw new Error("غير مصرح لك بإنشاء ألبوم");
     }
 
@@ -1061,49 +1070,38 @@ function createPhotoAlbum(p) {
     const title = String(p.title || "").trim();
     const description = String(p.description || "").trim();
 
-    if (!title) {
-      throw new Error("اكتب اسم الألبوم");
-    }
-
-    if (title.length > 80) {
-      throw new Error("اسم الألبوم طويل جدًا");
-    }
-
-    if (description.length > 500) {
-      throw new Error("وصف الألبوم طويل جدًا");
-    }
+    if (!title) throw new Error("اكتب اسم الألبوم");
+    if (title.length > 80) throw new Error("اسم الألبوم طويل جدًا");
+    if (description.length > 500) throw new Error("وصف الألبوم طويل جدًا");
 
     const rootFolder = getPhotoAlbumsFolder();
-    const albumFolder = rootFolder.createFolder(title);
+    albumFolder = rootFolder.createFolder(title);
 
-    let metadata = savePhotoAlbumMetadata(
-  albumFolder,
-  {
-    title: title,
-    description: description,
-    coverFileId: ""
-  }
-);
+    let metadata = savePhotoAlbumMetadata(albumFolder, {
+      title: title,
+      description: description,
+      coverFileId: ""
+    });
 
-if (p.coverData) {
-  metadata = savePhotoAlbumCover(albumFolder, p);
-}
-const albumImages = [];
-const albumFiles = albumFolder.getFiles();
+    if (p.coverData) {
+      metadata = savePhotoAlbumCover(albumFolder, p);
+    }
 
-while (albumFiles.hasNext()) {
-  const file = albumFiles.next();
+    const albumImages = [];
+    const albumFiles = albumFolder.getFiles();
 
-  if (!isImageMimeType(file.getMimeType())) {
-    continue;
-  }
+    while (albumFiles.hasNext()) {
+      const file = albumFiles.next();
+      if (!isImageMimeType(file.getMimeType())) continue;
 
-  albumImages.push({
-    id: file.getId(),
-    name: file.getName(),
-    url: getImageUrl(file.getId())
-  });
-}
+      albumImages.push({
+        id: file.getId(),
+        name: file.getName(),
+        url: getImageUrl(file.getId())
+      });
+    }
+
+    creationCommitted = true;
     return photoAlbumPostMessage(p, {
       success: true,
       message: "تم إنشاء الألبوم بنجاح",
@@ -1112,24 +1110,31 @@ while (albumFiles.hasNext()) {
         title: metadata.title,
         description: metadata.description,
         coverFileId: metadata.coverFileId || "",
-coverUrl: metadata.coverFileId
-  ? getImageUrl(metadata.coverFileId)
-  : "",
+        coverUrl: metadata.coverFileId ? getImageUrl(metadata.coverFileId) : "",
         imageCount: albumImages.length,
-images: albumImages,
-updatedAt: metadata.updatedAt
+        images: albumImages,
+        updatedAt: metadata.updatedAt
       }
     });
 
   } catch (error) {
+    if (albumFolder && !creationCommitted) {
+      try {
+        albumFolder.setTrashed(true);
+      } catch (cleanupError) {
+        Logger.log("تعذر تنظيف مجلد ألبوم لم يكتمل إنشاؤه: " + cleanupError.message);
+      }
+    }
+
     return photoAlbumPostMessage(p, {
       success: false,
-      message: error.message
+      message: error.message || "تعذر إنشاء الألبوم"
     });
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
 }
+
 /* =========================
    تعديل بيانات الألبوم
 ========================= */
@@ -1137,10 +1142,14 @@ updatedAt: metadata.updatedAt
 function updatePhotoAlbum(p) {
   let lock = null;
   let lockAcquired = false;
-  try {
-    const isAuthorized = isPhotoAlbumAdminAuthorized(p);
+  let albumFolder = null;
+  let previousName = "";
+  let previousMetadata = null;
+  let newCoverFile = null;
+  let updateCommitted = false;
 
-    if (!isAuthorized) {
+  try {
+    if (!isPhotoAlbumAdminAuthorized(p)) {
       throw new Error("غير مصرح لك بتعديل الألبوم");
     }
 
@@ -1149,42 +1158,41 @@ function updatePhotoAlbum(p) {
     lockAcquired = true;
 
     const albumId = String(p.albumId || "").trim();
+    if (!albumId) throw new Error("معرّف الألبوم غير موجود");
 
-    if (!albumId) {
-      throw new Error("معرّف الألبوم غير موجود");
-    }
-
-    const albumFolder = getPhotoAlbumFolder(albumId);
+    albumFolder = getPhotoAlbumFolder(albumId);
+    previousName = albumFolder.getName();
+    previousMetadata = getPhotoAlbumMetadata(albumFolder);
 
     const title = String(p.title || "").trim();
     const description = String(p.description || "").trim();
 
-    if (!title) {
-      throw new Error("اكتب اسم الألبوم");
-    }
+    if (!title) throw new Error("اكتب اسم الألبوم");
+    if (title.length > 80) throw new Error("اسم الألبوم طويل جدًا");
+    if (description.length > 500) throw new Error("وصف الألبوم طويل جدًا");
 
-    if (title.length > 80) {
-      throw new Error("اسم الألبوم طويل جدًا");
-    }
+    // جهّز الغلاف الجديد أولًا دون تغيير بيانات الألبوم الحالية.
+    if (p.coverData) {
+      const mimeType = String(p.coverMimeType || "").trim();
+      const fileName = getSafeFileName(p.coverName || "album-cover");
+      if (!isImageMimeType(mimeType)) throw new Error("ملف الغلاف يجب أن يكون صورة");
 
-    if (description.length > 500) {
-      throw new Error("وصف الألبوم طويل جدًا");
+      const bytes = decodeImageData(p.coverData, mimeType);
+      if (!bytes || bytes.length === 0) throw new Error("بيانات صورة الغلاف غير صالحة");
+      if (bytes.length > MAX_FILE_SIZE) throw new Error("حجم صورة الغلاف يجب ألا يتجاوز 4 ميجابايت");
+
+      newCoverFile = albumFolder.createFile(Utilities.newBlob(bytes, mimeType, fileName));
+      setPublicImage(newCoverFile);
     }
 
     albumFolder.setName(title);
+    const metadata = savePhotoAlbumMetadata(albumFolder, {
+      title: title,
+      description: description,
+      ...(newCoverFile ? { coverFileId: newCoverFile.getId() } : {})
+    });
 
-    let metadata = savePhotoAlbumMetadata(
-  albumFolder,
-  {
-    title: title,
-    description: description
-  }
-);
-
-if (p.coverData) {
-  metadata = savePhotoAlbumCover(albumFolder, p);
-}
-
+    updateCommitted = true;
     return photoAlbumPostMessage(p, {
       success: true,
       message: "تم تعديل بيانات الألبوم بنجاح",
@@ -1192,23 +1200,39 @@ if (p.coverData) {
         id: albumFolder.getId(),
         title: metadata.title,
         description: metadata.description,
-        coverFileId: metadata.coverFileId,
-        coverUrl: metadata.coverFileId
-          ? getImageUrl(metadata.coverFileId)
-          : "",
+        coverFileId: metadata.coverFileId || "",
+        coverUrl: metadata.coverFileId ? getImageUrl(metadata.coverFileId) : "",
         updatedAt: metadata.updatedAt
       }
     });
 
   } catch (error) {
+    if (albumFolder && !updateCommitted && previousMetadata) {
+      try {
+        if (previousName) albumFolder.setName(previousName);
+        savePhotoAlbumMetadata(albumFolder, previousMetadata);
+      } catch (rollbackError) {
+        Logger.log("تعذر استعادة بيانات الألبوم بعد فشل التعديل: " + rollbackError.message);
+      }
+    }
+
+    if (newCoverFile && !updateCommitted) {
+      try {
+        newCoverFile.setTrashed(true);
+      } catch (cleanupError) {
+        Logger.log("تعذر تنظيف الغلاف الجديد بعد فشل التعديل: " + cleanupError.message);
+      }
+    }
+
     return photoAlbumPostMessage(p, {
       success: false,
-      message: error.message
+      message: error.message || "تعذر تعديل بيانات الألبوم"
     });
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
 }
+
 /* =========================
    رفع صورة داخل ألبوم
 ========================= */
@@ -1345,10 +1369,15 @@ function updatePhotoAlbumCover(p) {
 function replacePhotoAlbumImage(p) {
   let lock = null;
   let lockAcquired = false;
-  try {
-    const isAuthorized = isPhotoAlbumAdminAuthorized(p);
+  let newFile = null;
+  let albumFolder = null;
+  let oldFile = null;
+  let previousMetadata = null;
+  let coverMetadataChanged = false;
+  let oldFileTrashed = false;
 
-    if (!isAuthorized) {
+  try {
+    if (!isPhotoAlbumAdminAuthorized(p)) {
       throw new Error("غير مصرح لك باستبدال الصور");
     }
 
@@ -1358,57 +1387,53 @@ function replacePhotoAlbumImage(p) {
 
     const albumId = String(p.albumId || "").trim();
     const oldFileId = String(p.imageId || p.fileId || "").trim();
+    if (!albumId || !oldFileId) throw new Error("بيانات الألبوم أو الصورة غير مكتملة");
 
-    if (!albumId || !oldFileId) {
-      throw new Error(
-        "بيانات الألبوم أو الصورة غير مكتملة"
-      );
-    }
-
-    const albumFolder = getPhotoAlbumFolder(albumId);
-    const oldFile = DriveApp.getFileById(oldFileId);
+    albumFolder = getPhotoAlbumFolder(albumId);
+    oldFile = DriveApp.getFileById(oldFileId);
 
     if (!isFileInsideFolder(oldFile, albumFolder.getId())) {
-      throw new Error(
-        "الصورة القديمة ليست داخل هذا الألبوم"
-      );
+      throw new Error("الصورة القديمة ليست داخل هذا الألبوم");
     }
-
     if (!isImageMimeType(oldFile.getMimeType())) {
       throw new Error("الملف القديم ليس صورة");
     }
 
     const fileName = getSafeFileName(p.fileName);
-    const mimeType = p.mimeType || "";
+    const mimeType = String(p.mimeType || "").trim();
     const data = p.data || "";
-
-    if (!data) {
-      throw new Error("بيانات الصورة الجديدة غير موجودة");
-    }
+    if (!data) throw new Error("بيانات الصورة الجديدة غير موجودة");
 
     const bytes = decodeImageData(data, mimeType);
-    const blob = Utilities.newBlob(
-      bytes,
-      mimeType,
-      fileName
-    );
-
-    // إنشاء الصورة الجديدة أولًا.
-    const newFile = albumFolder.createFile(blob);
-
+    newFile = albumFolder.createFile(Utilities.newBlob(bytes, mimeType, fileName));
     setPublicImage(newFile);
 
-    const metadata = getPhotoAlbumMetadata(albumFolder);
-
-    // إذا كانت الصورة القديمة هي الغلاف، نحدّث الغلاف.
-    if (metadata.coverFileId === oldFileId) {
-      savePhotoAlbumMetadata(albumFolder, {
-        coverFileId: newFile.getId()
-      });
+    previousMetadata = getPhotoAlbumMetadata(albumFolder);
+    if (previousMetadata.coverFileId === oldFileId) {
+      savePhotoAlbumMetadata(albumFolder, { coverFileId: newFile.getId() });
+      coverMetadataChanged = true;
     }
 
-    // حذف الصورة القديمة بعد نجاح إنشاء الجديدة.
-    oldFile.setTrashed(true);
+    try {
+      oldFile.setTrashed(true);
+      oldFileTrashed = true;
+    } catch (trashError) {
+      // لا نتخلص من الغلاف الجديد إذا تعذر نقل الغلاف القديم؛ نحافظ على غلاف صالح.
+      if (coverMetadataChanged) {
+        return photoAlbumPostMessage(p, {
+          success: true,
+          message: "تم حفظ الصورة الجديدة كغلاف، لكن تعذر نقل الصورة القديمة إلى المهملات. يمكنك حذفها لاحقًا.",
+          image: {
+            id: newFile.getId(),
+            name: newFile.getName(),
+            url: getImageUrl(newFile.getId())
+          },
+          coverFileId: newFile.getId(),
+          oldImageRetained: true
+        });
+      }
+      throw trashError;
+    }
 
     return photoAlbumPostMessage(p, {
       success: true,
@@ -1419,20 +1444,39 @@ function replacePhotoAlbumImage(p) {
         name: newFile.getName(),
         url: getImageUrl(newFile.getId())
       },
-      coverFileId: metadata.coverFileId === oldFileId
+      coverFileId: coverMetadataChanged
         ? newFile.getId()
-        : metadata.coverFileId
+        : previousMetadata.coverFileId
     });
 
   } catch (error) {
+    if (coverMetadataChanged && !oldFileTrashed && albumFolder && previousMetadata) {
+      try {
+        savePhotoAlbumMetadata(albumFolder, previousMetadata);
+      } catch (rollbackError) {
+        Logger.log("تعذر استعادة غلاف الألبوم السابق: " + rollbackError.message);
+        // في حالة تعذر الاستعادة نحتفظ بالصورة الجديدة حتى لا يشير الغلاف إلى ملف محذوف.
+        newFile = null;
+      }
+    }
+
+    if (newFile) {
+      try {
+        newFile.setTrashed(true);
+      } catch (cleanupError) {
+        Logger.log("تعذر تنظيف الصورة البديلة بعد فشل الاستبدال: " + cleanupError.message);
+      }
+    }
+
     return photoAlbumPostMessage(p, {
       success: false,
-      message: error.message
+      message: error.message || "تعذر استبدال الصورة"
     });
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
 }
+
 /* =========================
    حذف صورة من ألبوم
 ========================= */
