@@ -1,11 +1,12 @@
-const CLIENT_ID = "";
+
+const CLIENT_ID = "889693944069-h03fc0msck71367f96gqb9nh5stgvqk0.apps.googleusercontent.com";
 const ALLOWED_EMAIL = "";
 const FOLDER_NAME = "صور مدرسة عمر بن الخطاب ث بنين";
 const SCHEDULE_FOLDER_NAME = "قوائم فصول مدرسة عمر بن الخطاب ث بنين";
 const PHOTO_ALBUMS_FOLDER_NAME = "ألبومات معرض مدرسة عمر بن الخطاب ث بنين";
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ALLOWED_CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
-const RECOVERY_EMAIL = "";
+  const RECOVERY_EMAIL = "";
 const ALLOWED_PAGE_ORIGINS = [
   "https://dodydiaa2013-stack.github.io"
 ];
@@ -996,8 +997,7 @@ function bulkDeletePhotoContent(p) {
       lock.releaseLock();
     }
 
-    return photoAlbumPostMessage(p, {
-      success: true,
+    return photoAlbumPostMessage(p, {      success: true,
       message:
         "تم حذف العناصر المحددة بنجاح ونقلها إلى سلة مهملات Google Drive",
       scope: scope,
@@ -1584,11 +1584,9 @@ function doGet(e) {
   if (action === "galleryUploadStatus") {
   return getGalleryUploadStatus(p);
 }
-
-  if (action === "scheduleUploadStatus") {
-    return getScheduleUploadStatus(p);
-  }
-
+if (action === "scheduleUploadStatus") {
+  return getScheduleUploadStatus(p);
+}
   if (action === "gallery") {
     const images = getGalleryImages();
 
@@ -1998,7 +1996,6 @@ function replaceGalleryImage(p) {
     const bytes = decodeImageData(data, mimeType);
     newFile = folder.createFile(Utilities.newBlob(bytes, mimeType, fileName));
     setPublicImage(newFile);
-
     // لا ننقل الصورة القديمة إلى المهملات إلا بعد إنشاء الجديدة وضبط صلاحياتها.
     oldFile.setTrashed(true);
     replacementCompleted = true;
@@ -2109,6 +2106,7 @@ function deleteGalleryImage(p) {
    رفع أو استبدال صورة فصل
 ========================= */
 
+
 function uploadScheduleImage(p) {
   p = p || {};
   const startedAt = Date.now();
@@ -2133,6 +2131,7 @@ function uploadScheduleImage(p) {
     const fileName = getSafeFileName(p.fileName);
     const mimeType = p.mimeType || "";
     const data = p.data || "";
+
     if (!isAllowedClass(className)) throw new Error("الفصل المحدد غير مسموح به");
     if (!data) throw new Error("لم يتم إرسال صورة");
 
@@ -2146,18 +2145,22 @@ function uploadScheduleImage(p) {
     mark("انتظار القفل", t);
 
     cleanupOldScheduleUploadResults_();
+
     const props = PropertiesService.getScriptProperties();
     const resultKey = "SCHEDULE_UPLOAD_RESULT_" + nonce;
     const previous = props.getProperty(resultKey);
+
     if (previous) {
       try {
         const saved = JSON.parse(previous);
         if (saved.savedAt && Date.now() - saved.savedAt < 10 * 60 * 1000) {
           return scheduleUploadPostMessage(p, saved.result || {
-            success: false, message: "تم العثور على نتيجة سابقة غير مكتملة."
+            success: false,
+            message: "تم العثور على نتيجة سابقة غير مكتملة."
           });
         }
       } catch (ignored) {}
+
       props.deleteProperty(resultKey);
     }
 
@@ -2179,11 +2182,15 @@ function uploadScheduleImage(p) {
     t = Date.now();
     const files = folder.getFiles();
     let scanned = 0, deleted = 0, deleteErrors = 0;
+
     while (files.hasNext()) {
       const oldFile = files.next();
       scanned++;
-      if (oldFile.getId() !== newFile.getId() &&
-          (oldFile.getDescription() || "") === "CLASS:" + className) {
+
+      if (
+        oldFile.getId() !== newFile.getId() &&
+        (oldFile.getDescription() || "") === "CLASS:" + className
+      ) {
         try {
           oldFile.setTrashed(true);
           deleted++;
@@ -2193,6 +2200,7 @@ function uploadScheduleImage(p) {
         }
       }
     }
+
     mark("البحث عن الصور القديمة وحذفها", t);
     timings["عدد الملفات التي تم فحصها"] = scanned;
     timings["عدد الملفات القديمة المحذوفة"] = deleted;
@@ -2208,20 +2216,31 @@ function uploadScheduleImage(p) {
       fileName: newFile.getName(),
       url: getImageUrl(newFile.getId())
     };
-    props.setProperty(resultKey, JSON.stringify({ savedAt: Date.now(), result: result }));
+
+    props.setProperty(
+      resultKey,
+      JSON.stringify({ savedAt: Date.now(), result: result })
+    );
 
     console.log("تشخيص رفع الفصل " + className + ": " + JSON.stringify(timings));
     console.log("إجمالي زمن العملية: " + (Date.now() - startedAt) + " ms");
+
     return scheduleUploadPostMessage(p, result);
 
   } catch (error) {
     if (newFile && !uploadCompleted) {
-      try { newFile.setTrashed(true); } catch (cleanupError) { console.error(cleanupError); }
+      try {
+        newFile.setTrashed(true);
+      } catch (cleanupError) {
+        console.error(cleanupError);
+      }
     }
+
     const result = {
       success: false,
       message: error.message || "تعذر رفع قائمة الفصل"
     };
+
     if (lockAcquired && validNonce) {
       try {
         PropertiesService.getScriptProperties().setProperty(
@@ -2232,56 +2251,81 @@ function uploadScheduleImage(p) {
         console.error("تعذر حفظ نتيجة رفع الفصل: " + saveError.message);
       }
     }
+
     console.error("خطأ رفع الفصل: " + result.message);
     console.error("الأزمنة: " + JSON.stringify(timings));
     console.error("إجمالي زمن العملية: " + (Date.now() - startedAt) + " ms");
+
     return scheduleUploadPostMessage(p, result);
+
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
 }
 
 
+
 function deleteScheduleImage(p) {
   p = p || {};
+
   const lock = LockService.getScriptLock();
   let lockAcquired = false;
+
   try {
     verifyAdminToken(p.token || "");
     verifyAdminSession(p.adminSessionToken || "");
+
     const fileId = String(p.fileId || "").trim();
     const className = String(p.className || "").trim();
+
     if (!fileId || !isAllowedClass(className)) {
       throw new Error("بيانات حذف القائمة غير صحيحة");
     }
 
     lock.waitLock(20000);
     lockAcquired = true;
+
     const folder = getScheduleFolder();
     const file = DriveApp.getFileById(fileId);
+
     if (!isFileInsideFolder(file, folder.getId())) {
       throw new Error("الصورة ليست داخل مجلد قوائم الفصول");
     }
+
     if (!file.getMimeType().startsWith("image/")) {
       throw new Error("الملف المحدد ليس صورة");
     }
+
     if (file.getDescription() !== "CLASS:" + className) {
       throw new Error("الصورة لا تخص الفصل المحدد");
     }
 
     file.setTrashed(true);
-    if (!file.isTrashed()) throw new Error("لم يتم تأكيد نقل القائمة إلى سلة المهملات");
+
+    if (!file.isTrashed()) {
+      throw new Error("لم يتم تأكيد نقل القائمة إلى سلة المهملات");
+    }
+
     return jsonOutput({
       success: true,
       message: "تم حذف قائمة الفصل بنجاح",
       className: className,
       fileId: fileId
     });
+
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
 }
 
+
+
+/* =========================
+   التحقق من وجود الملف داخل مجلد محدد
+========================= */
+/* =========================================
+   الحذف الجماعي الآمن لقوائم الفصول
+========================================= */
 
 function bulkDeleteSchedules(p) {
   p = p || {};
@@ -2899,74 +2943,6 @@ function getSavedPageChanges() {
 
 
 
-/**
- * توحيد صيغ حقل changes القادمة من نماذج POST المختلفة.
- * يقبل المصفوفة المباشرة أو JSON string أو الغلاف { changes: ... }،
- * بما في ذلك الغلاف المتداخل كسلسلة JSON، دون تغيير محتوى النصوص.
- */
-function parsePageChangesInput_(rawValue) {
-  if (rawValue === null || rawValue === undefined || rawValue === "") {
-    throw new Error("بيانات التعديلات فارغة.");
-  }
-
-  let value = rawValue;
-
-  if (typeof value === "string") {
-    if (value.length > 100000) {
-      throw new Error("بيانات التعديلات أكبر من الحجم المسموح.");
-    }
-    try {
-      value = JSON.parse(value);
-    } catch (error) {
-      throw new Error("صيغة بيانات التعديلات غير صحيحة.");
-    }
-  } else if (typeof value !== "object") {
-    throw new Error("صيغة بيانات التعديلات غير مدعومة.");
-  } else {
-    let serializedLength = 0;
-    try {
-      serializedLength = JSON.stringify(value).length;
-    } catch (error) {
-      throw new Error("تعذر قراءة بيانات التعديلات.");
-    }
-    if (serializedLength > 100000) {
-      throw new Error("بيانات التعديلات أكبر من الحجم المسموح.");
-    }
-  }
-
-  // فك أغلفة JSON المتداخلة بحد أقصى ثلاث مرات لمنع الدوران غير المحدود.
-  for (let depth = 0; depth < 3; depth++) {
-    if (Array.isArray(value)) return value;
-    if (!value || typeof value !== "object") break;
-
-    if (!Object.prototype.hasOwnProperty.call(value, "changes")) {
-      if (Object.prototype.hasOwnProperty.call(value, "data")) {
-        value = value.data;
-        continue;
-      }
-      if (Object.prototype.hasOwnProperty.call(value, "payload")) {
-        value = value.payload;
-        continue;
-      }
-      break;
-    }
-
-    value = value.changes;
-    if (typeof value === "string") {
-      if (value.length > 100000) {
-        throw new Error("بيانات التعديلات أكبر من الحجم المسموح.");
-      }
-      try {
-        value = JSON.parse(value);
-      } catch (error) {
-        throw new Error("صيغة قائمة التعديلات الداخلية غير صحيحة.");
-      }
-    }
-  }
-
-  return Array.isArray(value) ? value : null;
-}
-
 function savePageChanges(p) {
   p = p || {};
 
@@ -2977,18 +2953,49 @@ function savePageChanges(p) {
   verifyAdminToken(p.googleUploadToken || p.token || "");
   verifyAdminSession(p.adminSessionToken || "");
 
-  const incomingChanges = parsePageChangesInput_(p.changes);
+  const rawChanges = p.changes || "";
 
-  if (!Array.isArray(incomingChanges) || incomingChanges.length === 0 ||
-      incomingChanges.length > 500) {
-    throw new Error("قائمة التعديلات غير صحيحة: يجب إرسال مصفوفة تضم من 1 إلى 500 تعديل.");
+  if (!rawChanges || rawChanges.length > 100000) {
+    throw new Error("بيانات التعديلات فارغة أو أكبر من الحجم المسموح");
+  }
+
+  let data;
+
+  try {
+    data = JSON.parse(rawChanges);
+  } catch (error) {
+    throw new Error("صيغة بيانات التعديلات غير صحيحة");
+  }
+
+  // دعم الصيغة الأساسية { changes: [...] } وكذلك المصفوفة المباشرة
+  // والتوافق مع العملاء الذين يرسلون changes كسلسلة JSON.
+  let incomingChanges = null;
+
+  if (Array.isArray(data)) {
+    incomingChanges = data;
+  } else if (data && Array.isArray(data.changes)) {
+    incomingChanges = data.changes;
+  } else if (data && typeof data.changes === "string") {
+    try {
+      const nestedChanges = JSON.parse(data.changes);
+      incomingChanges = Array.isArray(nestedChanges)
+        ? nestedChanges
+        : nestedChanges && Array.isArray(nestedChanges.changes)
+          ? nestedChanges.changes
+          : null;
+    } catch (error) {
+      incomingChanges = null;
+    }
+  }
+
+  if (!Array.isArray(incomingChanges) || incomingChanges.length > 500) {
+    throw new Error("قائمة التعديلات غير صحيحة");
   }
 
   const allowedIds = [
     "school-title", "school-administration", "home-title",
     "home-vision-text", "home-mission-text",
-    "results-card-title", "results-card-description",
-    "support-card-title", "support-card-description",
+    "results-card-title", "results-card-description",    "support-card-title", "support-card-description",
     "schedules-card-title", "schedules-card-description",
     "tablet-title", "tablet-description", "server-title",
     "tablet-support-title", "schedules-title",
@@ -3987,8 +3994,7 @@ function getGalleryUploadStatus(p) {
     ) {
       props.deleteProperty(key);
 
-      return outputWithCallback({
-        success: true,
+      return outputWithCallback({        success: true,
         found: false
       }, callback);
     }
@@ -4009,68 +4015,6 @@ function getGalleryUploadStatus(p) {
     }, callback);
   }
 }
-function cleanupOldScheduleUploadResults_() {
-  const props = PropertiesService.getScriptProperties();
-  const all = props.getProperties();
-  const prefix = "SCHEDULE_UPLOAD_RESULT_";
-  const now = Date.now();
-  const maxAge = 10 * 60 * 1000;
-
-  Object.keys(all).forEach(function(key) {
-    if (key.indexOf(prefix) !== 0) return;
-    try {
-      const saved = JSON.parse(all[key]);
-      if (!saved.savedAt || now - saved.savedAt >= maxAge) {
-        props.deleteProperty(key);
-      }
-    } catch (error) {
-      props.deleteProperty(key);
-    }
-  });
-}
-
-function getScheduleUploadStatus(p) {
-  p = p || {};
-  const nonce = String(p.nonce || "");
-  const callback = String(p.callback || "");
-  const origin = String(p.origin || "");
-
-  if (!ALLOWED_PAGE_ORIGINS.includes(origin)) {
-    return outputWithCallback({ success: false, found: false, message: "مصدر الطلب غير مسموح" }, callback);
-  }
-  if (!/^[A-Za-z0-9_-]{10,120}$/.test(nonce)) {
-    return outputWithCallback({ success: false, found: false, message: "رقم الطلب غير صالح" }, callback);
-  }
-
-  try {
-    verifyAdminToken(p.token || "");
-    verifyAdminSession(p.adminSessionToken || "");
-  } catch (error) {
-    return outputWithCallback({ success: false, found: false, message: error.message || "انتهت جلسة المسؤول" }, callback);
-  }
-
-  cleanupOldScheduleUploadResults_();
-  const props = PropertiesService.getScriptProperties();
-  const key = "SCHEDULE_UPLOAD_RESULT_" + nonce;
-  const savedValue = props.getProperty(key);
-
-  if (!savedValue) {
-    return outputWithCallback({ success: true, found: false }, callback);
-  }
-
-  try {
-    const saved = JSON.parse(savedValue);
-    if (!saved.savedAt || Date.now() - saved.savedAt >= 10 * 60 * 1000) {
-      props.deleteProperty(key);
-      return outputWithCallback({ success: true, found: false }, callback);
-    }
-    return outputWithCallback({ success: true, found: true, result: saved.result || {} }, callback);
-  } catch (error) {
-    props.deleteProperty(key);
-    return outputWithCallback({ success: false, found: false, message: "تعذر قراءة نتيجة الرفع" }, callback);
-  }
-}
-
 function cleanupOldGalleryUploadResults_() {
   const props = PropertiesService.getScriptProperties();
   const all = props.getProperties();
@@ -4166,4 +4110,102 @@ function getPhotoAlbumFolder(albumId) {
   }
 
   return albumFolder;
+}
+
+function cleanupOldScheduleUploadResults_() {
+  const props = PropertiesService.getScriptProperties();
+  const all = props.getProperties();
+  const prefix = "SCHEDULE_UPLOAD_RESULT_";
+  const now = Date.now();
+  const maxAge = 10 * 60 * 1000;
+
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf(prefix) !== 0) return;
+
+    try {
+      const saved = JSON.parse(all[key]);
+
+      if (!saved.savedAt || now - saved.savedAt >= maxAge) {
+        props.deleteProperty(key);
+      }
+    } catch (error) {
+      props.deleteProperty(key);
+    }
+  });
+}
+
+function getScheduleUploadStatus(p) {
+  p = p || {};
+
+  const nonce = String(p.nonce || "");
+  const callback = String(p.callback || "");
+  const origin = String(p.origin || "");
+
+  if (!ALLOWED_PAGE_ORIGINS.includes(origin)) {
+    return outputWithCallback({
+      success: false,
+      found: false,
+      message: "مصدر الطلب غير مسموح"
+    }, callback);
+  }
+
+  if (!/^[A-Za-z0-9_-]{10,120}$/.test(nonce)) {
+    return outputWithCallback({
+      success: false,
+      found: false,
+      message: "رقم الطلب غير صالح"
+    }, callback);
+  }
+
+  try {
+    verifyAdminToken(p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+  } catch (error) {
+    return outputWithCallback({
+      success: false,
+      found: false,
+      message: error.message || "انتهت جلسة المسؤول"
+    }, callback);
+  }
+
+  cleanupOldScheduleUploadResults_();
+
+  const props = PropertiesService.getScriptProperties();
+  const key = "SCHEDULE_UPLOAD_RESULT_" + nonce;
+  const savedValue = props.getProperty(key);
+
+  if (!savedValue) {
+    return outputWithCallback({
+      success: true,
+      found: false
+    }, callback);
+  }
+
+  try {
+    const saved = JSON.parse(savedValue);
+
+    if (!saved.savedAt || Date.now() - saved.savedAt >= 10 * 60 * 1000) {
+      props.deleteProperty(key);
+
+      return outputWithCallback({
+        success: true,
+        found: false
+      }, callback);
+    }
+
+    return outputWithCallback({
+      success: true,
+      found: true,
+      result: saved.result || {}
+    }, callback);
+
+  } catch (error) {
+    props.deleteProperty(key);
+
+    return outputWithCallback({
+      success: false,
+      found: false,
+      message: "تعذر قراءة نتيجة الرفع"
+    }, callback);
+  }
 }
