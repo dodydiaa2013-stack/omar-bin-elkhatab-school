@@ -1146,6 +1146,7 @@ function updatePhotoAlbum(p) {
   let previousName = "";
   let previousMetadata = null;
   let newCoverFile = null;
+  let rollbackSucceeded = true;
   let updateCommitted = false;
 
   try {
@@ -1212,11 +1213,14 @@ function updatePhotoAlbum(p) {
         if (previousName) albumFolder.setName(previousName);
         savePhotoAlbumMetadata(albumFolder, previousMetadata);
       } catch (rollbackError) {
+        rollbackSucceeded = false;
         Logger.log("تعذر استعادة بيانات الألبوم بعد فشل التعديل: " + rollbackError.message);
       }
     }
 
-    if (newCoverFile && !updateCommitted) {
+    // لا تنقل الغلاف الجديد للمهملات إذا فشلت استعادة البيانات السابقة؛
+    // فقد تكون بيانات الألبوم ما زالت تشير إليه.
+    if (newCoverFile && !updateCommitted && rollbackSucceeded) {
       try {
         newCoverFile.setTrashed(true);
       } catch (cleanupError) {
