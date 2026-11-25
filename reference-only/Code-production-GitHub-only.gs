@@ -1460,7 +1460,7 @@ function replacePhotoAlbumImage(p) {
       }
     }
 
-    if (newFile) {
+    if (newFile && !oldFileTrashed) {
       try {
         newFile.setTrashed(true);
       } catch (cleanupError) {
