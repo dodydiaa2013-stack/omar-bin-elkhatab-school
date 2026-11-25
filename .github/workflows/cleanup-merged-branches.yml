@@ -1,0 +1,94 @@
+name: Safe cleanup of merged branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute_delete:
+        description: "Actually delete the allowlisted branches (choose yes only after reviewing the dry run)"
+        required: true
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preview or delete confirmed merged branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXECUTE_DELETE: ${{ inputs.execute_delete }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Strict allowlist: branches whose corresponding PRs were confirmed merged.
+          # Only branches tied to PRs confirmed merged are listed; main, automation, backups, and unresolved branches are excluded.
+          branches=(
+            "chore/refresh-code-gs-reference-4216"
+            "chore/update-code-gs-reference-2026-11-25"
+            "cleanup/remove-legacy-hero-editor-reference"
+            "cleanup/remove-obsolete-hero-image-editor"
+            "fix/accessibility-modal-dialogs"
+            "fix/index-html-async-state-races"
+            "fix/fontawesome-font-path-2026-11-24"
+            "fix/google-search-console-verification-2026-11-24"
+            "fix/page-text-save-payload-normalization"
+            "fix/page-text-save-timeout-status"
+            "fix/page-text-sync-noop-check"
+            "fix/remove-obsolete-page-review-poll"
+            "fix/restore-page-changes-input-parser"
+            "fix/restore-tab-style-tag-2026-11-24"
+            "fix/schedule-upload-confirmation-locks"
+            "fix/skip-tailwind-for-page-text-sync"
+            "fix/unify-cairo-default-font-2026-11-24"
+            "replace/complete-user-codegs-4060"
+            "replace/reference-codegs-sanitized"
+            "revert/font-display-optional-2026-11-24"
+            "revert/pr-333-cairo-default-font"
+            "test/cairo-font-flash-guard-2026-11-24"
+            "test/font-display-block-2026-11-24"
+            "test/font-display-block-latin-adjust-2026-11-24"
+            "test/font-display-optional-2026-11-24"
+            "test/fontawesome-inline-2026-11-24"
+            "review/remove-confirmed-unused-assets"
+          )
+
+          echo "Mode: ${EXECUTE_DELETE}"
+          echo "Repository: ${REPOSITORY}"
+
+          open_prs="$(gh api --paginate "repos/${REPOSITORY}/pulls?state=open&per_page=100")"
+
+          for branch in "${branches[@]}"; do
+            if [[ "$branch" == "main" ]]; then
+              echo "SKIP protected branch: main"
+              continue
+            fi
+
+            encoded_branch="${branch//\//%2F}"
+            if ! gh api "repos/${REPOSITORY}/branches/${encoded_branch}" >/dev/null 2>&1; then
+              echo "SKIP missing branch: ${branch}"
+              continue
+            fi
+
+            if jq -e --arg branch "$branch" --arg repo "$REPOSITORY" \
+              'any(.[]; .head.ref == $branch and .head.repo.full_name == $repo)' \
+              <<<"$open_prs" >/dev/null; then
+              echo "SKIP branch with an open PR: ${branch}"
+              continue
+            fi
+
+            if [[ "$EXECUTE_DELETE" != "yes" ]]; then
+              echo "DRY RUN - would delete: ${branch}"
+            else
+              gh api --method DELETE "repos/${REPOSITORY}/git/refs/heads/${encoded_branch}"
+              echo "DELETED: ${branch}"
+            fi
+          done
