@@ -2516,12 +2516,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
         let pendingPageChangesNonce = null;
 let pageChangesTimeout = null;
-let pendingReviewStatusNonce = null;
-let pendingReviewStatusHash = '';
-let reviewStatusTimeout = null;
-let reviewPollTimer = null;
-let reviewPollAttempts = 0;
-let reviewExpectedHash = '';
 
 // Keep edits made locally until the server confirms that exact submitted value.
 // Polling responses must never overwrite text that has not yet been confirmed saved.
@@ -2638,129 +2632,11 @@ async function saveAllPageChanges() {
 }
 
 
-function scheduleProductionPageReviewPoll(delay = 2500) {
-    if (reviewPollTimer) clearTimeout(reviewPollTimer);
-    reviewPollTimer = setTimeout(() => {
-        reviewPollTimer = null;
-        requestProductionPageReviewStatus();
-    }, delay);
-}
-
-function requestProductionPageReviewStatus() {
-    if (!reviewExpectedHash || pendingReviewStatusNonce) return;
-
-    if (reviewPollAttempts >= 20) {
-        reviewPollAttempts = 0;
-        scheduleProductionPageReviewPoll(300000);
-        return;
-    }
-
-    if (!hasDualAdminAuthorization()) {
-        scheduleProductionPageReviewPoll(5000);
-        return;
-    }
-
-    reviewPollAttempts++;
-    const nonce = (window.crypto && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
-    pendingReviewStatusNonce = nonce;
-    pendingReviewStatusHash = reviewExpectedHash;
-
-    let frame = document.getElementById('pageReviewStatusFrame');
-    if (!frame) {
-        frame = document.createElement('iframe');
-        frame.id = 'pageReviewStatusFrame';
-        frame.name = 'pageReviewStatusFrame';
-        frame.style.display = 'none';
-        document.body.appendChild(frame);
-    }
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = GOOGLE_SCRIPT_URL;
-    form.target = 'pageReviewStatusFrame';
-    form.style.display = 'none';
-
-    const fields = {
-        action: 'checkProductionPageReviewStatus',
-        environment: 'PRODUCTION',
-        googleUploadToken: googleUploadToken,
-        adminSessionToken: window.adminSessionToken,
-        nonce: nonce,
-        origin: location.origin,
-        expectedHash: reviewExpectedHash
-    };
-
-    Object.entries(fields).forEach(([name, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = value;
-        form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-    form.remove();
-
-    if (reviewStatusTimeout) clearTimeout(reviewStatusTimeout);
-    reviewStatusTimeout = setTimeout(() => {
-        if (pendingReviewStatusNonce === nonce) {
-            pendingReviewStatusNonce = null;
-            pendingReviewStatusHash = '';
-            scheduleProductionPageReviewPoll(3500);
-        }
-    }, 12000);
-}
-
-function renderProductionPageReviewStatus(result) {
-    // حالة PR مستقلة تمامًا عن رسالة نجاح الحفظ في شريط المطور.
-    if (result && result.status === 'confirmed' &&
-        result.created === true && result.url) {
-        reviewExpectedHash = '';
-        if (reviewPollTimer) clearTimeout(reviewPollTimer);
-        reviewPollTimer = null;
-        return;
-    }
-
-    // يستمر التحقق بصمت؛ لا نغيّر رسالة "تم الحفظ بنجاح".
-    scheduleProductionPageReviewPoll(2500);
-}
-
 window.addEventListener('message', function(event) {
     if (!isTrustedAppsScriptMessage(event)) return;
 
     const data = event.data;
     if (!data) return;
-
-    if (data.type === 'productionPageReviewStatusResult') {
-        const reviewFrame = document.getElementById('pageReviewStatusFrame');
-        if (!reviewFrame ||
-            !isTrustedAppsScriptMessage(event, reviewFrame.contentWindow) ||
-            !pendingReviewStatusNonce ||
-            data.nonce !== pendingReviewStatusNonce) return;
-
-        if (reviewStatusTimeout) clearTimeout(reviewStatusTimeout);
-        reviewStatusTimeout = null;
-        pendingReviewStatusNonce = null;
-        const requestedHash = pendingReviewStatusHash;
-        pendingReviewStatusHash = '';
-
-        if (requestedHash !== reviewExpectedHash) {
-            scheduleProductionPageReviewPoll(250);
-            return;
-        }
-
-        const result = data.result || {};
-        if (result.environment !== 'PRODUCTION') {
-            renderProductionPageReviewStatus({});
-            return;
-        }
-
-        renderProductionPageReviewStatus(result);
-        return;
-    }
 
     const responseFrame = document.getElementById('pageChangesUploadFrame');
     if (!responseFrame ||
@@ -2795,16 +2671,6 @@ window.addEventListener('message', function(event) {
         // Show success only after Apps Script confirms GitHub save and verification.
         alert('تم الحفظ بنجاح في المستودع الأصلي على GitHub، وتم التحقق من التعديلات.');
 
-        reviewExpectedHash = String(result.reviewExpectedHash || '');
-        reviewPollAttempts = 0;
-        if (reviewPollTimer) clearTimeout(reviewPollTimer);
-        reviewPollTimer = null;
-
-        if (/^[A-Za-z0-9_-]{43}$/.test(reviewExpectedHash)) {
-            scheduleProductionPageReviewPoll(700);
-        } else {
-            console.warn('[PageChanges] بصمة تأكيد طلب المراجعة غير صالحة.');
-        }
         return;
     }
 
