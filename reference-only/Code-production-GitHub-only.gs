@@ -1244,6 +1244,12 @@ function updatePhotoAlbum(p) {
 function uploadPhotoAlbumImage(p) {
   let lock = null;
   let lockAcquired = false;
+  let albumFolder = null;
+  let createdFile = null;
+  let previousMetadata = null;
+  let coverMetadataUpdateAttempted = false;
+  let uploadCommitted = false;
+
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
 
@@ -1261,7 +1267,7 @@ function uploadPhotoAlbumImage(p) {
       throw new Error("معرّف الألبوم غير موجود");
     }
 
-    const albumFolder = getPhotoAlbumFolder(albumId);
+    albumFolder = getPhotoAlbumFolder(albumId);
 
     const fileName = getSafeFileName(p.fileName);
     const mimeType = p.mimeType || "";
@@ -1274,31 +1280,69 @@ function uploadPhotoAlbumImage(p) {
     const bytes = decodeImageData(data, mimeType);
     const blob = Utilities.newBlob(bytes, mimeType, fileName);
 
-    const file = albumFolder.createFile(blob);
+    createdFile = albumFolder.createFile(blob);
 
     // مشاركة الصورة نفسها فقط، وليس مجلد الألبوم.
-    setPublicImage(file);
+    setPublicImage(createdFile);
 
-    const metadata = getPhotoAlbumMetadata(albumFolder);
+    previousMetadata = getPhotoAlbumMetadata(albumFolder);
 
     // جعل أول صورة مرفوعة غلافًا تلقائيًا.
-    if (!metadata.coverFileId) {
+    if (!previousMetadata.coverFileId) {
+      coverMetadataUpdateAttempted = true;
       savePhotoAlbumMetadata(albumFolder, {
-        coverFileId: file.getId()
+        coverFileId: createdFile.getId()
       });
     }
+
+    // بعد اكتمال إنشاء الصورة وصلاحياتها وبيانات الغلاف،
+    // لا نحذف الصورة إذا تعذر إرسال رسالة التأكيد.
+    uploadCommitted = true;
 
     return photoAlbumPostMessage(p, {
       success: true,
       message: "تم رفع الصورة بنجاح",
       image: {
-        id: file.getId(),
-        name: file.getName(),
-        url: getImageUrl(file.getId())
+        id: createdFile.getId(),
+        name: createdFile.getName(),
+        url: getImageUrl(createdFile.getId())
       }
     });
 
   } catch (error) {
+    if (createdFile && !uploadCommitted) {
+      let safeToTrash = true;
+
+      // إذا بدأ تحديث الغلاف ثم حدث خطأ، أعد بيانات الغلاف السابقة
+      // قبل نقل الصورة الجديدة إلى المهملات.
+      if (coverMetadataUpdateAttempted && albumFolder && previousMetadata) {
+        try {
+          savePhotoAlbumMetadata(albumFolder, {
+            title: previousMetadata.title,
+            description: previousMetadata.description,
+            coverFileId: previousMetadata.coverFileId
+          });
+        } catch (rollbackError) {
+          safeToTrash = false;
+          Logger.log(
+            "تعذر استعادة بيانات غلاف الألبوم بعد فشل الرفع: " +
+            rollbackError.message
+          );
+        }
+      }
+
+      if (safeToTrash) {
+        try {
+          createdFile.setTrashed(true);
+        } catch (cleanupError) {
+          Logger.log(
+            "تعذر تنظيف صورة الألبوم غير المكتملة: " +
+            cleanupError.message
+          );
+        }
+      }
+    }
+
     return photoAlbumPostMessage(p, {
       success: false,
       message: error.message
