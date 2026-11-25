@@ -1126,7 +1126,6 @@ updatedAt: metadata.updatedAt
       success: false,
       message: error.message
     });
-  }
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
@@ -1206,7 +1205,6 @@ if (p.coverData) {
       success: false,
       message: error.message
     });
-  }
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
@@ -1277,7 +1275,6 @@ function uploadPhotoAlbumImage(p) {
       success: false,
       message: error.message
     });
-  }
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
@@ -1337,7 +1334,6 @@ function updatePhotoAlbumCover(p) {
       success: false,
       message: error.message
     });
-  }
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
@@ -1433,7 +1429,6 @@ function replacePhotoAlbumImage(p) {
       success: false,
       message: error.message
     });
-  }
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
@@ -1497,7 +1492,6 @@ function deletePhotoAlbumImage(p) {
       success: false,
       message: error.message
     });
-  }
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
@@ -1548,7 +1542,6 @@ function deletePhotoAlbum(p) {
       success: false,
       message: error.message
     });
-  }
   } finally {
     if (lockAcquired) lock.releaseLock();
   }
