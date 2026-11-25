@@ -1685,6 +1685,10 @@ function doPost(e) {
       return savePageChanges(p);
     }
 
+    if (action === "restorePageChangesBackup") {
+      return restorePageChangesBackup(p);
+    }
+
     if (action === "checkProductionPageReviewStatus") {
       return checkProductionPageReviewStatus(p);
     }
@@ -3012,6 +3016,103 @@ function parsePageChangesInput_(rawValue) {
   }
 
   return Array.isArray(value) ? value : null;
+}
+
+/**
+ * استعادة لقطة كاملة من تعديلات نصوص الإنتاج، مع تحقق مزدوج وقراءة بعد الكتابة.
+ */
+function restorePageChangesBackup(p) {
+  p = p || {};
+  try {
+    if (String(p.environment || "") !== "PRODUCTION") throw new Error("تم رفض الاستعادة لأن الطلب لا يحدد بيئة الإنتاج.");
+    verifyAdminToken(p.googleUploadToken || p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+
+    const raw = String(p.changes || "");
+    if (!raw || raw.length > 100000) throw new Error("ملف تعديلات النصوص فارغ أو أكبر من الحجم المسموح.");
+    let snapshot;
+    try { snapshot = JSON.parse(raw); }
+    catch (error) { throw new Error("تعذر قراءة بنية تعديلات النصوص داخل النسخة."); }
+
+    const cleanSnapshot = validateProductionPageChangesPayload_(snapshot);
+    if (cleanSnapshot.changes.length > 500) throw new Error("عدد تعديلات النصوص في النسخة يتجاوز الحد المسموح.");
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const current = readProductionPageChangesFromGitHub_();
+      if (!current.exists || !current.sha) throw new Error("تعذر تأكيد النسخة الحالية من GitHub؛ أوقفنا الاستعادة دون تغيير الملف.");
+
+      const payloadToSave = {
+        success: true,
+        changes: cleanSnapshot.changes,
+        updatedAt: cleanSnapshot.updatedAt || new Date().toISOString()
+      };
+      const jsonContent = JSON.stringify(payloadToSave, null, 2) + "\\n";
+      const contentBase64 = Utilities.base64Encode(
+        Utilities.newBlob(jsonContent, "application/json", current.settings.path).getBytes()
+      );
+      const requestBody = {
+        message: "Restore production page text backup",
+        content: contentBase64,
+        branch: current.settings.branch,
+        sha: current.sha
+      };
+      const putResponse = UrlFetchApp.fetch(current.apiUrl, {
+        method: "put",
+        contentType: "application/json",
+        headers: current.headers,
+        payload: JSON.stringify(requestBody),
+        muteHttpExceptions: true
+      });
+      const putStatus = putResponse.getResponseCode();
+      if (putStatus !== 200 && putStatus !== 201) {
+        let detail = "";
+        try {
+          const body = JSON.parse(putResponse.getContentText() || "{}");
+          detail = String(body.message || "").slice(0, 180);
+        } catch (ignored) {}
+        throw new Error("رفض GitHub استعادة النسخة. رمز الاستجابة: " + putStatus + (detail ? " - " + detail : ""));
+      }
+
+      const verified = readProductionPageChangesFromGitHub_();
+      if (getPageChangesSyncHash_(verified.payload) !== getPageChangesSyncHash_(payloadToSave)) {
+        throw new Error("لم تتطابق النصوص بعد إعادة قراءتها من GitHub؛ لم يتم تأكيد الاستعادة.");
+      }
+
+      let workflowTriggered = false;
+      let workflowTriggerError = "";
+      try { workflowTriggered = triggerProductionPageTextSyncWorkflow_(verified.settings); }
+      catch (dispatchError) {
+        workflowTriggerError = dispatchError.message || String(dispatchError);
+        console.error("تم حفظ النسخة والتحقق منها، لكن تعذر إطلاق مسار المراجعة: " + workflowTriggerError);
+      }
+
+      return pageChangesPostMessage(p, {
+        success: true,
+        environment: "PRODUCTION",
+        githubSaved: true,
+        githubVerified: true,
+        workflowTriggered: workflowTriggered,
+        workflowTriggerError: workflowTriggerError,
+        htmlUpdatePending: true,
+        message: workflowTriggered
+          ? "تمت استعادة النصوص والتحقق منها في GitHub، وتم إطلاق مسار المراجعة."
+          : "تمت استعادة النصوص والتحقق منها في GitHub، لكن تعذر تأكيد إطلاق مسار المراجعة.",
+        count: payloadToSave.changes.length
+      });
+    } finally {
+      if (lock.hasLock()) lock.releaseLock();
+    }
+  } catch (error) {
+    return pageChangesPostMessage(p, {
+      success: false,
+      environment: "PRODUCTION",
+      githubSaved: false,
+      githubVerified: false,
+      message: error.message || "تعذرت استعادة تعديلات النصوص."
+    });
+  }
 }
 
 function savePageChanges(p) {
