@@ -30,18 +30,34 @@ jobs:
           set -euo pipefail
 
           # Strict allowlist: branches whose corresponding PRs were confirmed merged.
-          # main, automation, backup, test, and unresolved branches are deliberately excluded.
+          # Only branches tied to PRs confirmed merged are listed; main, automation, backups, and unresolved branches are excluded.
           branches=(
             "chore/refresh-code-gs-reference-4216"
+            "chore/update-code-gs-reference-2026-11-25"
             "cleanup/remove-legacy-hero-editor-reference"
             "cleanup/remove-obsolete-hero-image-editor"
             "fix/accessibility-modal-dialogs"
             "fix/index-html-async-state-races"
+            "fix/fontawesome-font-path-2026-11-24"
+            "fix/google-search-console-verification-2026-11-24"
+            "fix/page-text-save-payload-normalization"
             "fix/page-text-save-timeout-status"
             "fix/page-text-sync-noop-check"
+            "fix/remove-obsolete-page-review-poll"
             "fix/restore-page-changes-input-parser"
+            "fix/restore-tab-style-tag-2026-11-24"
             "fix/schedule-upload-confirmation-locks"
             "fix/skip-tailwind-for-page-text-sync"
+            "fix/unify-cairo-default-font-2026-11-24"
+            "replace/complete-user-codegs-4060"
+            "replace/reference-codegs-sanitized"
+            "revert/font-display-optional-2026-11-24"
+            "revert/pr-333-cairo-default-font"
+            "test/cairo-font-flash-guard-2026-11-24"
+            "test/font-display-block-2026-11-24"
+            "test/font-display-block-latin-adjust-2026-11-24"
+            "test/font-display-optional-2026-11-24"
+            "test/fontawesome-inline-2026-11-24"
             "review/remove-confirmed-unused-assets"
           )
 
