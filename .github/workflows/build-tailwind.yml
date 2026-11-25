@@ -60,7 +60,7 @@ jobs:
             throw new Error('Tailwind inline CSS markers are missing or out of order.');
           }
           const contentStart = startAt + start.length;
-          const updated = html.slice(0, contentStart) + '\\n' + css + '\\n' + html.slice(endAt);
+          const updated = html.slice(0, contentStart) + '\n' + css + '\n' + html.slice(endAt);
           fs.writeFileSync(indexPath, updated);
           NODE
 
