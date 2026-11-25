@@ -1,0 +1,140 @@
+name: Delete reviewed obsolete branches
+
+on:
+  workflow_dispatch:
+    inputs:
+      execute_delete:
+        description: "Choose yes only when you want to delete the 30 reviewed branches"
+        required: true
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
+      confirmation:
+        description: 'For deletion, enter exactly DELETE-30-REVIEWED-BRANCHES'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  delete-reviewed-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify allowlist and delete only approved branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          EXECUTE_DELETE: ${{ inputs.execute_delete }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected_repository="dodydiaa2013-stack/omar-bin-elkhatab-school"
+          if [[ "$REPOSITORY" != "$expected_repository" ]]; then
+            echo "::error::Unexpected repository: $REPOSITORY"
+            exit 1
+          fi
+
+          protected_branches=(
+            "main"
+            "preview/readonly-379"
+            "automation/page-text-sync"
+            "automation/page-text-sync-input"
+            "transfer/page-text-github-draft-only"
+            "fix/self-host-cairo-font"
+          )
+
+          branches=(
+            "chore/prepare-reviewed-closed-branch-cleanup"
+            "chore/safe-bulk-delete-merged-branches"
+            "feature/hero-image-simple-responsive-replacement"
+            "feature/preview-entrance-image-fill-rounded"
+            "feature/preview-entrance-image-height"
+            "feature/production-entrance-image-fill-rounded"
+            "feature/production-entrance-image-size-only"
+            "feature/production-entrance-image-size-only-clean"
+            "fix/album-operation-rollback-v1"
+            "fix/album-upload-partial-failure-cleanup"
+            "fix/bind-postmessage-and-reserved-fields"
+            "fix/gallery-status-auth-album-locks-v2"
+            "fix/preview-379-font-icon-alignment"
+            "fix/preview-font-refresh"
+            "perf/inline-tailwind-css-experiment"
+            "preview-379-image-size-only"
+            "preview-hero-image-size-adjustment"
+            "revert/pr-389-entrance-image-size"
+            "backup/cairo-font-flash-test-2026-11-24"
+            "backup/fix-fontawesome-font-path-2026-11-24"
+            "backup/font-display-block-2026-11-24"
+            "backup/font-display-block-latin-adjust-2026-11-24"
+            "backup/font-display-optional-2026-11-24"
+            "backup/fontawesome-inline-2026-11-24"
+            "backup/google-search-console-verification-2026-11-24"
+            "backup/main-before-google-url-fix-2026-11-20"
+            "backup/pre-responsive-hero-image-2026-11-22"
+            "backup/pre-restore-input-and-pause-2026-11-22"
+            "backup/pre-stale-page-text-overwrite-fix-2026-11-23"
+            "backup/restore-tab-style-tag-2026-11-24"
+          )
+
+          if [[ "${#branches[@]}" -ne 30 ]]; then
+            echo "::error::Allowlist count is not exactly 30."
+            exit 1
+          fi
+
+          for branch in "${branches[@]}"; do
+            for protected in "${protected_branches[@]}"; do
+              if [[ "$branch" == "$protected" ]]; then
+                echo "::error::Protected branch appeared in deletion allowlist: $branch"
+                exit 1
+              fi
+            done
+          done
+
+          echo "Verified exact allowlist: ${#branches[@]} branches."
+          echo "Protected branches: ${protected_branches[*]}"
+
+          if [[ "$EXECUTE_DELETE" == "yes" && "$CONFIRMATION" != "DELETE-30-REVIEWED-BRANCHES" ]]; then
+            echo "::error::Deletion confirmation phrase is missing or incorrect. Nothing was deleted."
+            exit 1
+          fi
+
+          open_prs="$(gh api --paginate "repos/${REPOSITORY}/pulls?state=open&per_page=100")"
+
+          deleted=0
+          skipped=0
+          for branch in "${branches[@]}"; do
+            encoded_branch="${branch//\//%2F}"
+
+            if ! gh api "repos/${REPOSITORY}/branches/${encoded_branch}" >/dev/null 2>&1; then
+              echo "SKIP missing branch: $branch"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            if jq -e --arg branch "$branch" --arg repo "$REPOSITORY"               'any(.[]; .head.ref == $branch and .head.repo.full_name == $repo)'               <<<"$open_prs" >/dev/null; then
+              echo "SKIP branch with an open pull request: $branch"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            if [[ "$EXECUTE_DELETE" != "yes" ]]; then
+              echo "DRY RUN - would delete: $branch"
+            else
+              gh api --method DELETE "repos/${REPOSITORY}/git/refs/heads/${encoded_branch}"
+              echo "DELETED: $branch"
+              deleted=$((deleted + 1))
+            fi
+          done
+
+          if [[ "$EXECUTE_DELETE" == "yes" ]]; then
+            echo "Deletion run finished. Deleted: $deleted. Skipped: $skipped."
+          else
+            echo "Dry run finished. No branches were deleted. Skipped: $skipped."
+            echo "To execute, run again with execute_delete=yes and the exact confirmation phrase."
+          fi
