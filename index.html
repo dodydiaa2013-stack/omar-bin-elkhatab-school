@@ -3739,7 +3739,8 @@ async function galleryUploadPost(fields, baselineImages) {
         };
 
         const onMessage = event => {
-            if (!isTrustedAppsScriptMessage(event)) return;
+            // اربط تأكيد الرفع بإطار الطلب نفسه، لا بأي إطار Apps Script آخر.
+            if (!isTrustedAppsScriptMessage(event, frame.contentWindow)) return;
             const message = event.data;
             if (!message || message.type !== 'galleryUploadResult' || message.nonce !== nonce) return;
             acceptResult(message.result);
@@ -3797,7 +3798,8 @@ async function galleryUploadPost(fields, baselineImages) {
             };
 
             const onStatusMessage = event => {
-                if (!isTrustedAppsScriptMessage(event)) return;
+                // اربط نتيجة الاستعلام بإطار POST الخاص بهذا الاستعلام تحديدًا.
+                if (!isTrustedAppsScriptMessage(event, statusFrame.contentWindow)) return;
                 const message = event.data;
                 if (!message || message.type !== 'galleryUploadStatusResult' ||
                     message.nonce !== nonce) return;
