@@ -8,8 +8,7 @@ const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ALLOWED_CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
   const RECOVERY_EMAIL = "dodydiaa_2015@hotmail.com";
 const ALLOWED_PAGE_ORIGINS = [
-  "https://dodydiaa2013-stack.github.io",
-  "https://omar-bin-elkhatab-school-pr407-preview-cgxfpggvq.vercel.app"
+  "https://dodydiaa2013-stack.github.io"
 ];
 /* =========================
    المجلدات
