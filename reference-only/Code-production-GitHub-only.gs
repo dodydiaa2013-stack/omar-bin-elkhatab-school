@@ -2638,7 +2638,7 @@ function adminLoginPostMessage(p, result) {
 
   return HtmlService.createHtmlOutput(
     "<!DOCTYPE html><html><body><script>" +
-    "window.parent.postMessage(" + payload + ", " +
+    "window.parent.parent.postMessage(" + payload + ", " +
     JSON.stringify(targetOrigin) + ");" +
     "</script></body></html>"
   ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
