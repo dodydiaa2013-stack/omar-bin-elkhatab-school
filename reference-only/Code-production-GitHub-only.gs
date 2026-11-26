@@ -8,7 +8,9 @@ const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ALLOWED_CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
 const RECOVERY_EMAIL = "";
 const ALLOWED_PAGE_ORIGINS = [
-  "https://dodydiaa2013-stack.github.io"
+  "https://dodydiaa2013-stack.github.io",
+  "https://omar-bin-elkhatab-school-pr407-preview-cgxfpggvq.vercel.app",
+  "https://omar-bin-elkhatab-school-pr407-preview-e164xqdxn.vercel.app"
 ];
 /* =========================
    المجلدات
@@ -1757,6 +1759,13 @@ function doPost(e) {
   } catch (error) {
     const message = error.message || "تعذر تنفيذ العملية";
 
+    if (action === "adminLogin") {
+      return adminLoginPostMessage(p, {
+        success: false,
+        message: message
+      });
+    }
+
     if (action === "adminLogout") {
       return adminLogoutPostMessage(p, {
         success: false,
@@ -2605,48 +2614,59 @@ CacheService.getScriptCache().put(
 }
 
 
-function adminLogin(p) {
+function adminLoginPostMessage(p, result) {
   p = p || {};
 
   const targetOrigin = String(p.origin || "");
-  const originAllowed = ALLOWED_PAGE_ORIGINS.includes(targetOrigin);
-
-  if (!originAllowed) {
-    throw new Error("عنوان الموقع غير معتمد لتسجيل الدخول.");
+  if (!ALLOWED_PAGE_ORIGINS.includes(targetOrigin)) {
+    // لا نرسل postMessage إلى مصدر غير معتمد.
+    return jsonOutput({
+      success: false,
+      message: "عنوان الموقع غير معتمد لتسجيل الدخول."
+    });
   }
 
+  const nonce = String(p.nonce || "");
+  const payload = JSON.stringify({
+    type: "adminLoginResult",
+    nonce: nonce,
+    result: result || {
+      success: false,
+      message: "تعذر تسجيل الدخول."
+    }
+  }).replace(/</g, "\\u003c");
+
+  return HtmlService.createHtmlOutput(
+    "<!DOCTYPE html><html><body><script>" +
+    "window.top.postMessage(" + payload + ", " +
+    JSON.stringify(targetOrigin) + ");" +
+    "</script></body></html>"
+  ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+
+function adminLogin(p) {
+  p = p || {};
+
   try {
+    const targetOrigin = String(p.origin || "");
+    if (!ALLOWED_PAGE_ORIGINS.includes(targetOrigin)) {
+      throw new Error("عنوان الموقع غير معتمد لتسجيل الدخول.");
+    }
+
+    const nonce = String(p.nonce || "");
+    if (!/^[A-Za-z0-9_-]{10,120}$/.test(nonce)) {
+      throw new Error("رقم طلب تسجيل الدخول غير صالح.");
+    }
+
     const result = verifyAdminPasswordOnServer(p.password);
-
-    const payload = JSON.stringify({
-      type: "adminLoginResult",
-      nonce: p.nonce || "",
-      result: result
-    }).replace(/</g, "\\u003c");
-
-    return HtmlService.createHtmlOutput(
-      "<!DOCTYPE html><html><body><script>" +
-      "top.postMessage(" + payload + ", " +
-      JSON.stringify(targetOrigin) + ");" +
-      "</script></body></html>"
-    ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    return adminLoginPostMessage(p, result);
 
   } catch (error) {
-    const payload = JSON.stringify({
-      type: "adminLoginResult",
-      nonce: p.nonce || "",
-      result: {
-        success: false,
-        message: error.message || "تعذر تسجيل الدخول"
-      }
-    }).replace(/</g, "\\u003c");
-
-    return HtmlService.createHtmlOutput(
-      "<!DOCTYPE html><html><body><script>" +
-      "top.postMessage(" + payload + ", " +
-      JSON.stringify(targetOrigin) + ");" +
-      "</script></body></html>"
-    ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    return adminLoginPostMessage(p, {
+      success: false,
+      message: error.message || "تعذر تسجيل الدخول."
+    });
   }
 }
 
