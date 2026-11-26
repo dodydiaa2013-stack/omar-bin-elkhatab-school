@@ -454,7 +454,7 @@
             <span id="adminBadge" class="hidden bg-emerald-600 text-white px-2 py-0.5 rounded-full text-xs font-bold animate-pulse">
                 <i class="fa-solid fa-user-shield ml-1"></i>وضع المعلم (مفعّل)
             </span>
-            <button onclick="toggleAdminModal()" id="loginBtn" class="bg-gold hover:bg-gold-hover text-navy font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow">
+            <button onclick="toggleAdminModal()" id="loginBtn" hidden aria-hidden="true" tabindex="-1" style="display:none!important" class="bg-gold hover:bg-gold-hover text-navy font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow">
                 <i class="fa-solid fa-key"></i>
                 <span id="loginBtnText">تسجيل الدخول</span>
             </button>
@@ -5721,6 +5721,23 @@ async function deleteCurrentPhotoAlbum() {
     }
 }
 
+
+    
+    // صفحة الإدارة المنفصلة فقط هي التي تفتح نافذة الدخول تلقائيًا.
+    // يظل مسار المصادقة الحالي (Google + كلمة مرور المسؤول) دون تغيير.
+    if (new URLSearchParams(window.location.search).get('adminD') === '1') {
+        const openAdminEntry = () => {
+            const modal = document.getElementById('adminModal');
+            if (modal && modal.classList.contains('hidden')) {
+                openAccessibleModal(modal, '#adminPasswordInput', toggleAdminModal);
+            }
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', openAdminEntry, { once: true });
+        } else {
+            openAdminEntry();
+        }
+    }
     </script>
     
 </body>
