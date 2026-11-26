@@ -1993,10 +1993,14 @@ window.addEventListener('DOMContentLoaded', () => {
                 if (submitButton) submitButton.disabled = false;
             };
 
+            // Keep the submitted iframe's WindowProxy as the trust anchor.
+            // Apps Script may post from a nested Google sandbox frame; the shared
+            // validator accepts that frame only when it descends from this iframe.
+            const expectedLoginFrame = frame.contentWindow;
+
             const handleMessage = function(event) {
-                // Apps Script HtmlService wraps the response in a nested Google iframe.
-                // Validate its origin and bind the response to this request's nonce.
-                if (!isTrustedAppsScriptMessage(event)) return;
+                // Validate both the Google origin and the source frame for this request.
+                if (!isTrustedAppsScriptMessage(event, expectedLoginFrame)) return;
                 const data = event.data;
 
                 if (!data || data.type !== 'adminLoginResult' || data.nonce !== nonce) {
