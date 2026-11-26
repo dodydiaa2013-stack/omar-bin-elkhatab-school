@@ -1,12 +1,12 @@
 
 const CLIENT_ID = "889693944069-h03fc0msck71367f96gqb9nh5stgvqk0.apps.googleusercontent.com";
-const ALLOWED_EMAIL = "";
+const ALLOWED_EMAIL = "dodydiaa2013@gmail.com";
 const FOLDER_NAME = "صور مدرسة عمر بن الخطاب ث بنين";
 const SCHEDULE_FOLDER_NAME = "قوائم فصول مدرسة عمر بن الخطاب ث بنين";
 const PHOTO_ALBUMS_FOLDER_NAME = "ألبومات معرض مدرسة عمر بن الخطاب ث بنين";
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const ALLOWED_CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
-const RECOVERY_EMAIL = "";
+  const RECOVERY_EMAIL = "dodydiaa_2015@hotmail.com";
 const ALLOWED_PAGE_ORIGINS = [
   "https://dodydiaa2013-stack.github.io"
 ];
