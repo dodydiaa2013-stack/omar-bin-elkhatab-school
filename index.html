@@ -454,7 +454,7 @@
             <span id="adminBadge" class="hidden bg-emerald-600 text-white px-2 py-0.5 rounded-full text-xs font-bold animate-pulse">
                 <i class="fa-solid fa-user-shield ml-1"></i>وضع المعلم (مفعّل)
             </span>
-            <button onclick="toggleAdminModal()" id="loginBtn" aria-hidden="true" tabindex="-1" class="bg-gold hover:bg-gold-hover text-navy font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow" style="visibility:hidden;pointer-events:none">
+            <button onclick="toggleAdminModal()" id="loginBtn" class="bg-gold hover:bg-gold-hover text-navy font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow">
                 <i class="fa-solid fa-key"></i>
                 <span id="loginBtnText">تسجيل الدخول</span>
             </button>
@@ -1152,8 +1152,7 @@
                 <p class="text-xs text-slate-500">أدخل الرقم السري لتفعيل لوحة التعديل ورفع النتائج</p>
             </div>
             <form id="adminLoginForm" class="space-y-3" onsubmit="event.preventDefault(); verifyAdminPassword();">
-                <label for="adminPasswordInput" class="block text-sm font-bold text-slate-700 text-right">كلمة المرور</label>
-                <input type="password" id="adminPasswordInput" aria-label="كلمة مرور المسؤول" autocomplete="current-password" placeholder="أدخل كلمة المرور الحالية"
+                <input type="password" id="adminPasswordInput" aria-label="كلمة مرور المسؤول" autocomplete="current-password" placeholder="أدخل الرقم السري هنا..."
                        class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800 focus:ring-2 focus:ring-gold outline-none">
                 <div id="adminErrorMsg" class="text-xs text-red-600 text-center hidden font-bold">الرقم السري غير صحيح! حاول مرة أخرى.</div>
                 <button type="submit" id="adminLoginSubmit" class="w-full bg-navy hover:bg-navy-light text-gold font-bold py-3 rounded-xl transition shadow">
@@ -2048,8 +2047,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 const fields = {
                     action: 'adminLogin',
                     password: password,
-                    // The current Apps Script adminLogin endpoint ignores email;
-                    // this field is collected in the UI but is not an authentication factor.
                     nonce: nonce,
                     origin: window.location.origin
                 };
@@ -5720,22 +5717,6 @@ async function deleteCurrentPhotoAlbum() {
     }
 }
 
-        // GitHub Pages serves the dedicated /adminD/ directory. Its wrapper
-        // embeds this same site with a private-entry flag so the existing login
-        // modal opens without changing the normal public homepage.
-        if (new URLSearchParams(window.location.search).get('adminD') === '1') {
-            const openAdminEntry = () => {
-                const modal = document.getElementById('adminModal');
-                if (modal && modal.classList.contains('hidden')) {
-                    openAccessibleModal(modal, '#adminPasswordInput', toggleAdminModal);
-                }
-            };
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', openAdminEntry, { once: true });
-            } else {
-                openAdminEntry();
-            }
-        }
     </script>
     
 </body>
