@@ -10,7 +10,7 @@
  * الإعدادات السرية تُضاف يدويًا في Project Settings > Script properties.
  */
 const ISOLATED_PREVIEW_ORIGIN =
-  "https://omar-bin-elkhatab-school-git-210472-dodydiaa2013-2144s-projects.vercel.app";
+  "https://omar-bin-elkhatab-school-pr407-prev.vercel.app";
 const FOLDER_NAME = "صور مدرسة عمر بن الخطاب ث بنين - المعزول للمعاينة";
 const SCHEDULE_FOLDER_NAME = "قوائم فصول مدرسة عمر بن الخطاب ث بنين - المعزول للمعاينة";
 const PHOTO_ALBUMS_FOLDER_NAME = "ألبومات معرض مدرسة عمر بن الخطاب ث بنين - المعزول للمعاينة";
