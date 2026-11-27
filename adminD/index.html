@@ -193,6 +193,20 @@ async function setAlbumCover(album,image,button){
  dashboardMessage(result.message||"تم تغيير الغلاف.","ok");await refreshDashboardData()
  }catch(error){dashboardMessage(error.message,"err")}finally{button.disabled=false}
 }
+async function uploadAlbumCover(album,button){
+ const picker=document.createElement("input");picker.type="file";picker.accept="image/jpeg,image/png,image/webp,image/gif";
+ picker.addEventListener("change",async()=>{
+  if(!picker.files||!picker.files[0])return;
+  button.disabled=true;
+  try{
+   const file=await readImageFile(picker.files[0]);
+   const result=await adminAction({action:"updatePhotoAlbum",nonce:dashboardNonce(),albumId:album.id,title:album.title,description:album.description||"",coverData:file.data,coverMimeType:file.mimeType,coverName:file.fileName},"photoAlbumResult");
+   if(!result||!result.success)throw new Error((result&&result.message)||"تعذر استبدال غلاف الألبوم.");
+   dashboardMessage(result.message||"تم استبدال غلاف الألبوم.","ok");await refreshDashboardData()
+  }catch(error){dashboardMessage(error.message,"err")}finally{button.disabled=false}
+ });
+ picker.click();
+}
 async function saveContentOrder(scope,albumId,root){
  const ids=Array.from(root.querySelectorAll("[data-order-id]")).map(node=>node.dataset.orderId);
  if(!ids.length)return;
@@ -259,6 +273,7 @@ function renderDashboardData(){
   const option=document.createElement("option");option.value=album.id;option.textContent=album.title;select.appendChild(option);
   const card=document.createElement("article");card.className="dash-item album";
   if(album.coverUrl){const img=document.createElement("img");img.src=album.coverUrl;img.alt=album.title;card.appendChild(img)}
+  const coverUpload=makeDeleteButton("استبدال غلاف الألبوم",()=>uploadAlbumCover(album,coverUpload));coverUpload.className="dash-action";card.appendChild(coverUpload);
   const title=document.createElement("strong");title.textContent=album.title;
   const meta=document.createElement("small");meta.textContent=(album.imageCount||0)+" صورة";
   const desc=document.createElement("div");desc.textContent=album.description||"";
