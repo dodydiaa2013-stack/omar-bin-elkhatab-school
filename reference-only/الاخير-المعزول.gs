@@ -604,7 +604,12 @@ function photoAlbumPostMessage(p, result) {
 }
 
 function isPhotoAlbumAdminAuthorized(p) {
-  if (!p || !p.token || !p.adminSessionToken) {
+  if (
+    !p ||
+    !p.token ||
+    !p.adminSessionToken ||
+    !ALLOWED_PAGE_ORIGINS.includes(String(p.origin || ""))
+  ) {
     return false;
   }
 
