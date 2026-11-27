@@ -14,7 +14,7 @@
 .dash-panel{padding:14px 0}.dash-panel h3{font-size:16px;color:var(--navy);margin:0 0 12px}.dash-message{display:none;padding:10px;border-radius:9px;font-size:12px;line-height:1.8}.dash-message.ok{display:block;background:#ecfdf5;color:#047857}.dash-message.err{display:block;background:#fff1f2;color:#be123c}
 .stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.stat{padding:14px 8px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;text-align:center}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{display:block;margin-top:7px;color:var(--navy);font-size:23px}
 .dash-note{font-size:12px;line-height:1.9;color:var(--muted);padding:10px 12px;background:#f8fafc;border-radius:10px}.dash-form{display:grid;gap:8px;padding:13px;margin:12px 0;border:1px solid #e2e8f0;border-radius:12px;background:#fbfdff}.dash-form label{font-size:12px;margin:4px 0 0}.dash-form input,.dash-form select,.dash-form textarea{font:inherit;font-size:13px;height:auto;min-height:42px;padding:9px 11px;border:1px solid #cbd5e1;border-radius:9px;background:white}.dash-form textarea{resize:vertical}.dash-form button,#refreshDashboard{margin:4px 0 0;height:42px;font-size:13px}.dash-form button:disabled,#refreshDashboard:disabled{opacity:.55}
-.dash-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:10px;margin-top:14px}.dash-item{min-width:0;border:1px solid #e2e8f0;border-radius:11px;overflow:hidden;background:#fff}.dash-item img{display:block;width:100%;height:110px;object-fit:cover;background:#f1f5f9}.dash-item div{padding:8px;font-size:11px;line-height:1.6;color:#334155;overflow-wrap:anywhere}.dash-item.album{padding:10px}.dash-item.album img{border-radius:8px}.dash-item.album strong{display:block;font-size:12px;color:var(--navy)}.dash-item.album small{color:var(--muted)}.dash-delete{display:block;width:100%;height:34px;margin:8px 0 0;padding:6px 9px;border:1px solid #fecaca;border-radius:8px;background:#fff1f2;color:#be123c;font:inherit;font-size:11px;font-weight:bold;cursor:pointer}.dash-delete:disabled{opacity:.55;cursor:wait}.dash-image-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.dash-image{min-width:0;padding:6px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc}.dash-image img{height:72px;border-radius:6px}.dash-image small{display:block;overflow-wrap:anywhere;color:var(--muted);font-size:10px}
+.dash-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:10px;margin-top:14px}.dash-item{min-width:0;border:1px solid #e2e8f0;border-radius:11px;overflow:hidden;background:#fff}.dash-item img{display:block;width:100%;height:110px;object-fit:cover;background:#f1f5f9}.dash-item div{padding:8px;font-size:11px;line-height:1.6;color:#334155;overflow-wrap:anywhere}.dash-item.album{padding:10px}.dash-item.album img{border-radius:8px}.dash-item.album strong{display:block;font-size:12px;color:var(--navy)}.dash-item.album small{color:var(--muted)}.dash-delete{display:block;width:100%;height:34px;margin:8px 0 0;padding:6px 9px;border:1px solid #fecaca;border-radius:8px;background:#fff1f2;color:#be123c;font:inherit;font-size:11px;font-weight:bold;cursor:pointer}.dash-delete:disabled{opacity:.55;cursor:wait}.dash-action{display:block;width:100%;height:32px;margin:6px 0 0;padding:5px 7px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;color:#334155;font:inherit;font-size:10px;cursor:pointer}.dash-action:disabled{opacity:.5}.dash-order-tools{display:flex;gap:5px;margin-top:6px}.dash-order-tools .dash-action{flex:1}.dash-select{display:flex;align-items:center;gap:6px;margin-top:7px;font-size:11px;color:#334155}.dash-select input{width:auto;min-height:0}.dash-image-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.dash-image{min-width:0;padding:6px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc}.dash-image img{height:72px;border-radius:6px}.dash-image small{display:block;overflow-wrap:anywhere;color:var(--muted);font-size:10px}
 @media(max-width:520px){.google-gate{align-items:stretch;flex-direction:column}.stat-grid{gap:5px}.stat{padding:11px 4px}.stat strong{font-size:20px}}
 
 :root{color-scheme:light;--navy:#0b132b;--teal:#0b4650;--gold:#d6a83e;--ink:#172033;--muted:#64748b;--line:#dbe3ef}
@@ -167,6 +167,60 @@ async function deleteScheduleItem(className,fileId,button){
  }catch(error){dashboardMessage(error.message,"err")}
  finally{button.disabled=false}
 }
+async function replaceImage(scope,item,albumId,button){
+ const fileInput=document.createElement("input");fileInput.type="file";fileInput.accept="image/jpeg,image/png,image/webp,image/gif";
+ fileInput.addEventListener("change",async()=>{if(!fileInput.files||!fileInput.files[0])return;button.disabled=true;try{
+  const file=await readImageFile(fileInput.files[0]);
+  const fields=scope==="gallery"?{action:"replaceGalleryImage",nonce:dashboardNonce(),oldFileId:item.id}:{action:"replacePhotoAlbumImage",nonce:dashboardNonce(),albumId,imageId:item.id};
+  const type=scope==="gallery"?"galleryUploadResult":"photoAlbumResult";
+  const result=await adminAction(Object.assign(fields,file),type);
+  if(!result||!result.success)throw new Error((result&&result.message)||"تعذر استبدال الصورة.");
+  dashboardMessage(result.message||"تم استبدال الصورة.","ok");await refreshDashboardData();
+ }catch(error){dashboardMessage(error.message,"err")}finally{button.disabled=false}});
+ fileInput.click();
+}
+async function updateAlbumDetails(album){
+ const title=window.prompt("اسم الألبوم:",album.title);if(title===null)return;
+ const description=window.prompt("وصف الألبوم:",album.description||"");if(description===null)return;
+ try{const result=await adminAction({action:"updatePhotoAlbum",nonce:dashboardNonce(),albumId:album.id,title:title.trim(),description:description.trim()},"photoAlbumResult");
+ if(!result||!result.success)throw new Error((result&&result.message)||"تعذر تعديل الألبوم.");
+ dashboardMessage(result.message||"تم تعديل الألبوم.","ok");await refreshDashboardData()
+ }catch(error){dashboardMessage(error.message,"err")}
+}
+async function setAlbumCover(album,image,button){
+ button.disabled=true;try{const result=await adminAction({action:"updatePhotoAlbumCover",nonce:dashboardNonce(),albumId:album.id,fileId:image.id},"photoAlbumResult");
+ if(!result||!result.success)throw new Error((result&&result.message)||"تعذر تغيير الغلاف.");
+ dashboardMessage(result.message||"تم تغيير الغلاف.","ok");await refreshDashboardData()
+ }catch(error){dashboardMessage(error.message,"err")}finally{button.disabled=false}
+}
+async function saveContentOrder(scope,albumId,root){
+ const ids=Array.from(root.querySelectorAll("[data-order-id]")).map(node=>node.dataset.orderId);
+ if(!ids.length)return;
+ try{const result=await adminAction({action:"savePhotoContentOrder",nonce:dashboardNonce(),scope,albumId:albumId||"",ids:JSON.stringify(ids)},"photoAlbumResult");
+ if(!result||!result.success)throw new Error((result&&result.message)||"تعذر حفظ الترتيب.");
+ dashboardMessage(result.message||"تم حفظ الترتيب.","ok");await refreshDashboardData()
+ }catch(error){dashboardMessage(error.message,"err")}
+}
+function addOrderControls(card,root,item,scope,albumId){
+ card.dataset.orderId=item.id;
+ const tools=document.createElement("div");tools.className="dash-order-tools";
+ [["↑","تحريك لأعلى",-1],["↓","تحريك لأسفل",1]].forEach(([label,title,step])=>{
+  const button=document.createElement("button");button.type="button";button.className="dash-action";button.textContent=label;button.title=title;
+  button.addEventListener("click",()=>{const sibling=step<0?card.previousElementSibling:card.nextElementSibling;if(!sibling||!sibling.dataset.orderId)return;if(step<0)root.insertBefore(card,sibling);else root.insertBefore(sibling,card)});
+  tools.appendChild(button)
+ });
+ card.appendChild(tools)
+}
+async function bulkDeleteSelectedSchedules(){
+ const selected=Array.from(document.querySelectorAll(".schedule-select:checked")).map(input=>({className:input.dataset.className,fileId:input.dataset.fileId}));
+ if(!selected.length){dashboardMessage("حدد قائمة فصل واحدة على الأقل.","err");return}
+ if(!window.confirm("هل تريد حذف "+selected.length+" من قوائم الفصول المحددة؟ سيتم نقلها إلى سلة مهملات Google Drive."))return;
+ const button=document.getElementById("bulkDeleteSchedulesButton");button.disabled=true;
+ try{const result=await adminAction({action:"bulkDeleteSchedules",nonce:dashboardNonce(),selections:JSON.stringify(selected)},"scheduleUploadResult");
+ if(!result||!result.success)throw new Error((result&&result.message)||"تعذر حذف القوائم المحددة.");
+ dashboardMessage(result.message||"تم حذف القوائم المحددة.","ok");await refreshDashboardData()
+ }catch(error){dashboardMessage(error.message,"err")}finally{button.disabled=false}
+}
 function makeDeleteButton(label,onClick){
  const button=document.createElement("button");button.type="button";button.className="dash-delete";button.textContent=label;button.addEventListener("click",onClick);return button;
 }
@@ -181,9 +235,11 @@ function renderDashboardData(){
   const card=document.createElement("article");card.className="dash-item";
   const img=document.createElement("img");img.src=item.url;img.alt=item.name||"صورة من المعرض";
   const label=document.createElement("div");label.textContent=item.name||"صورة";
+  const replace=makeDeleteButton("استبدال الصورة",()=>replaceImage("gallery",item,"",replace));replace.className="dash-action";
   const del=makeDeleteButton("حذف الصورة",()=>deletePhotoContent("gallery",[item.id]));
-  card.append(img,label,del);galleryRoot.appendChild(card);
+  card.append(img,label,replace,del);addOrderControls(card,galleryRoot,item,"gallery","");galleryRoot.appendChild(card);
  });
+ const galleryOrder=document.createElement("button");galleryOrder.type="button";galleryOrder.className="dash-action";galleryOrder.textContent="حفظ ترتيب صور المعرض";galleryOrder.addEventListener("click",()=>saveContentOrder("gallery","",galleryRoot));galleryRoot.appendChild(galleryOrder);
  const albumRoot=document.getElementById("albumItems"),select=document.getElementById("albumSelect");albumRoot.replaceChildren();select.innerHTML='<option value="">اختر الألبوم</option>';
  if(!albums.length)albumRoot.innerHTML='<p class="dash-note">لا توجد ألبومات في المعاينة.</p>';
  albums.forEach(album=>{
@@ -194,27 +250,35 @@ function renderDashboardData(){
   const meta=document.createElement("small");meta.textContent=(album.imageCount||0)+" صورة";
   const desc=document.createElement("div");desc.textContent=album.description||"";
   card.append(title,meta,desc);
+  const editAlbum=makeDeleteButton("تعديل اسم ووصف الألبوم",()=>updateAlbumDetails(album));editAlbum.className="dash-action";card.appendChild(editAlbum);
   const imageList=document.createElement("div");imageList.className="dash-image-list";
   (album.images||[]).forEach(image=>{
    const imageCard=document.createElement("div");imageCard.className="dash-image";
    const imageEl=document.createElement("img");imageEl.src=image.url;imageEl.alt=image.name||"صورة داخل الألبوم";
    const imageName=document.createElement("small");imageName.textContent=image.name||"صورة";
+   const cover=makeDeleteButton("تعيين كغلاف",()=>setAlbumCover(album,image,cover));cover.className="dash-action";
+   const replace=makeDeleteButton("استبدال الصورة",()=>replaceImage("albumImages",image,album.id,replace));replace.className="dash-action";
    const delImage=makeDeleteButton("حذف الصورة",()=>deletePhotoContent("albumImages",[image.id],album.id));
-   imageCard.append(imageEl,imageName,delImage);imageList.appendChild(imageCard);
+   imageCard.append(imageEl,imageName,cover,replace,delImage);addOrderControls(imageCard,imageList,image,"albumImages",album.id);imageList.appendChild(imageCard);
   });
   if((album.images||[]).length)card.appendChild(imageList);
   const delAlbum=makeDeleteButton("حذف الألبوم بالكامل",()=>deletePhotoContent("albums",[album.id]));
-  card.appendChild(delAlbum);albumRoot.appendChild(card);
+  card.appendChild(delAlbum);addOrderControls(card,albumRoot,album,"albums","");albumRoot.appendChild(card);
  });
+ const albumOrder=document.createElement("button");albumOrder.type="button";albumOrder.className="dash-action";albumOrder.textContent="حفظ ترتيب الألبومات";albumOrder.addEventListener("click",()=>saveContentOrder("albums","",albumRoot));albumRoot.appendChild(albumOrder);
+ document.querySelectorAll("#albumItems .dash-item.album").forEach(card=>{const list=card.querySelector(".dash-image-list");if(list){const save=document.createElement("button");save.type="button";save.className="dash-action";save.textContent="حفظ ترتيب صور هذا الألبوم";save.addEventListener("click",()=>saveContentOrder("albumImages",card.dataset.orderId,list));list.appendChild(save)}});
+
  const scheduleRoot=document.getElementById("scheduleItems");scheduleRoot.replaceChildren();
+ const bulkButton=document.createElement("button");bulkButton.type="button";bulkButton.id="bulkDeleteSchedulesButton";bulkButton.className="dash-action";bulkButton.textContent="حذف القوائم المحددة";bulkButton.addEventListener("click",bulkDeleteSelectedSchedules);scheduleRoot.appendChild(bulkButton);
  const classes=Object.keys(schedules).sort((a,b)=>a.localeCompare(b,"ar"));
  classes.forEach(className=>{
   const item=schedules[className];const card=document.createElement("article");card.className="dash-item";
   if(item&&item.url){
    const img=document.createElement("img");img.src=item.url;img.alt="قائمة "+className;
    const label=document.createElement("div");label.textContent="الفصل "+className;
+   const select=document.createElement("label");select.className="dash-select";const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.className="schedule-select";checkbox.dataset.className=className;checkbox.dataset.fileId=item.id;select.append(checkbox,document.createTextNode("تحديد للحذف الجماعي"));
    const del=makeDeleteButton("حذف القائمة",()=>deleteScheduleItem(className,item.id,del));
-   card.append(img,label,del);
+   card.append(img,label,select,del);
   }else{const label=document.createElement("div");label.textContent="الفصل "+className+" — لا توجد قائمة";card.appendChild(label)}
   scheduleRoot.appendChild(card);
  });
