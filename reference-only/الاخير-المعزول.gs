@@ -1844,7 +1844,7 @@ function doPost(e) {
       });
     }
 
-    if (action === "uploadGalleryImage") {
+    if (action === "uploadGalleryImage" || action === "replaceGalleryImage") {
       return galleryUploadPostMessage(p, {
         success: false,
         message: message
