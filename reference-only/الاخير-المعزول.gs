@@ -2114,6 +2114,10 @@ function replaceGalleryImage(p) {
 
 
 function deleteGalleryImage(p) {
+  p = p || {};
+  if (!ALLOWED_PAGE_ORIGINS.includes(String(p.origin || ""))) {
+    throw new Error("مصدر الطلب غير مسموح");
+  }
   verifyAdminToken(p.token || "");
   verifyAdminSession(p.adminSessionToken || "");
 
@@ -2308,6 +2312,9 @@ function uploadScheduleImage(p) {
 
 function deleteScheduleImage(p) {
   p = p || {};
+  if (!ALLOWED_PAGE_ORIGINS.includes(String(p.origin || ""))) {
+    throw new Error("مصدر الطلب غير مسموح");
+  }
 
   const lock = LockService.getScriptLock();
   let lockAcquired = false;
@@ -2370,6 +2377,9 @@ function deleteScheduleImage(p) {
 
 function bulkDeleteSchedules(p) {
   p = p || {};
+  if (!ALLOWED_PAGE_ORIGINS.includes(String(p.origin || ""))) {
+    throw new Error("مصدر الطلب غير مسموح");
+  }
 
   const lock = LockService.getScriptLock();
   let lockAcquired = false;
