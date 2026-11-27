@@ -5723,5 +5723,21 @@ async function deleteCurrentPhotoAlbum() {
 
     </script>
     
+    <script>
+        // بوابة الإدارة المستقلة: لا تُفتح نافذة الدخول إلا عند الوصول عبر المسار adminD.
+        (() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('adminD') !== '1') return;
+
+            window.addEventListener('load', () => {
+                if (typeof switchTab === 'function') {
+                    switchTab('tablet', { updateHistory: false, focus: false });
+                }
+                if (typeof toggleAdminModal === 'function') {
+                    toggleAdminModal();
+                }
+            }, { once: true });
+        })();
+    </script>
 </body>
 </html>
