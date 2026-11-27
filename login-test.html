@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>اختبار تسجيل دخول المسؤول - بيئة معزولة</title>
+<style>
+:root{color-scheme:light}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#f1f5f9;font-family:Tahoma,Arial,sans-serif;color:#172554;display:grid;place-items:center;padding:20px}.panel{width:min(100%,520px);background:#fff;border:1px solid #dbe3ef;border-radius:18px;padding:24px;box-shadow:0 12px 35px #0f172a12}h1{font-size:22px;margin:0 0 10px}.intro{color:#475569;line-height:1.8;font-size:14px}.warning{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:12px;font-size:13px;line-height:1.8;margin:16px 0}label{display:block;font-weight:bold;font-size:14px;margin:14px 0 7px}input{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:9px;font:inherit;direction:ltr;text-align:left}button{margin-top:18px;width:100%;border:0;border-radius:9px;background:#1d4ed8;color:white;padding:13px;font:inherit;font-weight:bold;cursor:pointer}button:disabled{opacity:.6;cursor:wait}.status{margin-top:14px;min-height:28px;line-height:1.7;font-size:14px;overflow-wrap:anywhere}.small{font-size:12px;color:#64748b;margin-top:14px;line-height:1.7}
+</style>
+</head>
+<body>
+<main class="panel">
+<h1>اختبار تسجيل دخول المسؤول</h1>
+<p class="intro">صفحة اختبار منفصلة لمشروع Apps Script المعزول. لا تستخدم كلمة مرور الموقع الحقيقي هنا.</p>
+<div class="warning"><strong>تنبيه:</strong> لا تدخل كلمة المرور قبل نشر مشروع Apps Script المعزول، والتأكد أن قائمة السماح فيه تحتوي على أصل صفحة Vercel التجريبية فقط. هذه الصفحة لا تتصل بخادم الإنتاج تلقائيًا.</div>
+<form id="loginForm">
+<label for="endpoint">رابط نشر Apps Script المعزول (/exec)</label>
+<input id="endpoint" type="url" inputmode="url" autocomplete="url" placeholder="https://script.google.com/macros/s/.../exec" required>
+<label for="password">كلمة مرور الاختبار المؤقتة</label>
+<input id="password" type="password" autocomplete="current-password" required>
+<button id="submit" type="submit">اختبار تسجيل الدخول</button>
+</form>
+<div id="status" class="status" role="status" aria-live="polite"></div>
+<p class="small">يتم إرسال كلمة المرور مباشرة إلى رابط Apps Script الذي تدخله عبر نموذج POST داخل إطار مخفي. لا تحفظ الصفحة كلمة المرور ولا تخزن رمز الجلسة بعد إغلاقها.</p>
+<iframe name="isolatedLoginFrame" id="isolatedLoginFrame" title="إطار اتصال تسجيل الدخول" hidden></iframe>
+</main>
+<script>
+(() => {
+  const form = document.getElementById('loginForm');
+  const endpointInput = document.getElementById('endpoint');
+  const passwordInput = document.getElementById('password');
+  const button = document.getElementById('submit');
+  const status = document.getElementById('status');
+  const frame = document.getElementById('isolatedLoginFrame');
+  let activeNonce = '';
+  let timeoutId = 0;
+
+  function isTrustedGoogleOrigin(origin) {
+    try {
+      const u = new URL(origin);
+      if (u.protocol !== 'https:' || u.username || u.password || u.port) return false;
+      const host = u.hostname.toLowerCase();
+      return host === 'script.google.com' ||
+        host === 'script.googleusercontent.com' ||
+        (host.endsWith('-script.googleusercontent.com') &&
+         /^[a-z0-9-]+$/.test(host.slice(0, -'-script.googleusercontent.com'.length)));
+    } catch (_) { return false; }
+  }
+
+  function isFrameOrDescendant(source, expected) {
+    if (!source || !expected) return false;
+    const pending = [expected];
+    const visited = new Set();
+    while (pending.length) {
+      const current = pending.pop();
+      if (!current || visited.has(current)) continue;
+      visited.add(current);
+      if (source === current) return true;
+      let count = 0;
+      try { count = current.length; } catch (_) { continue; }
+      for (let i = 0; i < count; i++) {
+        try { pending.push(current.frames[i]); } catch (_) {}
+      }
+    }
+    return false;
+  }
+
+  window.addEventListener('message', event => {
+    if (!activeNonce || !isTrustedGoogleOrigin(event.origin) ||
+        !isFrameOrDescendant(event.source, frame.contentWindow)) return;
+    const data = event.data;
+    if (!data || data.type !== 'adminLoginResult' || data.nonce !== activeNonce) return;
+
+    clearTimeout(timeoutId);
+    activeNonce = '';
+    button.disabled = false;
+    passwordInput.value = '';
+
+    if (data.result && data.result.success && data.result.token) {
+      status.textContent = 'نجح الاتصال وتسجيل الدخول واستلام رمز الجلسة. لم يتم حفظ الرمز.';
+      status.style.color = '#047857';
+    } else {
+      status.textContent = (data.result && data.result.message) || 'وصل رد من الخادم لكن تسجيل الدخول لم ينجح.';
+      status.style.color = '#b91c1c';
+    }
+  });
+
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (activeNonce) return;
+    let endpoint;
+    try {
+      endpoint = new URL(endpointInput.value.trim());
+      if (endpoint.protocol !== 'https:' ||
+          endpoint.hostname !== 'script.google.com' ||
+          !endpoint.pathname.startsWith('/macros/s/') ||
+          !endpoint.pathname.endsWith('/exec') ||
+          endpoint.search || endpoint.hash || endpoint.username || endpoint.password) {
+        throw new Error();
+      }
+    } catch (_) {
+      status.textContent = 'أدخل رابط نشر Apps Script المعزول الصحيح المنتهي بـ /exec.';
+      status.style.color = '#b91c1c';
+      return;
+    }
+
+    const nonce = (crypto.randomUUID ? crypto.randomUUID() :
+      String(Date.now()) + Math.random().toString(36).slice(2));
+    activeNonce = nonce;
+    button.disabled = true;
+    status.textContent = 'جارٍ إرسال طلب الاختبار وانتظار رد الخادم...';
+    status.style.color = '#475569';
+
+    const request = document.createElement('form');
+    request.method = 'POST';
+    request.action = endpoint.href;
+    request.target = frame.name;
+    request.hidden = true;
+    const fields = {
+      action: 'adminLogin',
+      password: passwordInput.value,
+      nonce,
+      origin: window.location.origin
+    };
+    for (const [name, value] of Object.entries(fields)) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      request.appendChild(input);
+    }
+    document.body.appendChild(request);
+    request.submit();
+    request.remove();
+
+    timeoutId = window.setTimeout(() => {
+      activeNonce = '';
+      button.disabled = false;
+      passwordInput.value = '';
+      status.textContent = 'لم يصل رد خلال 20 ثانية. راجع رابط النشر وقائمة السماح وسجل Apps Script.';
+      status.style.color = '#b91c1c';
+    }, 20000);
+  });
+})();
+</script>
+</body>
+</html>
