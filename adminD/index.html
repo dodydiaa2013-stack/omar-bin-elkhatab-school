@@ -14,7 +14,7 @@
 .dash-panel{padding:14px 0}.dash-panel h3{font-size:16px;color:var(--navy);margin:0 0 12px}.dash-message{display:none;padding:10px;border-radius:9px;font-size:12px;line-height:1.8}.dash-message.ok{display:block;background:#ecfdf5;color:#047857}.dash-message.err{display:block;background:#fff1f2;color:#be123c}
 .stat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.stat{padding:14px 8px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;text-align:center}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{display:block;margin-top:7px;color:var(--navy);font-size:23px}
 .dash-note{font-size:12px;line-height:1.9;color:var(--muted);padding:10px 12px;background:#f8fafc;border-radius:10px}.dash-form{display:grid;gap:8px;padding:13px;margin:12px 0;border:1px solid #e2e8f0;border-radius:12px;background:#fbfdff}.dash-form label{font-size:12px;margin:4px 0 0}.dash-form input,.dash-form select,.dash-form textarea{font:inherit;font-size:13px;height:auto;min-height:42px;padding:9px 11px;border:1px solid #cbd5e1;border-radius:9px;background:white}.dash-form textarea{resize:vertical}.dash-form button,#refreshDashboard{margin:4px 0 0;height:42px;font-size:13px}.dash-form button:disabled,#refreshDashboard:disabled{opacity:.55}
-.dash-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:10px;margin-top:14px}.dash-item{min-width:0;border:1px solid #e2e8f0;border-radius:11px;overflow:hidden;background:#fff}.dash-item img{display:block;width:100%;height:110px;object-fit:cover;background:#f1f5f9}.dash-item div{padding:8px;font-size:11px;line-height:1.6;color:#334155;overflow-wrap:anywhere}.dash-item.album{padding:10px}.dash-item.album img{border-radius:8px}.dash-item.album strong{display:block;font-size:12px;color:var(--navy)}.dash-item.album small{color:var(--muted)}
+.dash-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:10px;margin-top:14px}.dash-item{min-width:0;border:1px solid #e2e8f0;border-radius:11px;overflow:hidden;background:#fff}.dash-item img{display:block;width:100%;height:110px;object-fit:cover;background:#f1f5f9}.dash-item div{padding:8px;font-size:11px;line-height:1.6;color:#334155;overflow-wrap:anywhere}.dash-item.album{padding:10px}.dash-item.album img{border-radius:8px}.dash-item.album strong{display:block;font-size:12px;color:var(--navy)}.dash-item.album small{color:var(--muted)}.dash-delete{display:block;width:100%;height:34px;margin:8px 0 0;padding:6px 9px;border:1px solid #fecaca;border-radius:8px;background:#fff1f2;color:#be123c;font:inherit;font-size:11px;font-weight:bold;cursor:pointer}.dash-delete:disabled{opacity:.55;cursor:wait}.dash-image-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:10px}.dash-image{min-width:0;padding:6px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc}.dash-image img{height:72px;border-radius:6px}.dash-image small{display:block;overflow-wrap:anywhere;color:var(--muted);font-size:10px}
 @media(max-width:520px){.google-gate{align-items:stretch;flex-direction:column}.stat-grid{gap:5px}.stat{padding:11px 4px}.stat strong{font-size:20px}}
 
 :root{color-scheme:light;--navy:#0b132b;--teal:#0b4650;--gold:#d6a83e;--ink:#172033;--muted:#64748b;--line:#dbe3ef}
@@ -143,6 +143,33 @@ function fetchDashboardJsonp(action){return new Promise((resolve,reject)=>{const
 function setDashboardBusy(form,busy){form.querySelectorAll("button").forEach(b=>b.disabled=busy)}
 function readImageFile(file){return new Promise((resolve,reject)=>{if(!file)return reject(new Error("اختر صورة أولاً."));if(!/^image\/(jpeg|png|webp|gif)$/.test(file.type))return reject(new Error("نوع الصورة غير مسموح. استخدم JPG أو PNG أو WEBP أو GIF."));if(file.size>4*1024*1024)return reject(new Error("حجم الصورة أكبر من 4 ميجابايت."));const reader=new FileReader();reader.onload=()=>{const value=String(reader.result||"");const comma=value.indexOf(",");if(comma<0)return reject(new Error("تعذر قراءة الصورة."));resolve({data:value.slice(comma+1),fileName:file.name,mimeType:file.type})};reader.onerror=()=>reject(new Error("تعذرت قراءة ملف الصورة."));reader.readAsDataURL(file)})}
 function adminAction(fields,type){if(!sessionToken||!googleUploadToken)throw new Error("سجّل الدخول بكلمة المرور واعتمد حساب Google أولاً.");return new Promise(resolve=>postAction(Object.assign({},fields,{token:googleUploadToken,adminSessionToken:sessionToken}),type,result=>resolve(result)))}
+async function deletePhotoContent(scope, ids, albumId){
+ if(!Array.isArray(ids)||!ids.length)return;
+ const labels={gallery:"الصورة المحددة من معرض المدرسة",albums:"الألبوم بالكامل بكل صوره",albumImages:"الصورة المحددة من الألبوم"};
+ if(!window.confirm("هل أنت متأكد من حذف "+(ids.length>1?"العناصر المحددة":labels[scope]||"العنصر المحدد")+"؟ سيتم نقلها إلى سلة مهملات Google Drive."))return;
+ const buttons=Array.from(document.querySelectorAll(".dash-delete"));buttons.forEach(b=>b.disabled=true);
+ try{
+  const result=await adminAction({action:"bulkDeletePhotoContent",nonce:dashboardNonce(),scope,albumId:albumId||"",ids:JSON.stringify(ids)},"photoAlbumResult");
+  if(!result||!result.success)throw new Error((result&&result.message)||"تعذر تنفيذ الحذف.");
+  dashboardMessage(result.message||"تم الحذف بنجاح.","ok");
+  await refreshDashboardData();
+ }catch(error){dashboardMessage(error.message,"err")}
+ finally{buttons.forEach(b=>b.disabled=false)}
+}
+async function deleteScheduleItem(className,fileId,button){
+ if(!window.confirm("هل تريد حذف قائمة الفصل "+className+"؟ سيتم نقلها إلى سلة مهملات Google Drive."))return;
+ button.disabled=true;
+ try{
+  const result=await adminAction({action:"deleteSchedule",nonce:dashboardNonce(),className,fileId},"scheduleUploadResult");
+  if(!result||!result.success)throw new Error((result&&result.message)||"تعذر حذف قائمة الفصل.");
+  dashboardMessage(result.message||"تم حذف قائمة الفصل.","ok");
+  await refreshDashboardData();
+ }catch(error){dashboardMessage(error.message,"err")}
+ finally{button.disabled=false}
+}
+function makeDeleteButton(label,onClick){
+ const button=document.createElement("button");button.type="button";button.className="dash-delete";button.textContent=label;button.addEventListener("click",onClick);return button;
+}
 function renderDashboardData(){
  const gallery=dashboardData.gallery||[],albums=dashboardData.albums||[],schedules=dashboardData.schedules||{};
  document.getElementById("galleryCount").textContent=gallery.length;
@@ -150,12 +177,47 @@ function renderDashboardData(){
  document.getElementById("scheduleCount").textContent=Object.values(schedules).filter(Boolean).length;
  const galleryRoot=document.getElementById("galleryItems");galleryRoot.replaceChildren();
  if(!gallery.length)galleryRoot.innerHTML='<p class="dash-note">لا توجد صور في معرض المعاينة.</p>';
- gallery.forEach(item=>{const card=document.createElement("article");card.className="dash-item";const img=document.createElement("img");img.src=item.url;img.alt=item.name||"صورة من المعرض";const label=document.createElement("div");label.textContent=item.name||"صورة";card.append(img,label);galleryRoot.appendChild(card)});
+ gallery.forEach(item=>{
+  const card=document.createElement("article");card.className="dash-item";
+  const img=document.createElement("img");img.src=item.url;img.alt=item.name||"صورة من المعرض";
+  const label=document.createElement("div");label.textContent=item.name||"صورة";
+  const del=makeDeleteButton("حذف الصورة",()=>deletePhotoContent("gallery",[item.id]));
+  card.append(img,label,del);galleryRoot.appendChild(card);
+ });
  const albumRoot=document.getElementById("albumItems"),select=document.getElementById("albumSelect");albumRoot.replaceChildren();select.innerHTML='<option value="">اختر الألبوم</option>';
  if(!albums.length)albumRoot.innerHTML='<p class="dash-note">لا توجد ألبومات في المعاينة.</p>';
- albums.forEach(album=>{const option=document.createElement("option");option.value=album.id;option.textContent=album.title;select.appendChild(option);const card=document.createElement("article");card.className="dash-item album";if(album.coverUrl){const img=document.createElement("img");img.src=album.coverUrl;img.alt=album.title;card.appendChild(img)}const title=document.createElement("strong");title.textContent=album.title;const meta=document.createElement("small");meta.textContent=(album.imageCount||0)+" صورة";const desc=document.createElement("div");desc.textContent=album.description||"";card.append(title,meta,desc);albumRoot.appendChild(card)});
- const scheduleRoot=document.getElementById("scheduleItems");scheduleRoot.replaceChildren();const classes=Object.keys(schedules).sort((a,b)=>a.localeCompare(b,"ar"));let count=0;
- classes.forEach(className=>{const item=schedules[className];const card=document.createElement("article");card.className="dash-item";if(item&&item.url){count++;const img=document.createElement("img");img.src=item.url;img.alt="قائمة "+className;const label=document.createElement("div");label.textContent="الفصل "+className;card.append(img,label)}else{const label=document.createElement("div");label.textContent="الفصل "+className+" — لا توجد قائمة";card.appendChild(label)}scheduleRoot.appendChild(card)});
+ albums.forEach(album=>{
+  const option=document.createElement("option");option.value=album.id;option.textContent=album.title;select.appendChild(option);
+  const card=document.createElement("article");card.className="dash-item album";
+  if(album.coverUrl){const img=document.createElement("img");img.src=album.coverUrl;img.alt=album.title;card.appendChild(img)}
+  const title=document.createElement("strong");title.textContent=album.title;
+  const meta=document.createElement("small");meta.textContent=(album.imageCount||0)+" صورة";
+  const desc=document.createElement("div");desc.textContent=album.description||"";
+  card.append(title,meta,desc);
+  const imageList=document.createElement("div");imageList.className="dash-image-list";
+  (album.images||[]).forEach(image=>{
+   const imageCard=document.createElement("div");imageCard.className="dash-image";
+   const imageEl=document.createElement("img");imageEl.src=image.url;imageEl.alt=image.name||"صورة داخل الألبوم";
+   const imageName=document.createElement("small");imageName.textContent=image.name||"صورة";
+   const delImage=makeDeleteButton("حذف الصورة",()=>deletePhotoContent("albumImages",[image.id],album.id));
+   imageCard.append(imageEl,imageName,delImage);imageList.appendChild(imageCard);
+  });
+  if((album.images||[]).length)card.appendChild(imageList);
+  const delAlbum=makeDeleteButton("حذف الألبوم بالكامل",()=>deletePhotoContent("albums",[album.id]));
+  card.appendChild(delAlbum);albumRoot.appendChild(card);
+ });
+ const scheduleRoot=document.getElementById("scheduleItems");scheduleRoot.replaceChildren();
+ const classes=Object.keys(schedules).sort((a,b)=>a.localeCompare(b,"ar"));
+ classes.forEach(className=>{
+  const item=schedules[className];const card=document.createElement("article");card.className="dash-item";
+  if(item&&item.url){
+   const img=document.createElement("img");img.src=item.url;img.alt="قائمة "+className;
+   const label=document.createElement("div");label.textContent="الفصل "+className;
+   const del=makeDeleteButton("حذف القائمة",()=>deleteScheduleItem(className,item.id,del));
+   card.append(img,label,del);
+  }else{const label=document.createElement("div");label.textContent="الفصل "+className+" — لا توجد قائمة";card.appendChild(label)}
+  scheduleRoot.appendChild(card);
+ });
 }
 async function refreshDashboardData(){const button=document.getElementById("refreshDashboard");button.disabled=true;try{const results=await Promise.all([fetchDashboardJsonp("gallery"),fetchDashboardJsonp("photoAlbums"),fetchDashboardJsonp("schedules")]);dashboardData={gallery:results[0].images||[],albums:results[1].albums||[],schedules:results[2].schedules||{}};renderDashboardData();dashboardMessage("تم تحديث بيانات خدمة المعاينة.","ok")}catch(error){dashboardMessage(error.message,"err")}finally{button.disabled=false}}
 function initAdminGoogle(clientId){if(!window.google||!google.accounts||!google.accounts.id){dashboardMessage("تعذر تحميل خدمة تسجيل Google. أعد تحميل الصفحة وحاول مرة أخرى.","err");return}google.accounts.id.initialize({client_id:clientId,callback:handleAdminGoogleCredential});google.accounts.id.renderButton(document.getElementById("adminGoogleButton"),{theme:"outline",size:"large",text:"signin_with",shape:"rectangular",locale:"ar"})}
