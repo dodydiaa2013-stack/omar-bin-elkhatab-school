@@ -10,7 +10,7 @@
  * الإعدادات السرية تُضاف يدويًا في Project Settings > Script properties.
  */
 const ISOLATED_PREVIEW_ORIGIN =
-  "https://omar-bin-elkhatab-school-pr407-preview-ro9e8e4bl.vercel.app";
+  "https://omar-bin-elkhatab-school-git-210472-dodydiaa2013-2144s-projects.vercel.app";
 const FOLDER_NAME = "صور مدرسة عمر بن الخطاب ث بنين - المعزول للمعاينة";
 const SCHEDULE_FOLDER_NAME = "قوائم فصول مدرسة عمر بن الخطاب ث بنين - المعزول للمعاينة";
 const PHOTO_ALBUMS_FOLDER_NAME = "ألبومات معرض مدرسة عمر بن الخطاب ث بنين - المعزول للمعاينة";
@@ -4420,4 +4420,23 @@ function testIsolatedSession() {
       "ADMIN_SESSION_" + login.token
     );
   }
+}
+
+
+function testIsolatedGoogleClientConfig() {
+  const config = getIsolatedConfig_();
+  const checks = {
+    googleClientIdConfigured: !!config.clientId,
+    authorizedAdminEmailConfigured: !!config.adminEmail
+  };
+
+  return {
+    success: checks.googleClientIdConfigured &&
+      checks.authorizedAdminEmailConfigured,
+    checks: checks,
+    message: checks.googleClientIdConfigured &&
+      checks.authorizedAdminEmailConfigured
+        ? "إعدادات Google المعزولة مكتملة."
+        : "يلزم ضبط ISOLATED_GOOGLE_CLIENT_ID و ISOLATED_ADMIN_EMAIL في خصائص المشروع."
+  };
 }
