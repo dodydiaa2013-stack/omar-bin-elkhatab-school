@@ -1632,17 +1632,11 @@ if (action === "photoAlbums") {
     );
   }
   if (action === "pageChanges") {
-    if (String(p.environment || "") !== "PRODUCTION") {
-      return outputWithCallback({
-        success: false,
-        environment: "PRODUCTION",
-        message: "طلب قراءة النصوص لا يحمل علامة الإنتاج الصحيحة."
-      }, p.callback);
-    }
-    return outputWithCallback(
-      getPageChangesForClient_(),
-      p.callback
-    );
+    return outputWithCallback({
+      success: false,
+      environment: "PREVIEW",
+      message: "قراءة نصوص الصفحة غير مفعّلة في نسخة المعاينة حتى إعداد مستودع معاينة مستقل."
+    }, p.callback);
   }
   return ContentService.createTextOutput(
     "خدمة صور مدرسة عمر بن الخطاب تعمل"
@@ -2621,48 +2615,66 @@ CacheService.getScriptCache().put(
 }
 
 
+function adminLoginPostMessage(p, result) {
+  p = p || {};
+
+  const targetOrigin = String(p.origin || "");
+  const nonce = String(p.nonce || "");
+
+  if (!ALLOWED_PAGE_ORIGINS.includes(targetOrigin)) {
+    return jsonOutput({
+      success: false,
+      message: "عنوان الموقع غير معتمد."
+    });
+  }
+
+  const payload = JSON.stringify({
+    type: "adminLoginResult",
+    nonce: nonce,
+    result: result || {
+      success: false,
+      message: "تعذر تسجيل الدخول."
+    }
+  }).replace(/</g, "\\u003c");
+
+  const html =
+    "<!DOCTYPE html>" +
+    "<html><head><meta charset='UTF-8'></head>" +
+    "<body><script>" +
+    "window.top.postMessage(" +
+    payload + "," +
+    JSON.stringify(targetOrigin) +
+    ");" +
+    "</script></body></html>";
+
+  return HtmlService
+    .createHtmlOutput(html)
+    .setXFrameOptionsMode(
+      HtmlService.XFrameOptionsMode.ALLOWALL
+    );
+}
+
 function adminLogin(p) {
   p = p || {};
 
   const targetOrigin = String(p.origin || "");
-  const originAllowed = ALLOWED_PAGE_ORIGINS.includes(targetOrigin);
-
-  if (!originAllowed) {
-    throw new Error("عنوان الموقع غير معتمد لتسجيل الدخول.");
+  if (!ALLOWED_PAGE_ORIGINS.includes(targetOrigin)) {
+    return adminLoginPostMessage(p, {
+      success: false,
+      message: "عنوان الموقع غير معتمد لتسجيل الدخول."
+    });
   }
 
   try {
     const result = verifyAdminPasswordOnServer(p.password);
-
-    const payload = JSON.stringify({
-      type: "adminLoginResult",
-      nonce: p.nonce || "",
-      result: result
-    }).replace(/</g, "\\u003c");
-
-    return HtmlService.createHtmlOutput(
-      "<!DOCTYPE html><html><body><script>" +
-      "top.postMessage(" + payload + ", " +
-      JSON.stringify(targetOrigin) + ");" +
-      "</script></body></html>"
-    ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-
+    return adminLoginPostMessage(p, result);
   } catch (error) {
-    const payload = JSON.stringify({
-      type: "adminLoginResult",
-      nonce: p.nonce || "",
-      result: {
-        success: false,
-        message: error.message || "تعذر تسجيل الدخول"
-      }
-    }).replace(/</g, "\\u003c");
-
-    return HtmlService.createHtmlOutput(
-      "<!DOCTYPE html><html><body><script>" +
-      "top.postMessage(" + payload + ", " +
-      JSON.stringify(targetOrigin) + ");" +
-      "</script></body></html>"
-    ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    return adminLoginPostMessage(p, {
+      success: false,
+      message: error && error.message
+        ? error.message
+        : "تعذر تسجيل الدخول."
+    });
   }
 }
 
