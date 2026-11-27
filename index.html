@@ -2649,7 +2649,7 @@ async function saveAllPageChanges() {
     form.action = GOOGLE_SCRIPT_URL;
     form.target = 'pageChangesUploadFrame';
     form.style.display = 'none';
-    const fields = { action:'savePageChanges', environment:'PRODUCTION', googleUploadToken:googleUploadToken, adminSessionToken:window.adminSessionToken, nonce:nonce, origin:location.origin, changes:payload };
+    const fields = { action:'savePageChanges', environment:'PREVIEW', googleUploadToken:googleUploadToken, adminSessionToken:window.adminSessionToken, nonce:nonce, origin:location.origin, changes:payload };
     Object.entries(fields).forEach(([name,value]) => {
         const input=document.createElement('input'); input.type='hidden'; input.name=name; input.value=value; form.appendChild(input);
     });
@@ -2684,7 +2684,7 @@ window.addEventListener('message', function(event) {
 
     const result = data.result || {};
     if (
-        result.environment === 'PRODUCTION' &&
+        result.environment === 'PREVIEW' &&
         result.success === true &&
         result.githubSaved === true &&
         result.githubVerified === true
@@ -3500,6 +3500,7 @@ async function deleteDriveTabletImage(fileId, fileName) {
 
         const fields = {
             action: 'delete',
+            origin: window.location.origin,
             token: googleUploadToken,
             adminSessionToken: window.adminSessionToken,
             fileId: fileId
@@ -4585,6 +4586,7 @@ async function deleteScheduleImage(cls) {
 
         const fields = {
             action: 'deleteSchedule',
+            origin: window.location.origin,
             token: googleUploadToken,
             adminSessionToken: window.adminSessionToken,
             fileId: item.id,
@@ -4699,6 +4701,7 @@ async function deleteScheduleImage(cls) {
 
                 const fields = {
                     action: 'bulkDeleteSchedules',
+                    origin: window.location.origin,
                     token: googleUploadToken,
                     adminSessionToken: window.adminSessionToken,
                     selections: JSON.stringify(selections)
