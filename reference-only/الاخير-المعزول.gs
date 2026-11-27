@@ -1598,6 +1598,29 @@ function getSchedules() {
 function doGet(e) {
   const p = (e && e.parameter) ? e.parameter : {};
   const action = p.action || "";
+  if (action === "isolatedGoogleConfig") {
+    const requestedOrigin = String(p.origin || "");
+    if (!ALLOWED_PAGE_ORIGINS.includes(requestedOrigin)) {
+      return outputWithCallback({
+        success: false,
+        message: "مصدر الطلب غير مسموح."
+      }, p.callback);
+    }
+
+    // معرّف OAuth عام بطبيعته؛ نعيده لواجهة المعاينة المعتمدة فقط.
+    const config = getIsolatedConfig_();
+    if (!config.clientId) {
+      return outputWithCallback({
+        success: false,
+        message: "لم يتم إعداد معرّف Google الخاص بالمعاينة."
+      }, p.callback);
+    }
+
+    return outputWithCallback({
+      success: true,
+      clientId: config.clientId
+    }, p.callback);
+  }
   if (action === "galleryUploadStatus") {
   return getGalleryUploadStatus(p);
 }
