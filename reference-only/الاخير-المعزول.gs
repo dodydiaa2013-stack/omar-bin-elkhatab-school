@@ -4307,3 +4307,94 @@ function getScheduleUploadStatus(p) {
     }, callback);
   }
 }
+
+/* ==========================================================
+   اختبارات النسخة المعزولة — لا تعرض كلمات المرور أو قيم الخصائص
+========================================================== */
+
+function testIsolatedPasswordSettings() {
+  const props = PropertiesService.getScriptProperties();
+  const checks = {
+    passwordSaltConfigured: !!props.getProperty("ADMIN_PASSWORD_SALT"),
+    passwordHashConfigured: !!props.getProperty("ADMIN_PASSWORD_HASH"),
+    authVersionConfigured: !!props.getProperty("ADMIN_AUTH_VERSION"),
+    previewOriginConfigured:
+      Array.isArray(ALLOWED_PAGE_ORIGINS) &&
+      ALLOWED_PAGE_ORIGINS.length === 1 &&
+      ALLOWED_PAGE_ORIGINS[0] === ISOLATED_PREVIEW_ORIGIN
+  };
+
+  return {
+    success: checks.passwordSaltConfigured &&
+      checks.passwordHashConfigured &&
+      checks.previewOriginConfigured,
+    checks: checks
+  };
+}
+
+function testIsolatedLogin() {
+  const password = PropertiesService.getScriptProperties()
+    .getProperty("ISOLATED_TEST_PASSWORD");
+
+  if (!password) {
+    return {
+      success: false,
+      message: "لم تُضبط كلمة مرور الاختبار في خصائص المشروع المعزول."
+    };
+  }
+
+  const result = verifyAdminPasswordOnServer(password);
+  return {
+    success: !!result.success,
+    message: result.success
+      ? "اختبار تسجيل الدخول المعزول ناجح."
+      : result.message
+  };
+}
+
+function testWrongIsolatedPassword() {
+  const result = verifyAdminPasswordOnServer(
+    "INVALID-ISOLATED-TEST-" + Utilities.getUuid()
+  );
+
+  return {
+    success: result.success === false,
+    message: result.success === false
+      ? "اختبار رفض كلمة المرور الخاطئة ناجح."
+      : "فشل الاختبار: تم قبول كلمة مرور غير صحيحة."
+  };
+}
+
+function testIsolatedSession() {
+  const password = PropertiesService.getScriptProperties()
+    .getProperty("ISOLATED_TEST_PASSWORD");
+
+  if (!password) {
+    return {
+      success: false,
+      message: "لم تُضبط كلمة مرور الاختبار في خصائص المشروع المعزول."
+    };
+  }
+
+  const login = verifyAdminPasswordOnServer(password);
+  if (!login.success || !login.token) {
+    return {
+      success: false,
+      message: login.message || "تعذر إنشاء جلسة اختبار."
+    };
+  }
+
+  try {
+    const valid = verifyAdminSession(login.token);
+    return {
+      success: valid === true,
+      message: valid === true
+        ? "اختبار جلسة المسؤول المعزولة ناجح."
+        : "فشل التحقق من جلسة المسؤول."
+    };
+  } finally {
+    CacheService.getScriptCache().remove(
+      "ADMIN_SESSION_" + login.token
+    );
+  }
+}
