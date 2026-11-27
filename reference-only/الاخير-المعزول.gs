@@ -202,13 +202,40 @@ function savePhotoAlbumCover(folder, p) {
     fileName
   );
 
+  const previousMetadata = getPhotoAlbumMetadata(folder);
+  const previousCoverId = String(previousMetadata.coverFileId || "");
   const file = folder.createFile(blob);
 
-  setPublicImage(file);
+  try {
+    setPublicImage(file);
 
-  return savePhotoAlbumMetadata(folder, {
-    coverFileId: file.getId()
-  });
+    const updatedMetadata = savePhotoAlbumMetadata(folder, {
+      coverFileId: file.getId()
+    });
+
+    // بعد تثبيت الغلاف الجديد بنجاح، انقل الغلاف السابق إلى سلة المهملات.
+    // لا نحذف أي ملف خارج مجلد الألبوم، ولا نحذف الملف الجديد نفسه.
+    if (previousCoverId && previousCoverId !== file.getId()) {
+      try {
+        const previousFile = DriveApp.getFileById(previousCoverId);
+        if (
+          !previousFile.isTrashed() &&
+          isFileInsideFolder(previousFile, folder.getId()) &&
+          isImageMimeType(previousFile.getMimeType())
+        ) {
+          previousFile.setTrashed(true);
+        }
+      } catch (cleanupError) {
+        console.error("تعذر نقل الغلاف السابق إلى سلة المهملات: " + cleanupError.message);
+      }
+    }
+
+    return updatedMetadata;
+  } catch (error) {
+    // إذا فشل تثبيت الغلاف الجديد، نظّف الملف الجديد وأبقِ بيانات الغلاف السابق.
+    try { file.setTrashed(true); } catch (cleanupError) {}
+    throw error;
+  }
 }
 
 function jsonOutput(data) {
