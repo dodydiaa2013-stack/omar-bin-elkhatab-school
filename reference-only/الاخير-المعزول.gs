@@ -3650,7 +3650,7 @@ function verifyDeveloperGoogle(p) {
       p && (p.token || p.googleUploadToken) || ""
     ).trim();
 
-    const allowedDeveloperEmail = ALLOWED_EMAIL;
+    const allowedDeveloperEmail = getIsolatedConfig_().adminEmail;
 
     if (!token) {
       return developerGooglePostMessage(p, {
