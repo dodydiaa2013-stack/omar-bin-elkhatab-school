@@ -1814,6 +1814,13 @@ function doPost(e) {
       });
     }
 
+    if (action === "deleteSchedule" || action === "bulkDeleteSchedules") {
+      return scheduleUploadPostMessage(p, {
+        success: false,
+        message: message
+      });
+    }
+
     if (action === "savePageChanges") {
       return pageChangesPostMessage(p, {
         success: false,
@@ -2359,7 +2366,7 @@ function deleteScheduleImage(p) {
       throw new Error("لم يتم تأكيد نقل القائمة إلى سلة المهملات");
     }
 
-    return jsonOutput({
+    return scheduleUploadPostMessage(p, {
       success: true,
       message: "تم حذف قائمة الفصل بنجاح",
       className: className,
@@ -2524,7 +2531,7 @@ function bulkDeleteSchedules(p) {
     });
 
   } catch (error) {
-    return jsonOutput({
+    return scheduleUploadPostMessage(p, {
       success: false,
       message: error.message || "تعذر تنفيذ الحذف الجماعي"
     });
