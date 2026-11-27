@@ -211,6 +211,18 @@ function addOrderControls(card,root,item,scope,albumId){
  });
  card.appendChild(tools)
 }
+async function bulkDeletePhotoSelection(scope,root,albumId){
+ const ids=Array.from(root.querySelectorAll("input[data-bulk-id]:checked")).map(input=>input.dataset.bulkId);
+ if(!ids.length){dashboardMessage("حدد عنصرًا واحدًا على الأقل للحذف الجماعي.","err");return}
+ await deletePhotoContent(scope,ids,albumId||"");
+}
+function addBulkDeleteButton(root,scope,albumId){
+ const button=document.createElement("button");button.type="button";button.className="dash-action";button.textContent="حذف العناصر المحددة";
+ button.addEventListener("click",()=>bulkDeletePhotoSelection(scope,root,albumId));root.appendChild(button)
+}
+function addBulkCheckbox(card,id,label){
+ const wrap=document.createElement("label");wrap.className="dash-select";const input=document.createElement("input");input.type="checkbox";input.dataset.bulkId=id;wrap.append(input,document.createTextNode(label||"تحديد للحذف الجماعي"));card.appendChild(wrap)
+}
 async function bulkDeleteSelectedSchedules(){
  const selected=Array.from(document.querySelectorAll(".schedule-select:checked")).map(input=>({className:input.dataset.className,fileId:input.dataset.fileId}));
  if(!selected.length){dashboardMessage("حدد قائمة فصل واحدة على الأقل.","err");return}
@@ -237,8 +249,9 @@ function renderDashboardData(){
   const label=document.createElement("div");label.textContent=item.name||"صورة";
   const replace=makeDeleteButton("استبدال الصورة",()=>replaceImage("gallery",item,"",replace));replace.className="dash-action";
   const del=makeDeleteButton("حذف الصورة",()=>deletePhotoContent("gallery",[item.id]));
-  card.append(img,label,replace,del);addOrderControls(card,galleryRoot,item,"gallery","");galleryRoot.appendChild(card);
+  card.append(img,label,replace,del);addBulkCheckbox(card,item.id,"تحديد");addOrderControls(card,galleryRoot,item,"gallery","");galleryRoot.appendChild(card);
  });
+ addBulkDeleteButton(galleryRoot,"gallery","");
  const galleryOrder=document.createElement("button");galleryOrder.type="button";galleryOrder.className="dash-action";galleryOrder.textContent="حفظ ترتيب صور المعرض";galleryOrder.addEventListener("click",()=>saveContentOrder("gallery","",galleryRoot));galleryRoot.appendChild(galleryOrder);
  const albumRoot=document.getElementById("albumItems"),select=document.getElementById("albumSelect");albumRoot.replaceChildren();select.innerHTML='<option value="">اختر الألبوم</option>';
  if(!albums.length)albumRoot.innerHTML='<p class="dash-note">لا توجد ألبومات في المعاينة.</p>';
@@ -259,14 +272,15 @@ function renderDashboardData(){
    const cover=makeDeleteButton("تعيين كغلاف",()=>setAlbumCover(album,image,cover));cover.className="dash-action";
    const replace=makeDeleteButton("استبدال الصورة",()=>replaceImage("albumImages",image,album.id,replace));replace.className="dash-action";
    const delImage=makeDeleteButton("حذف الصورة",()=>deletePhotoContent("albumImages",[image.id],album.id));
-   imageCard.append(imageEl,imageName,cover,replace,delImage);addOrderControls(imageCard,imageList,image,"albumImages",album.id);imageList.appendChild(imageCard);
+   imageCard.append(imageEl,imageName,cover,replace,delImage);addBulkCheckbox(imageCard,image.id,"تحديد");addOrderControls(imageCard,imageList,image,"albumImages",album.id);imageList.appendChild(imageCard);
   });
   if((album.images||[]).length)card.appendChild(imageList);
   const delAlbum=makeDeleteButton("حذف الألبوم بالكامل",()=>deletePhotoContent("albums",[album.id]));
-  card.appendChild(delAlbum);addOrderControls(card,albumRoot,album,"albums","");albumRoot.appendChild(card);
+  card.appendChild(delAlbum);addBulkCheckbox(card,album.id,"تحديد الألبوم للحذف الجماعي");addOrderControls(card,albumRoot,album,"albums","");albumRoot.appendChild(card);
  });
+ addBulkDeleteButton(albumRoot,"albums","");
  const albumOrder=document.createElement("button");albumOrder.type="button";albumOrder.className="dash-action";albumOrder.textContent="حفظ ترتيب الألبومات";albumOrder.addEventListener("click",()=>saveContentOrder("albums","",albumRoot));albumRoot.appendChild(albumOrder);
- document.querySelectorAll("#albumItems .dash-item.album").forEach(card=>{const list=card.querySelector(".dash-image-list");if(list){const save=document.createElement("button");save.type="button";save.className="dash-action";save.textContent="حفظ ترتيب صور هذا الألبوم";save.addEventListener("click",()=>saveContentOrder("albumImages",card.dataset.orderId,list));list.appendChild(save)}});
+ document.querySelectorAll("#albumItems .dash-item.album").forEach(card=>{const list=card.querySelector(".dash-image-list");if(list){addBulkDeleteButton(list,"albumImages",card.dataset.orderId);const save=document.createElement("button");save.type="button";save.className="dash-action";save.textContent="حفظ ترتيب صور هذا الألبوم";save.addEventListener("click",()=>saveContentOrder("albumImages",card.dataset.orderId,list));list.appendChild(save)}});
 
  const scheduleRoot=document.getElementById("scheduleItems");scheduleRoot.replaceChildren();
  const bulkButton=document.createElement("button");bulkButton.type="button";bulkButton.id="bulkDeleteSchedulesButton";bulkButton.className="dash-action";bulkButton.textContent="حذف القوائم المحددة";bulkButton.addEventListener("click",bulkDeleteSelectedSchedules);scheduleRoot.appendChild(bulkButton);
