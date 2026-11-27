@@ -1062,6 +1062,9 @@ function bulkDeletePhotoContent(p) {
 }
 
 function createPhotoAlbum(p) {
+  let albumFolder = null;
+  let creationCompleted = false;
+
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
     if (!isAuthorized) {
@@ -1084,7 +1087,7 @@ function createPhotoAlbum(p) {
     }
 
     const rootFolder = getPhotoAlbumsFolder();
-    const albumFolder = rootFolder.createFolder(title);
+    albumFolder = rootFolder.createFolder(title);
 
     let metadata = savePhotoAlbumMetadata(
   albumFolder,
@@ -1114,6 +1117,8 @@ while (albumFiles.hasNext()) {
     url: getImageUrl(file.getId())
   });
 }
+    creationCompleted = true;
+
     return photoAlbumPostMessage(p, {
       success: true,
       message: "تم إنشاء الألبوم بنجاح",
@@ -1132,6 +1137,14 @@ updatedAt: metadata.updatedAt
     });
 
   } catch (error) {
+    if (albumFolder && !creationCompleted) {
+      try {
+        albumFolder.setTrashed(true);
+      } catch (cleanupError) {
+        console.error("تعذر تنظيف مجلد الألبوم غير المكتمل: " + cleanupError.message);
+      }
+    }
+
     return photoAlbumPostMessage(p, {
       success: false,
       message: error.message
@@ -1173,19 +1186,35 @@ function updatePhotoAlbum(p) {
       throw new Error("وصف الألبوم طويل جدًا");
     }
 
+    const previousName = albumFolder.getName();
+    const previousMetadata = getPhotoAlbumMetadata(albumFolder);
+
     albumFolder.setName(title);
 
-    let metadata = savePhotoAlbumMetadata(
-  albumFolder,
-  {
-    title: title,
-    description: description
-  }
-);
+    let metadata;
+    try {
+      metadata = savePhotoAlbumMetadata(albumFolder, {
+        title: title,
+        description: description
+      });
 
-if (p.coverData) {
-  metadata = savePhotoAlbumCover(albumFolder, p);
-}
+      if (p.coverData) {
+        metadata = savePhotoAlbumCover(albumFolder, p);
+      }
+    } catch (updateError) {
+      // فشل حفظ الغلاف: أعد بيانات الاسم والوصف السابقة، مع إبقاء الغلاف السابق.
+      try {
+        albumFolder.setName(previousName);
+        savePhotoAlbumMetadata(albumFolder, {
+          title: previousMetadata.title,
+          description: previousMetadata.description,
+          coverFileId: previousMetadata.coverFileId
+        });
+      } catch (rollbackError) {
+        console.error("تعذر التراجع عن بيانات الألبوم بعد فشل التعديل: " + rollbackError.message);
+      }
+      throw updateError;
+    }
 
     return photoAlbumPostMessage(p, {
       success: true,
@@ -1214,6 +1243,8 @@ if (p.coverData) {
 ========================= */
 
 function uploadPhotoAlbumImage(p) {
+  let file = null;
+
   try {
     const isAuthorized = isPhotoAlbumAdminAuthorized(p);
 
@@ -1240,7 +1271,7 @@ function uploadPhotoAlbumImage(p) {
     const bytes = decodeImageData(data, mimeType);
     const blob = Utilities.newBlob(bytes, mimeType, fileName);
 
-    const file = albumFolder.createFile(blob);
+    file = albumFolder.createFile(blob);
 
     // مشاركة الصورة نفسها فقط، وليس مجلد الألبوم.
     setPublicImage(file);
@@ -1265,6 +1296,14 @@ function uploadPhotoAlbumImage(p) {
     });
 
   } catch (error) {
+    if (file) {
+      try {
+        file.setTrashed(true);
+      } catch (cleanupError) {
+        console.error("تعذر تنظيف صورة الألبوم غير المكتملة: " + cleanupError.message);
+      }
+    }
+
     return photoAlbumPostMessage(p, {
       success: false,
       message: error.message
@@ -2559,7 +2598,7 @@ function bulkDeleteSchedules(p) {
 
     const failedCount = results.length - deletedCount;
 
-    return jsonOutput({
+    return scheduleUploadPostMessage(p, {
       success: failedCount === 0,
       message: failedCount === 0
         ? "تم حذف قوائم الفصول المحددة بنجاح"
@@ -4157,6 +4196,18 @@ function getGalleryUploadStatus(p) {
       success: false,
       found: false,
       message: "رقم الطلب غير صالح"
+    }, callback);
+  }
+
+  // لا نكشف نتيجة أي عملية رفع إلا للمسؤول صاحب الجلسة المعتمدة.
+  try {
+    verifyAdminToken(p.token || "");
+    verifyAdminSession(p.adminSessionToken || "");
+  } catch (error) {
+    return outputWithCallback({
+      success: false,
+      found: false,
+      message: error.message || "انتهت جلسة المسؤول"
     }, callback);
   }
 
