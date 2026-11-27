@@ -274,7 +274,7 @@
 </script>
 <script>
     // تعريف رابط خادم الإنتاج قبل سكربت التحميل المبكر لتجنب ReferenceError.
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwE-mDS3J7B5Tt3S4CBo8i4o65q19VtzAALjNCFSDJnskIIQHuCPbco5Kk0nea537Bt/exec";
 </script>
 <script>
     // ابدأ طلب تعديلات النصوص أثناء قراءة الصفحة بدل انتظار DOMContentLoaded.
@@ -298,7 +298,7 @@
         const request = document.createElement("script");
         request.async = true;
         request.src = endpoint +
-            "?action=pageChanges&environment=PRODUCTION&callback=receivePageChangesEarly&_=" +
+            "?action=pageChanges&environment=PREVIEW&callback=receivePageChangesEarly&_=" +
             Date.now();
 
         const earlyRequestTimeout = setTimeout(() => {
@@ -2044,7 +2044,7 @@ window.addEventListener('DOMContentLoaded', () => {
             try {
                 const requestForm = document.createElement('form');
                 requestForm.method = 'POST';
-                requestForm.action = 'https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec';
+                requestForm.action = GOOGLE_SCRIPT_URL;
                 requestForm.target = 'adminLoginFrame';
                 requestForm.style.display = 'none';
 
@@ -2908,7 +2908,7 @@ function cacheCurrentPageChanges(changesSnapshot) {
 
 function loadSavedPageChanges() {
     if (pageChangesRequestInFlight) return;
-    const endpoint = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+    const endpoint = GOOGLE_SCRIPT_URL;
     const script = document.createElement("script");
     pageChangesRequestInFlight = true;
     pageChangesResponseReceived = false;
@@ -2920,7 +2920,7 @@ function loadSavedPageChanges() {
         if (pageChangesRequestTimeout) { clearTimeout(pageChangesRequestTimeout); pageChangesRequestTimeout = null; }
         script.remove();
     };
-    script.src = endpoint + "?action=pageChanges&environment=PRODUCTION&callback=receivePageChanges&_=" + Date.now();
+    script.src = endpoint + "?action=pageChanges&environment=PREVIEW&callback=receivePageChanges&_=" + Date.now();
     script.onerror = () => {
         console.error('[PageChanges] تعذر الاتصال بخادم النصوص؛ ستُستخدم النسخة المحلية للعرض إن كانت صالحة.');
         applyCachedPageChangesFallback('script-error');
@@ -3977,7 +3977,7 @@ function handleGoogleCredentialResponse(response) {
         clearTimeout(timeout);
 
         if (data.result && data.result.success &&
-            data.result.email === 'dodydiaa2013@gmail.com') {
+            Boolean(data.result.email)) {
             isDeveloperLoggedIn = true;
             updateDeveloperUI();
             if (status) status.textContent = 'تم التحقق من الحساب المصرح به. أدوات المطور أصبحت متاحة.';
@@ -4037,19 +4037,22 @@ function handleGoogleCredentialResponse(response) {
 }
 
 
-function initGooglePhotoLogin() {
+function initGooglePhotoLogin(clientId) {
     const button = document.getElementById('googleSignInButton');
 
-    if (!button || !window.google ||
+    if (!button || !clientId || !window.google ||
         !window.google.accounts || !window.google.accounts.id) {
+        const status = document.getElementById('googleSignInStatus');
+        if (status) status.textContent = 'تعذر تهيئة تسجيل Google لخدمة المعاينة.';
         return;
     }
 
     window.google.accounts.id.initialize({
-        client_id: '889693944069-h03fc0msck71367f96gqb9nh5stgvqk0.apps.googleusercontent.com',
+        client_id: clientId,
         callback: handleGoogleCredentialResponse
     });
 
+    // إعدادات الرسم مطابقة لزر الموقع الأصلي دون تغيير مكانه أو شكله.
     window.google.accounts.id.renderButton(button, {
         theme: 'outline',
         size: 'large',
@@ -4059,7 +4062,44 @@ function initGooglePhotoLogin() {
     });
 }
 
-window.addEventListener('load', initGooglePhotoLogin);
+function loadIsolatedGoogleConfig() {
+    const button = document.getElementById('googleSignInButton');
+    if (!button) return;
+
+    const callbackName = '__isolatedGoogleConfig_' +
+        Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const status = document.getElementById('googleSignInStatus');
+
+    window[callbackName] = function(config) {
+        try {
+            if (config && config.success && config.clientId) {
+                initGooglePhotoLogin(config.clientId);
+            } else if (status) {
+                status.textContent = (config && config.message) ||
+                    'إعدادات حساب Google للمعاينة غير مكتملة.';
+            }
+        } finally {
+            delete window[callbackName];
+            script.remove();
+        }
+    };
+
+    script.onerror = function() {
+        delete window[callbackName];
+        script.remove();
+        if (status) status.textContent = 'تعذر تحميل إعدادات تسجيل Google للمعاينة.';
+    };
+
+    script.src = GOOGLE_SCRIPT_URL +
+        '?action=isolatedGoogleConfig&origin=' +
+        encodeURIComponent(location.origin) +
+        '&callback=' + encodeURIComponent(callbackName) +
+        '&_=' + Date.now();
+    document.head.appendChild(script);
+}
+
+window.addEventListener('load', loadIsolatedGoogleConfig);
 
 
         const CLASSES = ["1/1", "1/2", "1/3", "1/4", "1/5", "1/6", "1/7", "1/8"];
