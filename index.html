@@ -454,10 +454,6 @@
             <span id="adminBadge" class="hidden bg-emerald-600 text-white px-2 py-0.5 rounded-full text-xs font-bold animate-pulse">
                 <i class="fa-solid fa-user-shield ml-1"></i>وضع المعلم (مفعّل)
             </span>
-            <button onclick="toggleAdminModal()" id="loginBtn" class="bg-gold hover:bg-gold-hover text-navy font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow">
-                <i class="fa-solid fa-key"></i>
-                <span id="loginBtnText">تسجيل الدخول</span>
-            </button>
             <button type="button" id="adminLogoutBtn" onclick="logoutAdmin()" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow" aria-label="تسجيل الخروج" title="تسجيل الخروج">
                 <i class="fa-solid fa-right-from-bracket"></i>
                 <span data-page-edit-id="auto-2c7b684d604fca95">تسجيل الخروج</span>
@@ -5723,5 +5719,21 @@ async function deleteCurrentPhotoAlbum() {
 
     </script>
     
+    <script>
+        // بوابة الإدارة المستقلة: لا تُفتح نافذة الدخول إلا عند الوصول عبر المسار adminD.
+        (() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('adminD') !== '1') return;
+
+            window.addEventListener('load', () => {
+                if (typeof switchTab === 'function') {
+                    switchTab('tablet', { updateHistory: false, focus: false });
+                }
+                if (typeof toggleAdminModal === 'function') {
+                    toggleAdminModal();
+                }
+            }, { once: true });
+        })();
+    </script>
 </body>
 </html>
