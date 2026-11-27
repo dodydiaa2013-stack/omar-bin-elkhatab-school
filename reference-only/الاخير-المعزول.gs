@@ -299,7 +299,7 @@ function pageChangesPostMessage(p, result) {
   const payload = JSON.stringify({
     type: "savePageChangesResult",
     nonce: nonce,
-    result: Object.assign({}, result || {}, { environment: "PRODUCTION" })
+    result: Object.assign({}, result || {}, { environment: "PREVIEW" })
   }).replace(/</g, "\\u003c");
 
   const html = `
@@ -1696,7 +1696,12 @@ function doPost(e) {
     }
 
     if (action === "checkProductionPageReviewStatus") {
-      return checkProductionPageReviewStatus(p);
+      return jsonOutput({
+        success: false,
+        status: "disabled",
+        environment: "PREVIEW",
+        message: "التحقق من مراجعة نصوص الإنتاج غير مفعّل في نسخة المعاينة."
+      });
     }
 
     if (action === "uploadGalleryImage") {
@@ -1789,10 +1794,11 @@ function doPost(e) {
     }
 
     if (action === "checkProductionPageReviewStatus") {
-      return productionPageReviewStatusPostMessage(p, {
+      return jsonOutput({
         success: false,
-        status: "error",
-        message: message
+        status: "disabled",
+        environment: "PREVIEW",
+        message: "التحقق من مراجعة نصوص الإنتاج غير مفعّل في نسخة المعاينة."
       });
     }
 
