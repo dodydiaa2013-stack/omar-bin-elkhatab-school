@@ -1878,6 +1878,10 @@ function doPost(e) {
 
 function uploadGalleryImage(p) {
   p = p || {};
+  if (!ALLOWED_PAGE_ORIGINS.includes(String(p.origin || ""))) {
+    throw new Error("مصدر الطلب غير مسموح");
+  }
+
 
   const nonce = String(p.nonce || "");
   const validNonce = /^[A-Za-z0-9_-]{10,120}$/.test(nonce);
@@ -1985,6 +1989,10 @@ function uploadGalleryImage(p) {
 
 function replaceGalleryImage(p) {
   p = p || {};
+  if (!ALLOWED_PAGE_ORIGINS.includes(String(p.origin || ""))) {
+    throw new Error("مصدر الطلب غير مسموح");
+  }
+
 
   const nonce = String(p.nonce || "");
   const validNonce = /^[A-Za-z0-9_-]{10,120}$/.test(nonce);
@@ -2166,6 +2174,10 @@ function deleteGalleryImage(p) {
 
 function uploadScheduleImage(p) {
   p = p || {};
+  if (!ALLOWED_PAGE_ORIGINS.includes(String(p.origin || ""))) {
+    throw new Error("مصدر الطلب غير مسموح");
+  }
+
   const startedAt = Date.now();
   const timings = {};
   const mark = (name, start) => { timings[name] = Date.now() - start; };
@@ -3709,6 +3721,10 @@ function resetAdminPassword(p) {
 
 function verifyDeveloperGoogle(p) {
   try {
+    if (!ALLOWED_PAGE_ORIGINS.includes(String(p && p.origin || ""))) {
+      throw new Error("مصدر الطلب غير مسموح");
+    }
+
     const token = String(
       p && (p.token || p.googleUploadToken) || ""
     ).trim();
