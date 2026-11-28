@@ -5764,44 +5764,15 @@ async function deleteCurrentPhotoAlbum() {
     }
 }
 
-/* استقبال جلسة الإدارة من بوابة adminD المستقلة، مع التحقق من المصدر والأصل والمسار. */
-if (window.parent !== window) {
-    window.addEventListener('message', function(event) {
-        if (event.source !== window.parent || event.origin !== window.location.origin) return;
-        let parentPath = '';
-        try { parentPath = window.parent.location.pathname; } catch (_) { return; }
-        if (!/(?:^|\\/)adminD\\/?$/.test(parentPath)) return;
-        const data = event.data;
-        if (!data || data.type !== 'adminDSessionBootstrap') return;
-        const token = String(data.token || '').trim();
-        if (!token || token.length > 256) return;
-        window.adminSessionToken = token;
-        isAdminLoggedIn = true;
-        updateTeacherUI();
-        renderSchedules();
-        renderTabletGallery();
-        refreshPhotoAlbumAuthorizationUI_();
-        try { event.source.postMessage({ type: 'adminDSessionReady' }, event.origin); } catch (_) {}
-    });
-}
 
     </script>
     
     <script>
-        // بوابة adminD: عند تضمين الموقع داخل لوحة الإدارة، تستقبل الجلسة من الصفحة الأم ولا تعرض تسجيل دخول ثانٍ.
+        // بوابة الإدارة المستقلة: لا تُفتح نافذة الدخول إلا عند الوصول عبر المسار adminD.
         (() => {
             const params = new URLSearchParams(window.location.search);
             if (params.get('adminD') !== '1') return;
-            if (window.parent !== window) {
-                const loginButton = document.getElementById('loginBtn');
-                if (loginButton) loginButton.classList.add('hidden');
-                const modal = document.getElementById('adminModal');
-                if (modal) {
-                    modal.classList.add('hidden');
-                    modal.setAttribute('aria-hidden', 'true');
-                }
-                return;
-            }
+
             window.addEventListener('load', () => {
                 if (typeof switchTab === 'function') {
                     switchTab('tablet', { updateHistory: false, focus: false });
