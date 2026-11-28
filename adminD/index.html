@@ -3089,8 +3089,8 @@ function loadPreviewPageChangesOverlay_() {
 }
 
 function exportUpdatedHTML() {
-    if (!isDeveloperLoggedIn) {
-        alert('سجّل الدخول بحساب Google المصرح به أولاً.');
+    if (!hasAdminSessionAuthorization()) {
+        alert('سجّل الدخول بكلمة مرور المسؤول أولاً.');
         return;
     }
     if (isLiveEditing) toggleLiveEditing();
@@ -4652,8 +4652,7 @@ async function replaceScheduleImage(className, triggerButton) {
 }
 
 async function deleteScheduleImage(cls) {
-    if (isAdminLoggedIn !== true || isDeveloperLoggedIn !== true ||
-        !googleUploadToken || !window.adminSessionToken) {
+    if (!hasAdminSessionAuthorization()) {
         alert('يجب تسجيل الدخول بكلمة مرور المسؤول أولاً.');
         return;
     }
