@@ -441,33 +441,7 @@ body.public-display-only #editToggleBtn {
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:right-3 focus:z-[200] focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:font-bold focus:text-navy focus:shadow-xl" data-page-edit-id="auto-1c24b8a796d6a493">تخطي إلى المحتوى</a>
 
     <!-- Developer Live Control Bar (يظهر فقط عند تفعيل وضع المعلم) -->
-    <div id="devControlBar" class="hidden bg-amber-500 text-navy px-4 py-2 flex flex-wrap justify-between items-center text-xs font-bold shadow-md sticky top-0 z-50" style="display: none;">
-        <div class="flex items-center gap-2">
-            <i class="fa-solid fa-code text-lg"></i>
-            <span>وضع المطور الشامل: يمكنك تعديل أي نص أو عنصر في الصفحة مباشرة!</span>
-        </div>
-        <div class="flex items-center gap-2">
-            <button onclick="toggleLiveEditing()" id="editToggleBtn" class="bg-navy hover:bg-navy-light text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                <i class="fa-solid fa-pen-to-square"></i> تفعيل التعديل الحي
-            </button>
-            <button onclick="saveAllPageChanges()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
-            </button>
-            <span id="pageChangesSaveStatus" class="text-xs font-bold" role="status" aria-live="polite" style="max-width: 220px; white-space: normal;"></span>
-            <button onclick="exportUpdatedHTML()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                <i class="fa-solid fa-file-code"></i> تحميل كود HTML المعدل
-            </button>
-            <div id="manualBackupControls" class="hidden flex flex-wrap items-center gap-2 border-r border-amber-700 pr-2">
-                <button type="button" onclick="downloadManualSiteBackup()" class="bg-blue-700 hover:bg-blue-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                    <i class="fa-solid fa-download"></i> إنشاء نسخة احتياطية
-                </button>
-                <button type="button" onclick="document.getElementById('manualBackupFileInput').click()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                    <i class="fa-solid fa-rotate-left"></i> استعادة نسخة
-                </button>
-                <input id="manualBackupFileInput" type="file" accept=".json,application/json" class="hidden" onchange="restoreManualSiteBackup(this)">
-            </div>
-        </div>
-    </div>
+    
 
     <!-- 1. Government Top Bar -->
     <div class="bg-navy text-white text-xs md:text-sm py-2 px-4 shadow-inner border-b-2 border-gold flex flex-wrap justify-between items-center gap-2">
@@ -477,17 +451,9 @@ body.public-display-only #editToggleBtn {
             <span data-page-edit-id="academic-year" class="hidden md:inline-block bg-navy-light text-gold text-xs px-2 py-0.5 rounded border border-gold/30">العام الدراسي 2026 / 2027</span>
         </div>
         <div class="flex items-center gap-3">
-            <span id="adminBadge" class="hidden bg-emerald-600 text-white px-2 py-0.5 rounded-full text-xs font-bold animate-pulse">
-                <i class="fa-solid fa-user-shield ml-1"></i>وضع المعلم (مفعّل)
-            </span>
-            <button onclick="toggleAdminModal()" id="loginBtn" class="bg-gold hover:bg-gold-hover text-navy font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow">
-                <i class="fa-solid fa-key"></i>
-                <span id="loginBtnText">تسجيل الدخول</span>
-            </button>
-            <button type="button" id="adminLogoutBtn" onclick="logoutAdmin()" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1 rounded transition text-xs flex items-center gap-1 shadow" aria-label="تسجيل الخروج" title="تسجيل الخروج">
-                <i class="fa-solid fa-right-from-bracket"></i>
-                <span data-page-edit-id="auto-2c7b684d604fca95">تسجيل الخروج</span>
-            </button>
+            
+            
+            
         </div>
     </div>
 
@@ -907,39 +873,13 @@ body.public-display-only #editToggleBtn {
                     <span class="text-xs text-slate-500" data-page-edit-id="auto-a43e4b126aca99d0">نشرات توضيحية مصورة للطلاب والمعلمين</span>
                 </div>
 
-                <div id="tabletTeacherUpload" class="hidden bg-slate-50 p-4 rounded-xl border border-slate-300 space-y-2">
-                    <label for="tabletImgInput" class="block text-xs font-bold text-navy">إضافة صورة جديدة لنشرة التطوير (خاص بالمعلم):</label>
-                    <div id="googleSignInButton" class="my-2"></div>
-<p id="googleSignInStatus" class="text-xs text-slate-600">سجّل الدخول بحساب Google المصرح له برفع الصور.</p>
-                    <div id="tabletImageUploadControls" class="hidden gap-2">
-                        <input type="file" id="tabletImgInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="block w-full text-xs text-slate-500 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-navy file:text-white" aria-label="اختيار عدة صور لنشرات التطوير والتابلت">
-                        <button type="button" onclick="uploadTabletImage()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-lg text-xs shrink-0">
-                            رفع وحفظ داخل الكود
-                        </button>
-                    </div>
-                    <div id="tabletImageUploadProgress" class="hidden mt-3 rounded-lg border border-blue-200 bg-white p-3 space-y-2" aria-live="polite">
-                        <div class="flex items-center justify-between gap-3">
-                            <span class="text-xs font-bold text-navy">متابعة رفع الصور</span>
-                            <span id="tabletImageUploadCounter" class="text-sm font-extrabold text-blue-700 tabular-nums">0 / 0</span>
-                        </div>
-                        <div class="h-2.5 w-full overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="تقدم رفع الصور" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="tabletImageUploadProgressBar">
-                            <div id="tabletImageUploadProgressFill" class="h-full rounded-full bg-blue-600 transition-all duration-300" style="width:0%"></div>
-                        </div>
-                        <p id="tabletImageUploadProgressLabel" class="text-xs text-slate-600">في انتظار بدء الرفع...</p>
-                    </div>
-                </div>
+                
 
                 <div class="flex justify-end pt-2">
                     <button type="button" onclick="refreshTabletGallery(this)" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-navy hover:bg-slate-50">
                         <i class="fa-solid fa-rotate ml-1"></i><span data-page-edit-id="auto-46f51d79cb328d89">تحديث الصور</span></button>
                 </div>
-                <div id="tabletImageManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <span class="text-xs font-bold text-navy">إدارة الصور:</span>
-                    <button type="button" onclick="selectAllContent('gallery')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
-                    <button type="button" onclick="clearContentSelection('gallery')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
-                    <button type="button" onclick="bulkDeleteSelectedContent('gallery')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
-                    <span id="gallerySelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد صور.</span>
-                </div>
+                
                 <div id="tabletGallery" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2"></div>
             </div>
         </section>
@@ -958,26 +898,16 @@ body.public-display-only #editToggleBtn {
                             <i class="fa-solid fa-calendar-days text-gold"></i> <span data-page-edit-id="schedules-title">قوائم الفصول</span>
                         </h2>
                         <p class="text-xs text-slate-500 mt-1"><span data-page-edit-id="schedules-description">قوائم الفصول الرسمية (1/1 إلى 1/8)</span></p>
-                        <p id="scheduleOperationStatus" class="text-xs text-slate-600 mt-2" role="status" aria-live="polite">حالة عمليات قوائم الفصول ستظهر هنا.</p>
+                        
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         <button type="button" onclick="refreshSchedules(this)" class="bg-white border border-slate-300 text-navy font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-2 hover:bg-slate-50">
                             <i class="fa-solid fa-rotate"></i><span data-page-edit-id="auto-781d435c1dcdeb16">تحديث القوائم</span></button>
-                        <div id="scheduleTeacherControl" class="hidden">
-                            <button onclick="toggleScheduleUploadModal()" class="bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow hover:bg-emerald-700">
-                                <i class="fa-solid fa-upload"></i> تعديل/رفع قائمة فصل
-                            </button>
-                        </div>
+                        
                     </div>
                 </div>
 
-                <div id="scheduleBulkManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <span class="text-xs font-bold text-navy">حذف قوائم الفصول:</span>
-                    <button type="button" onclick="selectAllSchedulesForBulkDelete()" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
-                    <button type="button" onclick="clearScheduleBulkSelection()" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
-                    <button type="button" onclick="bulkDeleteSelectedSchedules()" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف القوائم المحددة</button>
-                    <span id="scheduleBulkSelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد قوائم.</span>
-                </div>
+                
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="schedulesGrid"></div>
             </div>
         </section>
@@ -1051,21 +981,11 @@ body.public-display-only #editToggleBtn {
                     <div class="flex flex-wrap items-center gap-2">
                         <button type="button" onclick="refreshPhotoAlbums(this)" class="bg-white border border-slate-300 text-navy font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-2 hover:bg-slate-50">
                             <i class="fa-solid fa-rotate"></i><span data-page-edit-id="auto-33bd4a76e129934c">تحديث الألبومات</span></button>
-                        <div id="alertsTeacherControl" class="hidden">
-                            <button type="button" onclick="openPhotoAlbumCreate()" class="bg-navy hover:bg-navy-light text-gold font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2">
-                                <i class="fa-solid fa-plus"></i> إضافة ألبوم جديد
-                            </button>
-                        </div>
+                        
                     </div>
                 </div>
-                <p id="photoAlbumsStatus" class="text-xs text-slate-500 text-center py-2" role="status" aria-live="polite">جارٍ تحميل ألبومات الصور...</p>
-                <div id="photoAlbumsManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <span class="text-xs font-bold text-navy">ترتيب وإدارة الألبومات:</span>
-                    <button type="button" onclick="selectAllContent('albums')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
-                    <button type="button" onclick="clearContentSelection('albums')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
-                    <button type="button" onclick="bulkDeleteSelectedContent('albums')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
-                    <span id="albumsSelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد ألبومات.</span>
-                </div>
+                
+                
                 <div id="photoAlbumsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
                 <div id="photoAlbumViewer" class="hidden space-y-4 border-t border-slate-100 pt-5">
                     <div class="flex flex-wrap items-center justify-between gap-3">
@@ -1074,54 +994,15 @@ body.public-display-only #editToggleBtn {
                             <h3 id="photoAlbumViewerTitle" class="text-xl font-extrabold text-navy"></h3>
                             <p id="photoAlbumViewerMeta" class="text-xs text-slate-500 mt-1"></p>
                         </div>
-                        <div id="photoAlbumActions" class="hidden flex-wrap gap-2">
-                            <button type="button" onclick="refreshCurrentPhotoAlbum(this)" class="rounded-lg bg-slate-100 text-slate-700 px-3 py-2 text-xs font-bold"><i class="fa-solid fa-rotate ml-1"></i> تحديث الصور</button>
-                            <button type="button" onclick="openPhotoAlbumEdit()" class="rounded-lg bg-amber-100 text-amber-900 px-3 py-2 text-xs font-bold"><i class="fa-solid fa-pen ml-1"></i> تعديل الألبوم</button>
-                            <button type="button" onclick="document.getElementById('photoAlbumImagesInput').click()" class="rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold"><i class="fa-solid fa-upload ml-1"></i> إضافة صور</button>
-                            <button type="button" onclick="deleteCurrentPhotoAlbum()" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold"><i class="fa-solid fa-trash ml-1"></i> حذف الألبوم</button>
-                        </div>
+                        
                     </div>
-                    <input id="photoAlbumImagesInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="hidden" onchange="uploadPhotoAlbumImages(this)">
-                    <div id="photoAlbumUploadProgress" class="hidden rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2" role="status" aria-live="polite">
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <p id="photoAlbumUploadStatus" class="text-xs font-bold text-slate-700">جاهز لرفع الصور.</p>
-                            <span id="photoAlbumUploadProgressText" class="text-xs font-bold text-slate-500">0 / 0</span>
-                        </div>
-                        <div class="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                            <div id="photoAlbumUploadProgressBar" class="h-full rounded-full bg-emerald-600 transition-all" style="width:0%"></div>
-                        </div>
-                        <div id="photoAlbumUploadResults" class="space-y-1 text-xs"></div>
-                    </div>
-                    <div id="albumImagesManagement" class="hidden flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <span class="text-xs font-bold text-navy">ترتيب وإدارة الصور:</span>
-                        <button type="button" onclick="selectAllContent('albumImages')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">تحديد الكل</button>
-                        <button type="button" onclick="clearContentSelection('albumImages')" class="rounded-lg bg-white border px-3 py-2 text-xs font-bold">إلغاء التحديد</button>
-                        <button type="button" onclick="bulkDeleteSelectedContent('albumImages')" class="rounded-lg bg-red-600 text-white px-3 py-2 text-xs font-bold">حذف المحدد</button>
-                        <span id="albumImagesSelectionStatus" class="text-xs text-slate-500" aria-live="polite">لم يتم تحديد صور.</span>
-                    </div>
+                    
+                    
+                    
                     <div id="photoAlbumImagesGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"></div>
                 </div>
             </div>
-            <div id="photoAlbumEditor" class="hidden fixed inset-0 z-[80] bg-slate-950/70 p-4 flex items-center justify-center" aria-hidden="true">
-                <div role="dialog" aria-modal="true" aria-labelledby="photoAlbumEditorTitle" tabindex="-1" class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-                    <div class="flex justify-between items-center">
-                        <h3 id="photoAlbumEditorTitle" class="font-extrabold text-lg text-navy">إضافة ألبوم جديد</h3>
-                        <button type="button" onclick="closePhotoAlbumEditor()" class="text-slate-500 text-xl" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                    <label for="photoAlbumNameInput" class="block text-xs font-bold text-navy">اسم الألبوم</label>
-                    <input id="photoAlbumNameInput" type="text" maxlength="100" class="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="مثال: ورشة الذكاء الاصطناعي">
-                    <label for="photoAlbumDescriptionInput" class="block text-xs font-bold text-navy">وصف مختصر (اختياري)</label>
-                    <input id="photoAlbumDescriptionInput" type="text" maxlength="180" class="w-full border border-slate-300 rounded-lg p-3 text-sm" placeholder="نبذة عن النشاط">
-                    <label for="photoAlbumCoverInput" class="block text-xs font-bold text-navy">صورة الغلاف</label>
-                    <input id="photoAlbumCoverInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="w-full text-xs border rounded-lg p-2">
-                    <p class="text-[11px] text-slate-500">يمكنك اختيار صورة غلاف من جهازك، أو ترك الغلاف الافتراضي مؤقتًا.</p>
-                    <div class="flex gap-2 justify-end pt-2">
-                        <button type="button" onclick="closePhotoAlbumEditor()" class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">إلغاء</button>
-                        <button type="button" id="photoAlbumSaveButton" onclick="savePhotoAlbum()" class="px-4 py-2 rounded-lg bg-navy text-gold text-xs font-bold">حفظ الألبوم</button>
-                    </div>
-                    <p id="photoAlbumEditorStatus" class="text-xs text-slate-500"></p>
-                </div>
-            </div>
+            
         </section>
 
     </main>
@@ -1165,106 +1046,10 @@ body.public-display-only #editToggleBtn {
     </footer>
 
     <!-- TEACHER LOGIN MODAL -->
-    <div id="adminModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4" aria-hidden="true">
-        <div role="dialog" aria-modal="true" aria-labelledby="adminModalTitle" tabindex="-1" class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-2 border-gold space-y-5 relative">
-            <button type="button" aria-label="إغلاق نافذة تسجيل الدخول" onclick="toggleAdminModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-            <div class="text-center space-y-2">
-                <div class="w-12 h-12 bg-amber-100 text-gold rounded-full flex items-center justify-center mx-auto text-2xl">
-                    <i class="fa-solid fa-lock"></i>
-                </div>
-                <h3 id="adminModalTitle" class="text-xl font-extrabold text-navy">تسجيل دخول المعلم / المطور</h3>
-                <p class="text-xs text-slate-500">أدخل الرقم السري لتفعيل لوحة التعديل ورفع النتائج</p>
-            </div>
-            <form id="adminLoginForm" class="space-y-3" onsubmit="event.preventDefault(); verifyAdminPassword();">
-                <input type="password" id="adminPasswordInput" aria-label="كلمة مرور المسؤول" autocomplete="current-password" placeholder="أدخل الرقم السري هنا..."
-                       class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800 focus:ring-2 focus:ring-gold outline-none">
-                <div id="adminErrorMsg" class="text-xs text-red-600 text-center hidden font-bold">الرقم السري غير صحيح! حاول مرة أخرى.</div>
-                <button type="submit" id="adminLoginSubmit" class="w-full bg-navy hover:bg-navy-light text-gold font-bold py-3 rounded-xl transition shadow">
-                    تأكيد الدخول
-                </button>
-            </form>
-            <div class="text-center">
-                <button type="button" onclick="showPasswordRecovery()" class="text-sm text-blue-700 hover:text-blue-900 font-bold underline">
-                    نسيت كلمة المرور؟
-                </button>
-            </div>
-            <div id="passwordRecoveryPanel" class="hidden border-t border-slate-200 pt-4 space-y-3">
-                <div class="text-center">
-                    <h4 class="font-extrabold text-navy">استعادة كلمة المرور</h4>
-                    <p class="text-xs text-slate-500">سيتم إرسال رمز تحقق إلى البريد البديل المعتمد.</p>
-                </div>
-                <div id="recoveryStepRequest" class="space-y-3">
-                    <label for="recoveryEmailInput" class="block text-sm font-bold text-slate-700 text-right">البريد الإلكتروني البديل المعتمد</label>
-                    <input id="recoveryEmailInput" type="email" dir="ltr" inputmode="email" autocomplete="email" maxlength="254" required placeholder="أدخل البريد الإلكتروني البديل" aria-label="البريد الإلكتروني البديل المعتمد" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none">
-                    <button type="button" id="recoverySendButton" onclick="requestPasswordRecovery()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">إرسال رمز التحقق</button>
-                </div>
-                <div id="recoveryStepVerify" class="hidden space-y-3">
-                    <input id="recoveryCodeInput" type="text" aria-label="رمز التحقق المكوّن من ستة أرقام" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="أدخل رمز التحقق المكوّن من 6 أرقام" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
-                    <button type="button" id="recoveryVerifyButton" onclick="verifyPasswordRecoveryCode()" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2.5 rounded-xl transition">التحقق من الرمز</button>
-                </div>
-                <div id="recoveryStepReset" class="hidden space-y-3">
-                    <input id="recoveryNewPassword" type="password" aria-label="كلمة المرور الجديدة" autocomplete="new-password" minlength="12" maxlength="128" placeholder="كلمة المرور الجديدة (12 حرفًا على الأقل)" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
-                    <input id="recoveryConfirmPassword" type="password" aria-label="تأكيد كلمة المرور الجديدة" autocomplete="new-password" minlength="12" maxlength="128" placeholder="أعد كتابة كلمة المرور الجديدة" class="w-full px-4 py-3 border border-slate-300 rounded-xl text-center font-bold text-slate-800">
-                    <button type="button" id="recoveryResetButton" onclick="resetAdminPassword()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-2.5 rounded-xl transition">حفظ كلمة المرور الجديدة</button>
-                </div>
-                <div id="recoveryMessage" role="status" aria-live="polite" class="text-xs text-center font-bold"></div>
-                <button type="button" onclick="hidePasswordRecovery()" class="w-full text-xs text-slate-500 hover:text-slate-700 underline">إغلاق استعادة كلمة المرور</button>
-            </div>
-        </div>
-    </div>
+    
 
     <!-- SCHEDULE UPLOAD MODAL FOR TEACHER -->
-    <div id="scheduleModal" class="fixed inset-0 bg-navy/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4" aria-hidden="true">
-        <div role="dialog" aria-modal="true" aria-labelledby="scheduleModalTitle" tabindex="-1" class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 relative">
-            <button type="button" aria-label="إغلاق نافذة قوائم الفصول" onclick="toggleScheduleUploadModal()" class="absolute left-4 top-4 text-slate-400 hover:text-slate-600">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-            <h3 id="scheduleModalTitle" class="text-lg font-bold text-navy">تعديل أو رفع قائمة فصل</h3>
-            <div class="space-y-3 text-xs">
-                <p class="text-xs text-slate-600">اختر صورة مستقلة أمام كل فصل. يمكنك تجهيز الفصول كلها ثم الضغط على زر الحفظ مرة واحدة.</p>
-                <div id="scheduleClassFiles" class="space-y-2 max-h-64 overflow-y-auto">
-                    <div class="grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white">
-                        <label for="scheduleClassFile_1_1" class="font-bold text-navy">فصل 1/1</label>
-                        <input id="scheduleClassFile_1_1" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-class-name="1/1" aria-label="صورة قائمة فصل 1/1" class="w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white">
-                        <label for="scheduleClassFile_1_2" class="font-bold text-navy">فصل 1/2</label>
-                        <input id="scheduleClassFile_1_2" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-class-name="1/2" aria-label="صورة قائمة فصل 1/2" class="w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white">
-                        <label for="scheduleClassFile_1_3" class="font-bold text-navy">فصل 1/3</label>
-                        <input id="scheduleClassFile_1_3" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-class-name="1/3" aria-label="صورة قائمة فصل 1/3" class="w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white">
-                        <label for="scheduleClassFile_1_4" class="font-bold text-navy">فصل 1/4</label>
-                        <input id="scheduleClassFile_1_4" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-class-name="1/4" aria-label="صورة قائمة فصل 1/4" class="w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white">
-                        <label for="scheduleClassFile_1_5" class="font-bold text-navy">فصل 1/5</label>
-                        <input id="scheduleClassFile_1_5" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-class-name="1/5" aria-label="صورة قائمة فصل 1/5" class="w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white">
-                        <label for="scheduleClassFile_1_6" class="font-bold text-navy">فصل 1/6</label>
-                        <input id="scheduleClassFile_1_6" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-class-name="1/6" aria-label="صورة قائمة فصل 1/6" class="w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white">
-                        <label for="scheduleClassFile_1_7" class="font-bold text-navy">فصل 1/7</label>
-                        <input id="scheduleClassFile_1_7" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-class-name="1/7" aria-label="صورة قائمة فصل 1/7" class="w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50">
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-[76px_1fr] gap-2 items-center border border-slate-200 rounded-lg p-2 bg-white">
-                        <label for="scheduleClassFile_1_8" class="font-bold text-navy">فصل 1/8</label>
-                        <input id="scheduleClassFile_1_8" type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-class-name="1/8" aria-label="صورة قائمة فصل 1/8" class="w-full min-w-0 text-xs p-1.5 border rounded-lg bg-slate-50">
-                    </div>
-                </div>
-                <button id="scheduleUploadButton" onclick="saveScheduleImage()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i class="fa-solid fa-floppy-disk ml-1"></i> حفظ كل قوائم الفصول مرة واحدة
-                </button>
-            </div>
-
-        </div>
-    </div>
+    
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
