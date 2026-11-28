@@ -401,8 +401,34 @@
         }
     </style>
 
+<style id="public-display-only">
+/* صفحة الزوار: محتوى الموقع للعرض فقط، دون أدوات أو نوافذ الإدارة. */
+body.public-display-only #loginBtn,
+body.public-display-only #adminBadge,
+body.public-display-only #devControlBar,
+body.public-display-only #manualBackupControls,
+body.public-display-only #adminModal,
+body.public-display-only #photoAlbumEditor,
+body.public-display-only #tabletTeacherUpload,
+body.public-display-only #tabletImageManagement,
+body.public-display-only #tabletImageUploadControls,
+body.public-display-only #tabletImageUploadProgress,
+body.public-display-only #scheduleBulkManagement,
+body.public-display-only #scheduleModal,
+body.public-display-only #scheduleOperationStatus,
+body.public-display-only #googleSignInButton,
+body.public-display-only #googleSignInStatus,
+body.public-display-only #photoAlbumActions,
+body.public-display-only #albumImagesManagement,
+body.public-display-only #pageChangesSaveStatus,
+body.public-display-only #editToggleBtn {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+</style>
 </head>
-<body class="bg-slate-50 text-slate-800 flex flex-col min-h-screen">
+<body class="public-display-only bg-slate-50 text-slate-800 flex flex-col min-h-screen">
 
     <noscript>
         <main id="javascript-disabled-message" lang="ar" dir="rtl" role="alert">
