@@ -276,6 +276,8 @@
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwE-mDS3J7B5Tt3S4CBo8i4o65q19VtzAALjNCFSDJnskIIQHuCPbco5Kk0nea537Bt/exec";
         // قراءة نصوص الإنتاج للعرض فقط؛ جميع عمليات الإدارة والحفظ تبقى معزولة.
         const PAGE_CHANGES_READ_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
+        // بعد تحميل النصوص المنشورة، تُحمّل تعديلات المعاينة المحفوظة من الخادم المعزول كطبقة فوقها.
+        const PAGE_CHANGES_PREVIEW_READ_URL = GOOGLE_SCRIPT_URL;
 </script>
 <script>
     // ابدأ طلب تعديلات النصوص أثناء قراءة الصفحة بدل انتظار DOMContentLoaded.
@@ -3012,10 +3014,78 @@ function receivePageChanges(data) {
     window.__pageChangesFallbackPending = '';
     // Merge the server snapshot with any local edits still awaiting confirmation.
     cacheCurrentPageChanges(normalized);
+    // حمّل طبقة تعديلات المعاينة بعد الأساس المنشور؛ فشل المعاينة لا يعطل عرض الإنتاج.
+    loadPreviewPageChangesOverlay_();
     document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
         message.classList.toggle('active', index === currentNewsIndex)
     );
     return true;
+}
+
+function loadPreviewPageChangesOverlay_() {
+    if (window.__pagePreviewOverlayRequested) return;
+    window.__pagePreviewOverlayRequested = true;
+
+    const callbackName = '__pagePreviewOverlay_' +
+        Date.now().toString(36) + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    let settled = false;
+    const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        delete window[callbackName];
+        script.remove();
+    };
+
+    window[callbackName] = function(data) {
+        try {
+            if (!data || data.success !== true ||
+                data.environment !== 'PREVIEW' ||
+                !validatePageChangesForClient(data.changes)) {
+                console.info('[PageChanges] لا توجد طبقة نصوص معاينة مؤكدة؛ استمر عرض نصوص الإنتاج.');
+                return;
+            }
+
+            const normalized = normalizeFixedPageChanges(data.changes);
+            const stats = applyPageChangesList(normalized);
+            if (stats.missing > 0 || stats.invalid > 0) {
+                console.warn('[PageChanges] لم تُطبق طبقة المعاينة لوجود معرّفات ناقصة أو غير صالحة.', {
+                    missing: stats.missing, invalid: stats.invalid
+                });
+                return;
+            }
+
+            cacheCurrentPageChanges(normalized);
+            window.__pagePreviewOverlayReady = true;
+            console.info('[PageChanges] تم تطبيق طبقة نصوص المعاينة فوق النصوص المنشورة.', {
+                received: data.changes.length,
+                applied: stats.applied,
+                unchanged: stats.unchanged,
+                skippedEditing: stats.skippedEditing
+            });
+            document.querySelectorAll('#tickerText .ticker-message').forEach((message,index) =>
+                message.classList.toggle('active', index === currentNewsIndex)
+            );
+        } catch (error) {
+            console.warn('[PageChanges] تعذر تطبيق طبقة نصوص المعاينة؛ بقيت النصوص المنشورة كما هي.', error);
+        } finally {
+            finish();
+        }
+    };
+
+    script.onerror = () => {
+        console.info('[PageChanges] خادم المعاينة غير متاح حاليًا؛ استمر عرض النصوص المنشورة.');
+        finish();
+    };
+    const timeout = setTimeout(() => {
+        console.info('[PageChanges] انتهت مهلة طبقة المعاينة؛ استمر عرض النصوص المنشورة.');
+        finish();
+    }, 12000);
+    script.src = PAGE_CHANGES_PREVIEW_READ_URL +
+        '?action=pageChanges&callback=' + encodeURIComponent(callbackName) +
+        '&_=' + Date.now();
+    document.head.appendChild(script);
 }
 
 function exportUpdatedHTML() {
