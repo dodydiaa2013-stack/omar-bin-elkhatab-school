@@ -1652,8 +1652,8 @@ window.addEventListener('DOMContentLoaded', () => {
         const MANUAL_BACKUP_MAX_BYTES = 20 * 1024 * 1024;
 
         function downloadManualSiteBackup() {
-            if (!hasDualAdminAuthorization()) {
-                alert('يلزم تسجيل الدخول بصلاحية المسؤول وحساب Google المعتمد لإنشاء النسخة الاحتياطية.');
+            if (!hasAdminSessionAuthorization()) {
+                alert('يلزم تسجيل الدخول بصلاحية المسؤول لإنشاء النسخة الاحتياطية.');
                 return;
             }
 
@@ -1722,8 +1722,8 @@ window.addEventListener('DOMContentLoaded', () => {
         }
 
         function restoreManualSiteBackup(input) {
-            if (!hasDualAdminAuthorization()) {
-                alert('يلزم تسجيل الدخول بصلاحية المسؤول وحساب Google المعتمد لاستعادة النسخة الاحتياطية.');
+            if (!hasAdminSessionAuthorization()) {
+                alert('يلزم تسجيل الدخول بصلاحية المسؤول لاستعادة النسخة الاحتياطية.');
                 input.value = '';
                 return;
             }
@@ -2269,11 +2269,21 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        function hasDualAdminAuthorization() {
+        function hasAdminSessionAuthorization() {
             return isAdminLoggedIn === true &&
-                isDeveloperLoggedIn === true &&
-                Boolean(googleUploadToken) &&
                 Boolean(window.adminSessionToken);
+        }
+
+        function hasDualAdminAuthorization() {
+            return hasAdminSessionAuthorization() &&
+                isDeveloperLoggedIn === true &&
+                Boolean(googleUploadToken);
+        }
+
+        function hasContentManagementAuthorization(scope) {
+            return scope === 'gallery'
+                ? hasDualAdminAuthorization()
+                : hasAdminSessionAuthorization();
         }
 
         function clearAdminClientSession_() {
@@ -2499,7 +2509,8 @@ window.addEventListener('DOMContentLoaded', () => {
                 teacherUpload.classList.toggle('hidden', !isAdminLoggedIn);
             }
 
-            const canManage = hasDualAdminAuthorization();
+            const canManage = hasAdminSessionAuthorization();
+            const canManageTablet = hasDualAdminAuthorization();
 
             const logoutButton = document.getElementById('adminLogoutBtn');
             if (logoutButton) {
@@ -2517,8 +2528,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
             const tabletUploadControls = document.getElementById('tabletImageUploadControls');
             if (tabletUploadControls) {
-                tabletUploadControls.classList.toggle('hidden', !canManage);
-                tabletUploadControls.classList.toggle('flex', canManage);
+                tabletUploadControls.classList.toggle('hidden', !canManageTablet);
+                tabletUploadControls.classList.toggle('flex', canManageTablet);
             }
 
             const albumControl = document.getElementById('alertsTeacherControl');
@@ -2546,10 +2557,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
         function updateDeveloperUI() {
             const bar = document.getElementById('devControlBar');
-            const googleVerified = isDeveloperLoggedIn === true && Boolean(googleUploadToken);
+            const adminAuthorized = hasAdminSessionAuthorization();
             if (bar) {
-                bar.style.display = googleVerified ? 'flex' : 'none';
-                bar.classList.toggle('hidden', !googleVerified);
+                bar.style.display = adminAuthorized ? 'flex' : 'none';
+                bar.classList.toggle('hidden', !adminAuthorized);
             }
         }
 
@@ -2571,7 +2582,7 @@ document.addEventListener('input', function(event) {
 
 function toggleLiveEditing() {
     if (assignPageEditIds() !== true) { alert("تعذر تفعيل التحرير: توجد معرّفات نصوص ناقصة أو مكررة."); return; }
-    if (!hasDualAdminAuthorization()) { alert("يجب تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به لاستخدام أدوات التعديل."); return; }
+    if (!hasAdminSessionAuthorization()) { alert("يجب تسجيل الدخول بكلمة مرور المسؤول لاستخدام أدوات التعديل."); return; }
     isLiveEditing = !isLiveEditing;
     document.querySelectorAll('[data-page-edit-id]').forEach(el => {
         if (isLiveEditing) {
@@ -2609,8 +2620,8 @@ function setPageChangesSaveStatus(message, state) {
 }
 
 async function saveAllPageChanges() {
-    if (!hasDualAdminAuthorization()) {
-        alert('يجب تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به قبل حفظ التعديلات.');
+    if (!hasAdminSessionAuthorization()) {
+        alert('يجب تسجيل الدخول بكلمة مرور المسؤول قبل حفظ التعديلات.');
         return;
     }
     if (pendingPageChangesNonce) {
@@ -2677,7 +2688,7 @@ async function saveAllPageChanges() {
     form.action = GOOGLE_SCRIPT_URL;
     form.target = 'pageChangesUploadFrame';
     form.style.display = 'none';
-    const fields = { action:'savePageChanges', environment:'PREVIEW', googleUploadToken:googleUploadToken, adminSessionToken:window.adminSessionToken, nonce:nonce, origin:location.origin, changes:payload };
+    const fields = { action:'savePageChanges', environment:'PREVIEW', adminSessionToken:window.adminSessionToken, nonce:nonce, origin:location.origin, changes:payload };
     Object.entries(fields).forEach(([name,value]) => {
         const input=document.createElement('input'); input.type='hidden'; input.name=name; input.value=value; form.appendChild(input);
     });
@@ -4130,7 +4141,7 @@ function renderSchedules() {
         if (!activeScheduleIds.has(String(id))) scheduleBulkSelection.delete(String(id));
     });
     const management = document.getElementById('scheduleBulkManagement');
-    if (management) management.classList.toggle('hidden', !hasDualAdminAuthorization());
+    if (management) management.classList.toggle('hidden', !hasAdminSessionAuthorization());
     grid.innerHTML = '';
 
     CLASSES.forEach(cls => {
@@ -4173,7 +4184,7 @@ function renderSchedules() {
                 <span class="text-slate-500 font-semibold">مدرسة عمر بن الخطاب</span>
 
                 <div class="flex items-center gap-2">
-                    ${imgUrl && hasDualAdminAuthorization()
+                    ${imgUrl && hasAdminSessionAuthorization()
                         ? `<button type="button" onclick="replaceScheduleImage('${cls}', this)"
                             class="text-amber-600 hover:underline font-bold flex items-center gap-1">
                             <i class="fa-solid fa-arrows-rotate"></i> استبدال
@@ -4199,7 +4210,7 @@ function renderSchedules() {
             </div>
         `;
 
-        if (fileId && hasDualAdminAuthorization()) {
+        if (fileId && hasAdminSessionAuthorization()) {
             const selectionRow = document.createElement('div');
             selectionRow.className = 'flex items-center gap-2 border-t border-slate-200 bg-white px-4 py-3';
             const checkbox = document.createElement('input');
@@ -4226,9 +4237,8 @@ function renderSchedules() {
 
 
         function toggleScheduleUploadModal() {
-            if (isAdminLoggedIn !== true || isDeveloperLoggedIn !== true ||
-                !googleUploadToken || !window.adminSessionToken) {
-                alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
+            if (!hasAdminSessionAuthorization()) {
+                alert('يجب تسجيل الدخول بكلمة مرور المسؤول أولاً.');
                 return;
             }
             const modal = document.getElementById('scheduleModal');
@@ -4352,7 +4362,7 @@ function uploadOneScheduleFile(file, className, index, preparedData) {
         const fields = {
             action: 'uploadSchedule',
             nonce: nonce,
-            token: googleUploadToken,
+
             adminSessionToken: window.adminSessionToken || '',
             origin: window.location.origin,
             className: className,
@@ -4500,7 +4510,7 @@ async function saveScheduleImage() {
 
 
 async function replaceScheduleImage(className, triggerButton) {
-    if (!hasDualAdminAuthorization()) {
+    if (!hasAdminSessionAuthorization()) {
         alert('يلزم تسجيل الدخول بكلمة مرور المسؤول وحساب Google المصرح به معًا.');
         return;
     }
@@ -4574,7 +4584,7 @@ async function replaceScheduleImage(className, triggerButton) {
 async function deleteScheduleImage(cls) {
     if (isAdminLoggedIn !== true || isDeveloperLoggedIn !== true ||
         !googleUploadToken || !window.adminSessionToken) {
-        alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
+        alert('يجب تسجيل الدخول بكلمة مرور المسؤول أولاً.');
         return;
     }
     const item = driveSchedules[cls];
@@ -4598,7 +4608,7 @@ async function deleteScheduleImage(cls) {
 
         const fields = {
             action: 'deleteSchedule',
-            token: googleUploadToken,
+
             adminSessionToken: window.adminSessionToken,
             fileId: item.id,
             className: cls
@@ -4664,7 +4674,7 @@ async function deleteScheduleImage(cls) {
         }
 
         function selectAllSchedulesForBulkDelete() {
-            if (!hasDualAdminAuthorization()) return;
+            if (!hasAdminSessionAuthorization()) return;
             scheduleBulkSelection.clear();
             CLASSES.forEach(cls => {
                 const item = driveSchedules && driveSchedules[cls];
@@ -4679,8 +4689,8 @@ async function deleteScheduleImage(cls) {
         }
 
         async function bulkDeleteSelectedSchedules() {
-            if (!hasDualAdminAuthorization()) {
-                alert('يجب تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول أولاً.');
+            if (!hasAdminSessionAuthorization()) {
+                alert('يجب تسجيل الدخول بكلمة مرور المسؤول أولاً.');
                 return;
             }
             const selections = getSelectedScheduleEntries();
@@ -4712,7 +4722,7 @@ async function deleteScheduleImage(cls) {
 
                 const fields = {
                     action: 'bulkDeleteSchedules',
-                    token: googleUploadToken,
+
                     adminSessionToken: window.adminSessionToken,
                     selections: JSON.stringify(selections)
                 };
@@ -4812,7 +4822,7 @@ async function deleteScheduleImage(cls) {
         }
 
         function selectAllContent(scope) {
-            if (!hasDualAdminAuthorization()) return;
+            if (!hasContentManagementAuthorization(scope)) return;
             imageContentSelections[scope] = new Set(getContentItems(scope).map(contentItemId).filter(Boolean));
             renderContentScope(scope);
             contentSelectionStatus(scope);
@@ -4837,7 +4847,7 @@ async function deleteScheduleImage(cls) {
         // سحب وإفلات ترتيب العناصر: الماوس على الكمبيوتر، والضغط المطوّل ثم السحب باللمس على الهاتف.
         let activeContentDrag = null;
         function attachContentDragSort(card, scope, itemId, controls) {
-            if (!card || !controls || !hasDualAdminAuthorization()) return;
+            if (!card || !controls || !hasContentManagementAuthorization(scope)) return;
             card.dataset.contentDragScope = scope;
             card.dataset.contentDragId = String(itemId);
             card.classList.add('content-sortable-card');
@@ -4946,7 +4956,7 @@ async function deleteScheduleImage(cls) {
         }
 
         async function reorderContentItemTo(scope, sourceId, targetId) {
-            if (!hasDualAdminAuthorization() ||
+            if (!hasContentManagementAuthorization(scope) ||
                 !Object.prototype.hasOwnProperty.call(imageContentSelections, scope) ||
                 !sourceId || !targetId || sourceId === targetId) return;
 
@@ -4993,7 +5003,7 @@ async function deleteScheduleImage(cls) {
         }
 
         async function moveContentItem(scope, itemId, direction) {
-            if (!hasDualAdminAuthorization() ||
+            if (!hasContentManagementAuthorization(scope) ||
                 !Object.prototype.hasOwnProperty.call(imageContentSelections, scope)) return;
 
             const albumId = scope === 'albumImages' ? String(currentPhotoAlbumId || '') : '';
@@ -5041,8 +5051,8 @@ async function deleteScheduleImage(cls) {
         }
 
         async function bulkDeleteSelectedContent(scope) {
-            if (!hasDualAdminAuthorization()) {
-                alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+            if (!hasContentManagementAuthorization(scope)) {
+                alert('يلزم تسجيل الدخول بكلمة مرور المسؤول.');
                 return;
             }
             if (!Object.prototype.hasOwnProperty.call(imageContentSelections, scope)) return;
@@ -5283,7 +5293,7 @@ async function refreshPhotoAlbums(button) {
         }
 
         function refreshPhotoAlbumAuthorizationUI_() {
-            const canManage = hasDualAdminAuthorization();
+            const canManage = hasAdminSessionAuthorization();
 
             const management = document.getElementById('photoAlbumsManagement');
             if (management) management.classList.toggle('hidden', !canManage);
@@ -5312,7 +5322,7 @@ async function refreshPhotoAlbums(button) {
             const grid = document.getElementById('photoAlbumsGrid');
             const management = document.getElementById('photoAlbumsManagement');
             if (!grid) return;
-            if (management) management.classList.toggle('hidden', !hasDualAdminAuthorization());
+            if (management) management.classList.toggle('hidden', !hasAdminSessionAuthorization());
             grid.innerHTML = '';
             photoAlbumsCache.forEach((album, index) => {
                 const card = document.createElement('article');
@@ -5330,7 +5340,7 @@ async function refreshPhotoAlbums(button) {
                             <p class="text-xs text-slate-500 mt-1 line-clamp-2">${photoAlbumEscape(album.description || 'اضغط لعرض صور الألبوم')}</p>
                         </div>
                     </button>`;
-                if (hasDualAdminAuthorization()) {
+                if (hasAdminSessionAuthorization()) {
                     const controls = document.createElement('div');
                     controls.className = 'flex items-center justify-between gap-2 border-t bg-slate-50 p-3';
                     const checkbox = document.createElement('input');
@@ -5364,7 +5374,7 @@ async function refreshPhotoAlbums(button) {
         }
 
         function openPhotoAlbumCreate() {
-            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); return; }
+            if (!hasAdminSessionAuthorization()) { alert('يلزم تسجيل الدخول بكلمة مرور المسؤول.'); return; }
             photoAlbumEditId = null;
             document.getElementById('photoAlbumEditorTitle').textContent = 'إضافة ألبوم جديد';
             document.getElementById('photoAlbumNameInput').value = '';
@@ -5376,7 +5386,7 @@ async function refreshPhotoAlbums(button) {
 
         function openPhotoAlbumEdit() {
             const album = photoAlbumsCache.find(item => String(item.id) === String(currentPhotoAlbumId));
-            if (!album || !hasDualAdminAuthorization()) return;
+            if (!album || !hasAdminSessionAuthorization()) return;
             photoAlbumEditId = album.id;
             document.getElementById('photoAlbumEditorTitle').textContent = 'تعديل بيانات الألبوم';
             document.getElementById('photoAlbumNameInput').value = album.title || '';
@@ -5391,7 +5401,7 @@ async function refreshPhotoAlbums(button) {
         }
 
         async function savePhotoAlbum() {
-            if (!hasDualAdminAuthorization()) { alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.'); return; }
+            if (!hasAdminSessionAuthorization()) { alert('يلزم تسجيل الدخول بكلمة مرور المسؤول.'); return; }
             const title = document.getElementById('photoAlbumNameInput').value.trim();
             const description = document.getElementById('photoAlbumDescriptionInput').value.trim();
             const cover = document.getElementById('photoAlbumCoverInput').files[0];
@@ -5437,9 +5447,9 @@ async function refreshPhotoAlbums(button) {
             viewer.classList.remove('hidden');
             document.getElementById('photoAlbumsGrid').classList.add('hidden');
             document.getElementById('photoAlbumsStatus').classList.add('hidden');
-            document.getElementById('photoAlbumActions').classList.toggle('hidden', !hasDualAdminAuthorization());
+            document.getElementById('photoAlbumActions').classList.toggle('hidden', !hasAdminSessionAuthorization());
             const imageManagement = document.getElementById('albumImagesManagement');
-            if (imageManagement) imageManagement.classList.toggle('hidden', !hasDualAdminAuthorization());
+            if (imageManagement) imageManagement.classList.toggle('hidden', !hasAdminSessionAuthorization());
 
             if (!Array.isArray(album.images)) {
                 grid.innerHTML = '<p class="col-span-full py-8 text-center text-slate-500">جارٍ تحميل صور الألبوم...</p>';
@@ -5555,9 +5565,9 @@ async function refreshPhotoAlbums(button) {
         async function uploadPhotoAlbumImages(input) {
     const files = Array.from(input.files || []);
     if (!files.length || !currentPhotoAlbumId) return;
-    if (!hasDualAdminAuthorization()) {
+    if (!hasAdminSessionAuthorization()) {
         const status = document.getElementById('photoAlbumUploadStatus');
-        if (status) status.textContent = 'يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.';
+        if (status) status.textContent = 'يلزم تسجيل الدخول بكلمة مرور المسؤول.';
         document.getElementById('photoAlbumUploadProgress')?.classList.remove('hidden');
         input.value = '';
         return;
@@ -5689,7 +5699,7 @@ async function refreshPhotoAlbums(button) {
 }
 
 async function replacePhotoAlbumImage(imageId) {
-    if (!hasDualAdminAuthorization()) return;
+    if (!hasAdminSessionAuthorization()) return;
     const albumId = String(currentPhotoAlbumId || '');
     const operationKey = 'album-replace-' + albumId + '-' + imageId;
 
@@ -5730,8 +5740,8 @@ async function replacePhotoAlbumImage(imageId) {
 }
 
 async function deletePhotoAlbumImage(imageId) {
-    if (!hasDualAdminAuthorization()) {
-        alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+    if (!hasAdminSessionAuthorization()) {
+        alert('يلزم تسجيل الدخول بكلمة مرور المسؤول.');
         return;
     }
     if (!confirm('هل تريد نقل هذه الصورة إلى سلة مهملات Google Drive؟ ويمكنك استعادتها من درايف.')) return;
@@ -5753,8 +5763,8 @@ async function deletePhotoAlbumImage(imageId) {
 }
 
 async function deleteCurrentPhotoAlbum() {
-    if (!hasDualAdminAuthorization()) {
-        alert('يلزم تسجيل الدخول بحساب Google المصرح به وكلمة مرور المسؤول معًا.');
+    if (!hasAdminSessionAuthorization()) {
+        alert('يلزم تسجيل الدخول بكلمة مرور المسؤول.');
         return;
     }
     if (!currentPhotoAlbumId ||
