@@ -286,12 +286,14 @@ body.adminD-login-pending #adminLoginSubmit{height:48px;border-radius:12px}
 <script>
     // تعريف رابط خادم الإنتاج قبل سكربت التحميل المبكر لتجنب ReferenceError.
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwE-mDS3J7B5Tt3S4CBo8i4o65q19VtzAALjNCFSDJnskIIQHuCPbco5Kk0nea537Bt/exec";
+        // قراءة النصوص المنشورة من الإنتاج للعرض فقط؛ الحفظ يظل موجّهًا للخادم المعزول.
+        const PAGE_CHANGES_READ_URL = "https://script.google.com/macros/s/AKfycbzrTk0km_VUQvfzsHfZGXm-yHlb8muchjMSbV9450dKThQQIt0nXh0mMWoRqe1DNfIF/exec";
 </script>
 <script>
     // ابدأ طلب تعديلات النصوص أثناء قراءة الصفحة بدل انتظار DOMContentLoaded.
     // إذا وصلت الاستجابة قبل تجهيز عناصر الصفحة، احتفظ بها حتى تصبح جاهزة.
     (() => {
-        const endpoint = GOOGLE_SCRIPT_URL;
+        const endpoint = PAGE_CHANGES_READ_URL;
         window.__pageChangesDomReady = false;
         window.__earlyPageChangesReceived = false;
 
@@ -2926,7 +2928,7 @@ function cacheCurrentPageChanges(changesSnapshot) {
 
 function loadSavedPageChanges() {
     if (pageChangesRequestInFlight) return;
-    const endpoint = GOOGLE_SCRIPT_URL;
+    const endpoint = PAGE_CHANGES_READ_URL;
     const script = document.createElement("script");
     pageChangesRequestInFlight = true;
     pageChangesResponseReceived = false;
